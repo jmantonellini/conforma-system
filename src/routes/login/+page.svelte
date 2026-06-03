@@ -7,7 +7,7 @@
 	const { form } = $props();
 </script>
 
-<div class="flex min-h-screen items-center justify-center">
+<div class="flex items-center justify-center">
 	<form method="post" use:enhance class="flex h-full items-center justify-center">
 		<fieldset class="fieldset w-xs rounded-box border border-base-300 bg-base-200 p-4">
 			<legend class="fieldset-legend">Login</legend>

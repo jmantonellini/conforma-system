@@ -1,10 +1,20 @@
 import type { Handle } from '@sveltejs/kit';
 import { getDb } from '$lib/server/db';
-import { env } from '$env/dynamic/private';
+import type { Usuario } from '$lib/server/db/schema';
 
 export const handle: Handle = async ({ event, resolve }) => {
-	event.locals.db = getDb(event.platform?.env?.DB, env.DATABASE_URL);
+	const dbBinding = event.platform?.env?.DB;
 
-	const response = await resolve(event);
-	return response;
+	if (dbBinding) {
+		event.locals.db = getDb(dbBinding);
+	} else {
+		console.error('❌ Database binding "DB" not found');
+	}
+
+	return resolve(event);
 };
+
+function tienePermiso(usuario: Usuario, permisoRequerido: string) {
+	// Query joins entre roles_permisos
+	// Retorna boolean
+}

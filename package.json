@@ -16,13 +16,14 @@
 		"db:generate": "drizzle-kit generate",
 		"db:migrate": "drizzle-kit migrate",
 		"db:studio": "drizzle-kit studio",
+		"db:local:migrate": "wrangler d1 migrations apply conforma-db --local",
+		"db:remote:migrate": "wrangler d1 migrations apply conforma-db --remote",
 		"deploy": "pnpm run build && wrangler deploy",
 		"cf-typegen": "wrangler types && mv worker-configuration.d.ts src/"
 	},
 	"devDependencies": {
 		"@eslint/compat": "^2.0.4",
 		"@eslint/js": "^10.0.1",
-		"@libsql/client": "^0.17.2",
 		"@sveltejs/adapter-cloudflare": "^7.2.8",
 		"@sveltejs/kit": "^2.57.0",
 		"@sveltejs/vite-plugin-svelte": "^7.0.0",
@@ -42,11 +43,14 @@
 		"prettier-plugin-tailwindcss": "^0.7.2",
 		"svelte": "^5.55.2",
 		"svelte-check": "^4.4.6",
+		"sveltekit-superforms": "^2.30.1",
 		"tailwindcss": "^4.2.2",
 		"typescript": "^6.0.2",
 		"typescript-eslint": "^8.58.1",
 		"vite": "^8.0.7",
-		"wrangler": "^4.94.0"
+		"wrangler": "^4.94.0",
+		"wrangler-studio": "^0.0.2",
+		"zod": "^4.4.3"
 	},
 	"dependencies": {
 		"bcryptjs": "^3.0.3"

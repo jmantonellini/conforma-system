@@ -8,6 +8,11 @@ declare global {
 		// interface Error {}
 		interface Locals {
 			db: DrizzleClient;
+			user?: {
+				id: number;
+				username: string;
+				rol: string;
+			};
 		}
 		// interface PageData {}
 		// interface PageState {}

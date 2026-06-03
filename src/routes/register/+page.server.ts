@@ -39,7 +39,7 @@ export const actions = {
 		try {
 			await locals.db.insert(usuarios).values({
 				username,
-				password_hash: hash,
+				password_hash: hash
 			});
 
 			return { success: true, message: 'Usuario creado exitosamente. Ahora podés iniciar sesión.' };

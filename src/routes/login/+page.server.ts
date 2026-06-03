@@ -13,12 +13,15 @@ export const actions = {
 		const formData = await request.formData();
 		const username = formData.get('username') as string;
 		const password = formData.get('password') as string;
-		
+
 		if (!username || !password) {
 			return fail(400, { error: 'Usuario y contraseña requeridos', username });
 		}
-
-		const user = await locals.db.select().from(usuarios).where(eq(usuarios.username, username)).get();
+		const user = await locals.db
+			.select()
+			.from(usuarios)
+			.where(eq(usuarios.username, username))
+			.get();
 
 		if (!user || !bcrypt.compareSync(password, user.password_hash)) {
 			return fail(401, { error: 'Credenciales inválidas', username });

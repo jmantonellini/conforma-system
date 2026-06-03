@@ -1,17 +1,14 @@
-import { drizzle as drizzleLibSql } from 'drizzle-orm/libsql';
+// src/lib/server/db/index.ts
 import { drizzle as drizzleD1 } from 'drizzle-orm/d1';
-import { createClient } from '@libsql/client';
 import * as schema from './schema';
 
-export function getDb(db?: D1Database, databaseUrl?: string) {
+export function getDb(db?: D1Database) {
 	if (db) {
 		return drizzleD1(db, { schema });
 	}
-	if (databaseUrl) {
-		const client = createClient({ url: databaseUrl });
-		return drizzleLibSql(client, { schema });
-	}
-	throw new Error('No database configuration found');
+
+	console.error('❌ No database binding found');
+	throw new Error('No database binding found');
 }
 
 export type DrizzleClient = ReturnType<typeof getDb>;
