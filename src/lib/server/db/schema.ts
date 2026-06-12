@@ -121,7 +121,7 @@ export const pedidos = sqliteTable('pedidos', {
 		.references(() => estados_pedido.id, { onDelete: 'restrict' })
 		.notNull(),
 	precio_total: real('precio_total'),
-	seña: real('seña'),
+	anticipo: real('anticipo'),
 	saldo_pendiente: real('saldo_pendiente'),
 	observaciones: text('observaciones'),
 	created_at: integer('created_at', { mode: 'timestamp' }).$default(() => new Date()),
@@ -149,10 +149,20 @@ export const productos = sqliteTable('productos', {
 	trombon_largo: integer('trombon_largo'),
 	trombon_observaciones: text('trombon_observaciones'),
 
+	tipo_vehiculo_id: integer('tipo_vehiculo_id').references(() => tipos_vehiculo.id),
+	marca_id: integer('marca_id').references(() => marcas.id),
+	modelo_id: integer('modelo_id').references(() => modelos.id),
+
+	tipo_uso_id: integer('tipo_uso_id').references(() => tipos_uso.id),
+	categoria_competencia_id: integer('categoria_competencia_id').references(
+		() => categorias_competencia.id
+	),
+
 	precio_base: real('precio_base'),
 	es_personalizable: integer('es_personalizable', { mode: 'boolean' }).default(true),
 	activo: integer('activo', { mode: 'boolean' }).default(true),
-	created_at: integer('created_at', { mode: 'timestamp' }).$default(() => new Date())
+	created_at: integer('created_at', { mode: 'timestamp' }).$default(() => new Date()),
+	updated_at: integer('updated_at', { mode: 'timestamp' }).$onUpdate(() => new Date())
 });
 
 export const lineas_pedido = sqliteTable('lineas_pedido', {
@@ -182,6 +192,51 @@ export const lineas_pedido = sqliteTable('lineas_pedido', {
 	orden_linea: integer('orden_linea'), // Para ordenar líneas dentro del pedido
 	created_at: integer('created_at', { mode: 'timestamp' }).$default(() => new Date()),
 	updated_at: integer('updated_at', { mode: 'timestamp' }).$onUpdate(() => new Date())
+});
+
+export const tipos_vehiculo = sqliteTable('tipos_vehiculo', {
+	id: integer('id').primaryKey({ autoIncrement: true }),
+	nombre: text('nombre').notNull(), // Auto, Moto, Camioneta, Avión
+	slug: text('slug').notNull().unique(), // auto, moto, camioneta, avion
+	activo: integer('activo', { mode: 'boolean' }).default(true)
+});
+
+export const marcas = sqliteTable('marcas', {
+	id: integer('id').primaryKey({ autoIncrement: true }),
+	nombre: text('nombre').notNull().unique(),
+	activo: integer('activo', { mode: 'boolean' }).default(true)
+});
+
+export const modelos = sqliteTable('modelos', {
+	id: integer('id').primaryKey({ autoIncrement: true }),
+	marca_id: integer('marca_id')
+		.references(() => marcas.id, { onDelete: 'restrict' })
+		.notNull(),
+	tipo_vehiculo_id: integer('tipo_vehiculo_id')
+		.references(() => tipos_vehiculo.id, { onDelete: 'restrict' })
+		.notNull(),
+	nombre: text('nombre').notNull(),
+	anio_desde: integer('anio_desde'),
+	anio_hasta: integer('anio_hasta'),
+	activo: integer('activo', { mode: 'boolean' }).default(true)
+});
+
+export const tipos_uso = sqliteTable('tipos_uso', {
+	id: integer('id').primaryKey({ autoIncrement: true }),
+	nombre: text('nombre').notNull(), // Calle, Competición
+	slug: text('slug').notNull().unique()
+});
+
+export const categorias_competencia = sqliteTable('categorias_competencia', {
+	id: integer('id').primaryKey({ autoIncrement: true }),
+	nombre: text('nombre').notNull(),
+	descripcion: text('descripcion'),
+	tipo_uso_id: integer('tipo_uso_id')
+		.references(() => tipos_uso.id)
+		.notNull(),
+	activa_desde: integer('activa_desde', { mode: 'timestamp' }),
+	activa_hasta: integer('activa_hasta', { mode: 'timestamp' }),
+	vigente: integer('vigente', { mode: 'boolean' }).default(true)
 });
 
 // ============================================
@@ -343,7 +398,7 @@ export const logs_sistema = sqliteTable('logs_sistema', {
 });
 
 // ============================================
-// 7. TIPOS DE TIPOSCRIPT
+// 7. TIPOS DE TYPESCRIPT
 // ============================================
 
 export type Usuario = typeof usuarios.$inferSelect;
@@ -357,3 +412,8 @@ export type Producto = typeof productos.$inferSelect;
 export type LineaPedido = typeof lineas_pedido.$inferSelect;
 export type EstadoPedido = typeof estados_pedido.$inferSelect;
 export type EstadoFabricacion = typeof estados_fabricacion.$inferSelect;
+export type Modelo = typeof modelos.$inferSelect;
+export type Marca = typeof marcas.$inferSelect;
+export type TipoUso = typeof tipos_uso.$inferSelect;
+export type TipoVehiculo = typeof tipos_vehiculo.$inferSelect;
+export type CategoriaComp = typeof categorias_competencia.$inferSelect;

@@ -3,7 +3,6 @@
 	import { SideBarToggle } from '$lib/components/ui/icons';
 	let { tabs, children } = $props();
 
-	let tabTitle = $state('');
 	let drawerOpen = $state(true);
 </script>
 
@@ -20,7 +19,6 @@
 			>
 				<SideBarToggle />
 			</label>
-			<div class="px-4">{tabTitle}</div>
 		</nav>
 		{@render children()}
 	</div>
@@ -35,7 +33,6 @@
 					{#each tabs ?? [] as tab (tab.href)}
 						<a
 							href={tab.href}
-							onclick={() => (tabTitle = tab.label)}
 							class="flex items-center gap-4 px-4 py-2 whitespace-nowrap hover:bg-gray-200"
 							class:bg-gray-300={tab.href && page.url.pathname.startsWith(tab.href)}
 						>
@@ -52,7 +49,6 @@
 								{#each tab.subtabs as subtab (subtab.href)}
 									<a
 										href={subtab.href}
-										onclick={() => (tabTitle = subtab.label)}
 										class="block px-4 py-2 whitespace-nowrap hover:bg-gray-200"
 										class:bg-gray-300={subtab.href && page.url.pathname.startsWith(subtab.href)}
 									>

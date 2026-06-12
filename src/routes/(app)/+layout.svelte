@@ -2,13 +2,14 @@
 	import type { LayoutProps } from './$types';
 	import Header from '$lib/components/ui/Header.svelte';
 	import { SideBar } from '$lib/components/ui';
-	import { Fabricacion, Settings, Users } from '$lib/components/ui/icons';
+	import { Fabricacion, Producto, Settings, Users } from '$lib/components/ui/icons';
 	import Pedido from '$lib/components/ui/icons/Pedido.svelte';
 
 	const tabs = [
 		{ href: '/pedidos', label: 'Pedidos', icon: Pedido },
 		{ href: '/fabricacion', label: 'Fabricación', icon: Fabricacion },
 		{ href: '/clientes', label: 'Clientes', icon: Users },
+		{ href: '/productos', label: 'Productos', icon: Producto },
 		{
 			href: '/configuracion',
 			label: 'Configuración',

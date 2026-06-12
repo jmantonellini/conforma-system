@@ -1,201 +1,80 @@
-<!-- src/lib/components/ui/SearchSelect.svelte -->
 <script lang="ts">
-	import { onMount } from 'svelte';
-	import FormField from './FormField.svelte';
+	import { FormFieldWrapper } from '.';
 
 	let {
 		options = [],
+		label,
+		field,
 		placeholder = 'Seleccionar...',
-		value = $bindable(''),
-		label = '',
-		disabled = false,
-		required = false,
-		id = '',
-		onChange = () => {}
-	} = $props<{
-		options: Array<{ value: string; label: string }>;
+		...restProps
+	}: {
+		options: { value: string; label: string }[];
+		label: string;
+		field: any;
 		placeholder?: string;
-		value: string;
-		label?: string;
-		disabled?: boolean;
-		required?: boolean;
-		id?: string;
-		onChange?: (value: string) => void;
-	}>();
+		[key: string]: any;
+	} = $props();
 
 	let searchTerm = $state('');
 	let isOpen = $state(false);
-	let highlightedIndex = $derived(-1);
-	let inputRef: HTMLInputElement | null = $state(null);
-	let listboxRef: HTMLUListElement | null = $state(null);
-
-	let filteredOptions = $derived(
-		searchTerm.trim() === ''
-			? options
-			: options.filter((opt: { label: string }) =>
-					opt.label.toLowerCase().includes(searchTerm.toLowerCase())
-				)
-	);
 
 	$effect(() => {
-		highlightedIndex = -1;
-	});
-
-	$effect(() => {
-		const selected = options.find((opt: { value: string; label: string }) => opt.value === value);
-		if (selected) {
-			searchTerm = selected.label;
-		} else if (!isOpen && searchTerm !== '') {
-			searchTerm = '';
-		}
+		// Sincroniza el término de búsqueda con el valor actual del select oculto
+		const currentValue = field.value();
+		const selectedOption = options.find((opt) => opt.value === currentValue);
+		if (selectedOption) searchTerm = selectedOption.label;
+		else searchTerm = '';
 	});
 
 	function handleSelect(option: { value: string; label: string }) {
-		value = option.value;
+		// Al seleccionar, actualiza el valor del select oculto
+		field.set(option.value);
 		searchTerm = option.label;
 		isOpen = false;
-		onChange(option.value); // 👈 Notificar cambio
-		inputRef?.blur();
 	}
-
-	function clearSelection() {
-		value = '';
-		searchTerm = '';
-		isOpen = false;
-		onChange('');
-		inputRef?.focus();
-	}
-
-	function handleKeydown(event: KeyboardEvent) {
-		if (disabled) return;
-
-		switch (event.key) {
-			case 'ArrowDown':
-				event.preventDefault();
-				if (!isOpen) {
-					isOpen = true;
-				} else if (highlightedIndex < filteredOptions.length - 1) {
-					highlightedIndex++;
-					scrollToHighlighted();
-				}
-				break;
-
-			case 'ArrowUp':
-				event.preventDefault();
-				if (isOpen && highlightedIndex > 0) {
-					highlightedIndex--;
-					scrollToHighlighted();
-				}
-				break;
-
-			case 'Enter':
-				event.preventDefault();
-				if (isOpen && highlightedIndex >= 0 && filteredOptions[highlightedIndex]) {
-					handleSelect(filteredOptions[highlightedIndex]);
-				} else if (!isOpen) {
-					isOpen = true;
-				}
-				break;
-
-			case 'Escape':
-				event.preventDefault();
-				isOpen = false;
-				inputRef?.blur();
-				break;
-
-			case 'Tab':
-				isOpen = false;
-				break;
-		}
-	}
-
-	function scrollToHighlighted() {
-		if (listboxRef && highlightedIndex >= 0) {
-			const highlightedItem = listboxRef.children[highlightedIndex] as HTMLElement;
-			highlightedItem?.scrollIntoView({ block: 'nearest' });
-		}
-	}
-
-	function handleClickOutside(event: MouseEvent) {
-		if (inputRef && !inputRef.contains(event.target as Node)) {
-			isOpen = false;
-			const selected = options.find((opt: { value: string; label: string }) => opt.value === value);
-			if (selected && searchTerm !== selected.label) {
-				searchTerm = selected.label;
-			} else if (!value && searchTerm !== '') {
-				searchTerm = '';
-			}
-		}
-	}
-
-	onMount(() => {
-		document.addEventListener('click', handleClickOutside);
-		return () => {
-			document.removeEventListener('click', handleClickOutside);
-		};
-	});
 </script>
 
-<div class="dropdown w-full" class:dropdown-open={isOpen}>
-	<FormField
-		{label}
-		isSearch={true}
-		{required}
-		{id}
-		{disabled}
-		{placeholder}
-		type="text"
-		bind:value={searchTerm}
-		bind:inputRef
-		onfocus={() => !disabled && (isOpen = true)}
-		onkeydown={handleKeydown}
-		autocomplete="off"
-		role="combobox"
-		aria-expanded={isOpen}
-		aria-autocomplete="list"
-		aria-controls="select-dropdown"
-		aria-label={placeholder}
-	/>
+<div class="relative">
+	<FormFieldWrapper {label} id={field.value()}>
+		<!-- Input visible para búsqueda -->
+		<input
+			type="text"
+			class="input w-full"
+			{placeholder}
+			bind:value={searchTerm}
+			onfocus={() => (isOpen = true)}
+			onblur={() => setTimeout(() => (isOpen = false), 200)}
+			{...restProps}
+		/>
+	</FormFieldWrapper>
 
-	{#if isOpen && !disabled}
+	<!-- Select oculto que se conecta al Remote Form -->
+	<select {...field.as('select')} class="hidden">
+		<option value="">Seleccionar...</option>
+		{#each options as opt (opt.value)}
+			<option value={opt.value}>{opt.label}</option>
+		{/each}
+	</select>
+
+	{#if isOpen && options.filter((opt) => opt.label
+				.toLowerCase()
+				.includes(searchTerm.toLowerCase())).length}
 		<ul
-			bind:this={listboxRef}
-			id="select-dropdown"
-			class="menu absolute top-full right-0 left-0 z-50 mt-1 max-h-60 w-full overflow-y-auto rounded-box bg-base-100 p-0 shadow"
-			role="listbox"
-			tabindex="-1"
+			class="absolute z-10 mt-1 max-h-60 w-full overflow-auto rounded-md border bg-base-100 shadow-lg"
 		>
-			{#if filteredOptions.length === 0}
-				<li
-					class="menu-title px-4 py-2 text-gray-400"
-					role="option"
-					aria-selected="false"
-					aria-disabled="true"
-				>
-					<span>No hay resultados</span>
-				</li>
-			{:else}
-				{#each filteredOptions as option, index (option.value)}
-					<li
-						role="option"
-						aria-selected={value === option.value}
-						class="cursor-pointer"
-						class:bg-primary={value === option.value}
-						class:bg-opacity-20={value === option.value}
-						class:bg-base-200={highlightedIndex === index && value !== option.value}
+			{#each options.filter((opt) => opt.label
+					.toLowerCase()
+					.includes(searchTerm.toLowerCase())) as opt (opt.value)}
+				<li>
+					<button
+						type="button"
+						class="w-full px-4 py-2 text-left hover:bg-base-200"
+						onclick={() => handleSelect(opt)}
 					>
-						<button
-							type="button"
-							class="w-full px-4 py-2 text-left"
-							class:text-primary-content={value === option.value}
-							onclick={() => handleSelect(option)}
-							onmouseenter={() => (highlightedIndex = index)}
-						>
-							{option.label}
-						</button>
-					</li>
-				{/each}
-			{/if}
+						{opt.label}
+					</button>
+				</li>
+			{/each}
 		</ul>
 	{/if}
 </div>

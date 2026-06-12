@@ -1,42 +1,55 @@
-import { z } from 'zod';
 import { query, command, getRequestEvent, form } from '$app/server';
 import { getDb } from '$lib/server/db';
 import { clientes } from '$lib/server/db/schema';
-import { eq, ilike, count, and } from 'drizzle-orm';
+import { eq, ilike, count, and, or, like } from 'drizzle-orm';
+import * as v from 'valibot';
 
 // Schema de validación
-const ClienteSchemaBase = z.object({
-	nombre: z.string().min(3, 'El nombre debe tener al menos 3 caracteres'),
-	razon_social: z.string().optional(),
-	cuit: z.string().optional(),
-	email: z.email('Email inválido').optional(),
-	telefono: z.string().optional(),
-	pais: z.string().default('Argentina'),
-	provincia: z.string().optional(),
-	ciudad: z.string().optional(),
-	codigo_postal: z.string().optional(),
-	calle: z.string().optional(),
-	numero: z.string().optional(),
-	piso: z.string().optional(),
-	departamento: z.string().optional()
+const ClienteSchemaBase = v.object({
+	nombre: v.pipe(v.string(), v.minLength(3, 'El nombre debe tener al menos 3 caracteres.')),
+	razon_social: v.optional(v.string()),
+	cuit: v.optional(v.string()),
+	email: v.optional(
+		v.pipe(
+			v.string(),
+			v.email('The email is badly formatted.'),
+			v.maxLength(30, 'Your email is too long.')
+		)
+	),
+	telefono: v.optional(v.string()),
+	pais: v.optional(v.string(), 'Argentina'),
+	provincia: v.optional(v.string()),
+	ciudad: v.optional(v.string()),
+	codigo_postal: v.optional(v.string()),
+	calle: v.optional(v.string()),
+	numero: v.optional(v.string()),
+	piso: v.optional(v.string()),
+	departamento: v.optional(v.string())
 });
 
 // Query: Obtener todos los clientes (con paginación y búsqueda)
 export const getClientes = query(
-	z.object({
-		search: z.string().optional(),
-		page: z.number().min(1).default(1).optional(),
-		limit: z.number().min(1).max(100).default(10).optional()
+	v.object({
+		search: v.optional(v.string()),
+		page: v.optional(v.pipe(v.number(), v.toMinValue(1)), 1),
+		limit: v.optional(v.pipe(v.number(), v.toMinValue(1), v.toMaxValue(100)), 10)
 	}),
-	async ({ search, page = 1, limit = 10 }) => {
+	async ({ search, page, limit }) => {
 		const db = getDb(getRequestEvent().platform?.env?.DB);
 
 		const offset = (page - 1) * limit;
 
-		// Construir condición de búsqueda
-		const whereCondition = search
-			? and(ilike(clientes.nombre, `%${search}%`), ilike(clientes.razon_social, `%${search}%`))
-			: undefined;
+		let whereCondition = undefined;
+
+		// Codicion de busqueda
+		if (search && search.trim() !== '') {
+			const searchTerm = `%${search}%`;
+			whereCondition = or(
+				like(clientes.nombre, searchTerm),
+				like(clientes.razon_social, searchTerm),
+				like(clientes.cuit, searchTerm)
+			);
+		}
 
 		// Obtener datos paginados
 		const data = await db
@@ -62,7 +75,7 @@ export const getClientes = query(
 );
 
 // Query: Obtener un cliente por ID (para editar)
-export const getClienteById = query(z.object({ id: z.number().optional() }), async ({ id }) => {
+export const getClienteById = query(v.object({ id: v.optional(v.number()) }), async ({ id }) => {
 	if (id == null) throw new Error('ID de cliente requerido');
 
 	const db = getDb(getRequestEvent().platform?.env?.DB);
@@ -86,13 +99,13 @@ export const createCliente = form(ClienteSchemaBase, async (data) => {
 		})
 		.returning();
 
-	console.log('CLIENTE', cliente);
-
+	getClientes({ search: '', page: 1 }).refresh();
 	return { success: true, cliente };
 });
 
-const ClienteSchemaUpdate = ClienteSchemaBase.extend({
-	id: z.string()
+const ClienteSchemaUpdate = v.object({
+	...ClienteSchemaBase.entries,
+	id: v.string()
 });
 
 // Command: Actualizar cliente
@@ -115,10 +128,9 @@ export const updateCliente = form(ClienteSchemaUpdate, async (data) => {
 });
 
 // Command: Eliminar cliente
-export const deleteCliente = command(z.object({ id: z.number() }), async (data) => {
+export const deleteCliente = command(v.number(), async (id) => {
 	const db = getDb(getRequestEvent().platform?.env?.DB);
-
-	await db.delete(clientes).where(eq(clientes.id, data.id));
-
+	await db.delete(clientes).where(eq(clientes.id, id));
+	getClientes({ search: '', page: 1 }).refresh();
 	return { success: true };
 });

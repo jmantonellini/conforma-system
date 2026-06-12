@@ -21,7 +21,8 @@
 			"binding": "DB",
 			"database_name": "conforma-db",
 			"database_id": "b5907069-9845-4776-a411-79dc58549dda",
-			"migrations_dir": "./src/lib/server/db/migrations"
+			"migrations_dir": "./src/lib/server/db/migrations",
+			"remote": true
 		}
 	]
 	/**

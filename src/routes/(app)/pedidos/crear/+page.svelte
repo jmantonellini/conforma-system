@@ -1,22 +1,20 @@
-<!-- src/routes/pedidos/crear/+page.svelte -->
 <script lang="ts">
 	import { crearPedido } from '$lib/remote/pedidos.remote';
 	import { getClientes } from '$lib/remote/clientes.remote';
 	import { getProductos } from '$lib/remote/productos.remote';
 	import SearchSelect from '$lib/components/ui/SearchSelect.svelte';
 	import PageHeader from '$lib/components/ui/PageHeader.svelte';
-	import FormField from '$lib/components/ui/FormField.svelte';
+	import FormFieldWrapper from '$lib/components/ui/FormFieldWrapper.svelte';
 	import { FormActions, PageLayout } from '$lib/components/ui';
+	import { toast } from '$lib/toast/toast.svelte';
 
 	const clientes = await getClientes({});
-	const productos = await getProductos();
+	const productos = await getProductos({});
 	const form = crearPedido;
 
-	// Estado local del formulario
-	let clienteSeleccionado = $state('');
 	let lineas = $state([
 		{
-			id: crypto.randomUUID(),
+			idx: 0,
 			producto_id: '',
 			cantidad: 1,
 			precio: 0,
@@ -24,6 +22,11 @@
 		}
 	]);
 
+	let total = $derived(
+		form.fields.lineas
+			?.value()
+			?.reduce((sum: number, l: any) => sum + (l.cantidad || 0) * (l.precio || 0), 0) ?? 0
+	);
 	// Opciones para el SearchSelect
 	const clientesOptions =
 		clientes.data.length > 0
@@ -34,33 +37,35 @@
 			: [];
 
 	function agregarLinea() {
-		lineas.push({
-			id: crypto.randomUUID(),
-			producto_id: '',
-			cantidad: 1,
-			precio: 0,
-			descripcion: ''
-		});
-		lineas = [...lineas];
+		lineas = [
+			...lineas,
+			{
+				idx: lineas.length,
+				producto_id: '',
+				cantidad: 1,
+				precio: 0,
+				descripcion: ''
+			}
+		];
 	}
 
-	function eliminarLinea(id: string) {
+	function eliminarLinea(idxAEliminar: number) {
 		if (lineas.length > 1) {
-			lineas = lineas.filter((l) => l.id !== id);
+			lineas = lineas.filter((l) => l.idx !== idxAEliminar);
+			lineas = lineas.map((l, i) => ({ ...l, id: i }));
 		}
 	}
 
-	function actualizarPrecioLinea(idx: number, productoId: string) {
+	function onProductoChange(idx: number, productoId: string) {
 		if (productoId && productoId !== 'personalizado') {
-			const producto = productos.find((p) => p.id.toString() === productoId);
+			const producto = productos.data.find((p) => p.id.toString() === productoId);
 			if (producto) {
-				lineas[idx].precio = producto.precio_base || 0;
+				const precio = producto.precio_base ?? 0;
+
+				form.fields.lineas[idx].precio.set(precio);
+				lineas[idx].precio = precio;
 			}
 		}
-	}
-
-	function calcularTotal() {
-		return lineas.reduce((sum, l) => sum + l.cantidad * l.precio, 0);
 	}
 </script>
 
@@ -72,7 +77,23 @@
 	/>
 
 	<!-- Form -->
-	<form {...form} class="space-y-6">
+	<form
+		{...form.enhance(async (form) => {
+			try {
+				if (await form.submit()) {
+					form.element.reset();
+
+					toast.success('Pedido creado!');
+				} else {
+					toast.error('Error de validación');
+				}
+			} catch (error) {
+				console.log(error);
+				toast.error('Error del servidor');
+			}
+		})}
+		class="space-y-6"
+	>
 		<!-- Datos del Cliente -->
 		<fieldset class="fieldset">
 			<legend class="fieldset-legend text-lg">Información del Cliente</legend>
@@ -84,35 +105,18 @@
 					label="Cliente"
 					options={clientesOptions}
 					placeholder="Buscar cliente..."
-					bind:value={clienteSeleccionado}
-					required={true}
-					onChange={(val) => {
-						const hiddenInput = document.querySelector(
-							'input[name="cliente_id"]'
-						) as HTMLInputElement;
-						if (hiddenInput) hiddenInput.value = val;
-					}}
+					field={form.fields.cliente_id}
 				/>
-				<input type="hidden" name="cliente_id" value={clienteSeleccionado} />
-				{#each form.fields?.cliente_id?.issues() as issue (issue)}
-					<p class="text-sm text-error">{issue.message}</p>
-				{/each}
 
 				<!-- Fecha de entrega -->
-				<FormField
-					label="Fecha de entrega prometida"
-					id="fecha_entrega_prometida"
-					{...form.fields?.fecha_entrega_prometida?.as('date')}
-				/>
+				<FormFieldWrapper label="Fecha de entrega prometida" id="fecha_entrega_prometida">
+					<input class="input" {...form.fields?.fecha_entrega_prometida?.as('date')} />
+				</FormFieldWrapper>
 
-				<!-- Seña -->
-				<FormField
-					label="Seña (opcional)"
-					step="0.01"
-					id="seña"
-					placeholder="0.00"
-					{...form.fields?.seña?.as('number')}
-				/>
+				<!-- Anticipo -->
+				<FormFieldWrapper label="Anticipo (opcional)" id="anticipo">
+					<input class="input remove-arrow" placeholder="0" {...form.fields?.anticipo?.as('number')} />
+				</FormFieldWrapper>
 			</div>
 		</fieldset>
 
@@ -126,73 +130,60 @@
 			</div>
 
 			<div class="space-y-3">
-				{#each lineas as linea, idx (linea.id)}
-					<div class="card border border-base-300 bg-base-100">
-						<div class="p-4">
-							<button
-								type="button"
-								onclick={() => eliminarLinea(linea.id)}
-								class="btn absolute top-2 right-2 btn-circle btn-ghost btn-xs"
-								class:hidden={lineas.length === 1}
-							>
-								✕
-							</button>
+				{#each lineas as linea, idx (linea.idx)}
+					<div class="card border border-base-300 bg-base-100 p-4">
+						<button
+							type="button"
+							onclick={() => eliminarLinea(linea.idx)}
+							class="btn absolute top-2 right-2 btn-circle btn-ghost btn-xs"
+							class:hidden={lineas.length === 1}
+						>
+							✕
+						</button>
 
-							<div class="grid gap-4 md:grid-cols-4">
-								<!-- Producto -->
-								<SearchSelect
-									id={`lineas[${idx}].producto_id`}
-									label="Producto"
-									options={[
-										{ value: 'personalizado', label: '📝 Personalizado' },
-										...productos.map((p) => ({
-											value: p.id.toString(),
-											label: p.nombre
-										}))
-									]}
-									placeholder="Seleccionar producto..."
-									bind:value={linea.producto_id}
-									onChange={(val) => {
-										linea.producto_id = val;
-										actualizarPrecioLinea(idx, val);
-									}}
-								/>
+						<div class="grid gap-4 md:grid-cols-4">
+							<!-- Producto -->
+							<SearchSelect
+								label="Producto"
+								id={`lineas[${idx}].producto_id`}
+								field={form.fields.lineas[idx].producto_id}
+								options={[
+									{ value: 'personalizado', label: '📝 Personalizado' },
+									...productos.data.map((p) => ({ value: p.id.toString(), label: p.nombre }))
+								]}
+								onChange={(val: string) => onProductoChange(idx, val)}
+							/>
 
-								<!-- Descripción (si es personalizado) -->
-								{#if linea.producto_id === 'personalizado'}
-									<FormField
-										label="Descripción"
+							<!-- Descripción (si es personalizado) -->
+							{#if form.fields.lineas[idx].producto_id.value() === 'personalizado'}
+								<FormFieldWrapper label="Descripción" id={`lineas[${idx}].descripcion`}>
+									<input
+										class="input"
 										id={`lineas[${idx}].descripcion`}
-										type="text"
-										bind:value={linea.descripcion}
+										{...form.fields.lineas[idx].descripcion.as('text')}
 									/>
-								{/if}
+								</FormFieldWrapper>
+							{/if}
 
-								<!-- Cantidad -->
-								<FormField
-									label="Cantidad"
+							<!-- Cantidad -->
+							<FormFieldWrapper label="Cantidad" id={`lineas[${idx}].cantidad`}>
+								<input
+									class="input remove-arrow"
 									id={`lineas[${idx}].cantidad`}
-									type="number"
+									{...form.fields.lineas[idx].cantidad.as('number')}
 									min="1"
-									bind:value={linea.cantidad}
 								/>
+							</FormFieldWrapper>
 
-								<!-- Precio -->
-								<FormField
-									label="Precio unitario"
-									id={`lineas[${idx}].precio`}
-									type="number"
+							<!-- Precio -->
+							<FormFieldWrapper label="Precio unitario" id={`lineas[${idx}].precio`}>
+								<input
+									class="input remove-arrow"
+									{...form.fields.lineas[idx].precio.as('number')}
 									step="0.01"
 									min="0"
-									bind:value={linea.precio}
 								/>
-							</div>
-
-							<!-- Hidden fields -->
-							<input type="hidden" name={`lineas[${idx}].producto_id`} value={linea.producto_id} />
-							<input type="hidden" name={`lineas[${idx}].cantidad`} value={linea.cantidad} />
-							<input type="hidden" name={`lineas[${idx}].precio`} value={linea.precio} />
-							<input type="hidden" name={`lineas[${idx}].descripcion`} value={linea.descripcion} />
+							</FormFieldWrapper>
 						</div>
 					</div>
 				{/each}
@@ -204,10 +195,7 @@
 				<div class="text-right">
 					<p class="text-sm text-base-content/70">Total</p>
 					<p class="text-3xl font-bold">
-						${calcularTotal().toLocaleString('es-AR', {
-							minimumFractionDigits: 2,
-							maximumFractionDigits: 2
-						})}
+						${total.toLocaleString('es-AR', { minimumFractionDigits: 2 })}
 					</p>
 				</div>
 			</div>
@@ -217,25 +205,21 @@
 		<fieldset class="fieldset">
 			<legend class="fieldset-legend text-lg">Notas</legend>
 
-			<FormField
-				label="Observaciones"
-				id="observaciones"
-				placeholder="Notas adicionales sobre el pedido..."
-				textarea={true}
-				rows={3}
-				{...form.fields?.observaciones?.as('text')}
-			/>
+			<FormFieldWrapper label="Observaciones" id="observaciones">
+				<textarea
+					placeholder="Notas adicionales sobre el pedido..."
+					rows={3}
+					{...form.fields?.observaciones?.as('text')}
+					class="textarea resize-none"
+				>
+				</textarea>
+			</FormFieldWrapper>
 		</fieldset>
 
 		<!-- Errores -->
 		{#if form?.fields?.allIssues?.()?.length}
 			<div role="alert" class="alert gap-4 alert-error">
-				<svg
-					xmlns="http://www.w3.org/2000/svg"
-					class="h-6 w-6 shrink-0 stroke-current"
-					fill="none"
-					viewBox="0 0 24 24"
-				>
+				<svg class="h-6 w-6 shrink-0 stroke-current" fill="none" viewBox="0 0 24 24">
 					<path
 						stroke-linecap="round"
 						stroke-linejoin="round"

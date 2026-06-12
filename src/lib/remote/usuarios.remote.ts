@@ -1,6 +1,6 @@
 import { getRequestEvent, query } from '$app/server';
 import { getDb } from '$lib/server/db';
-import { usuarios, sesiones } from '$lib/server/db/schema';
+import { sesiones, usuarios } from '$lib/server/db/schema';
 import { eq } from 'drizzle-orm';
 
 export const getCurrentUser = query(async () => {
@@ -13,7 +13,17 @@ export const getCurrentUser = query(async () => {
 
 	const session = await db.select().from(sesiones).where(eq(sesiones.id, sessionId)).get();
 
-	if (!session?.user_id) return null;
+	if (!session || session.user_id == null || new Date(session.expires_at) < new Date()) {
+		return null;
+	}
 
-	return await db.select().from(usuarios).where(eq(usuarios.id, session.user_id)).get();
+	const user = await db.select().from(usuarios).where(eq(usuarios.id, session.user_id)).get();
+
+	if (!user) return null;
+
+	return {
+		id: user.id,
+		username: user.username,
+		rol: String(user.rol_id ?? '')
+	};
 });

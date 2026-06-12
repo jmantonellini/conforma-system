@@ -1,11 +1,10 @@
 <script lang="ts">
 	import { paises, provincias } from '$lib/data/direcciones';
-	import FormField from './FormField.svelte';
+	import FormFieldWrapper from './FormFieldWrapper.svelte';
 
 	let { form, initialData, disabled = false } = $props();
 
 	function onPaisChange() {
-		// Resetear provincia y ciudad al cambiar país
 		if (form.fields.pais?.value() !== 'Argentina') {
 			form.fields.provincia = '';
 			form.fields.ciudad = '';
@@ -13,9 +12,10 @@
 	}
 
 	function onProvinciaChange() {
-		// Resetear ciudad al cambiar provincia
 		form.fields.ciudad = '';
 	}
+
+	let pais = $derived(form.fields?.pais?.value());
 </script>
 
 <fieldset class="fieldset rounded-lg border p-4">
@@ -28,7 +28,7 @@
 			<select
 				class="select-bordered select w-full"
 				id="pais"
-				{...form.fields?.pais?.as('text', initialData?.pais || 'Argentina')}
+				{...form.fields?.pais?.as('select', initialData?.pais || 'Argentina')}
 				onchange={onPaisChange}
 				{disabled}
 			>
@@ -38,7 +38,7 @@
 			</select>
 		</div>
 
-		{#if form.fields?.pais?.value() === 'Argentina'}
+		{#if pais === 'Argentina'}
 			<!-- Provincia (select) -->
 			<div class="flex w-full flex-col gap-2">
 				<label class="label" for="provincia"> Provincia </label>
@@ -46,7 +46,7 @@
 					id="provincia"
 					class="select"
 					class:select-disabled={disabled}
-					{...form.fields?.provincia?.as('text', initialData?.provincia || '')}
+					{...form.fields?.provincia?.as('select', initialData?.provincia || '')}
 					onchange={onProvinciaChange}
 					{disabled}
 				>
@@ -58,49 +58,61 @@
 			</div>
 		{:else}
 			<!-- Para otros países, campos de texto libre -->
-			<div class="md:col-span-2">
-				<FormField
-					label="Provincia / Estado"
+			<FormFieldWrapper id="provincia" label="Provincia / Estado">
+				<input
+					class="input"
 					{...form.fields?.provincia?.as('text', initialData?.provincia || '')}
 					{disabled}
 				/>
-			</div>
+			</FormFieldWrapper>
 		{/if}
 
 		<!-- Ciudad -->
-		<FormField label="Ciudad" {...form.fields?.ciudad?.as('text', initialData?.ciudad || '')} />
+		<FormFieldWrapper id="ciudad" label="Ciudad">
+			<input class="input" {...form.fields?.ciudad?.as('text', initialData?.ciudad || '')} />
+		</FormFieldWrapper>
 
 		<!-- Código Postal -->
-		<FormField
-			label="Código Postal"
-			{...form.fields?.codigo_postal?.as('text', initialData?.codigo_postal || '')}
-			{disabled}
-		/>
+		<FormFieldWrapper id="codigo_postal" label="Código Postal">
+			<input
+				class="input"
+				{...form.fields?.codigo_postal?.as('text', initialData?.codigo_postal || '')}
+				{disabled}
+			/>
+		</FormFieldWrapper>
 
 		<!-- Calle -->
-		<FormField
-			label="Calle"
-			{...form.fields?.calle?.as('text', initialData?.calle || '')}
-			{disabled}
-		/>
+		<FormFieldWrapper id="calle" label="Calle">
+			<input
+				class="input"
+				{...form.fields?.calle?.as('text', initialData?.calle || '')}
+				{disabled}
+			/>
+		</FormFieldWrapper>
 
 		<!-- Número, Piso, Departamento -->
 		<div class="grid grid-cols-3 gap-4 md:col-span-2">
-			<FormField
-				label="Número"
-				{...form.fields?.numero?.as('text', initialData?.numero || '')}
-				{disabled}
-			/>
-			<FormField
-				label="Piso"
-				{...form.fields?.piso?.as('text', initialData?.piso || '')}
-				{disabled}
-			/>
-			<FormField
-				label="Departamento"
-				{...form.fields?.departamento?.as('text', initialData?.departamento || '')}
-				{disabled}
-			/>
+			<FormFieldWrapper id="numero" label="Número">
+				<input
+					class="input"
+					{...form.fields?.numero?.as('text', initialData?.numero || '')}
+					{disabled}
+				/>
+			</FormFieldWrapper>
+			<FormFieldWrapper id="piso" label="Piso">
+				<input
+					class="input"
+					{...form.fields?.piso?.as('text', initialData?.piso || '')}
+					{disabled}
+				/>
+			</FormFieldWrapper>
+			<FormFieldWrapper id="departamento" label="Departamento">
+				<input
+					class="input"
+					{...form.fields?.departamento?.as('text', initialData?.departamento || '')}
+					{disabled}
+				/>
+			</FormFieldWrapper>
 		</div>
 	</div>
 </fieldset>

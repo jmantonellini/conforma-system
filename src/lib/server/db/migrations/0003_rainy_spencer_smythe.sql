@@ -1,0 +1,1 @@
+ALTER TABLE `pedidos` RENAME COLUMN "seña" TO "anticipo";
