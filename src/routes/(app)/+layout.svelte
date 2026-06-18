@@ -4,6 +4,8 @@
 	import { SideBar } from '$lib/components/ui';
 	import { Fabricacion, Producto, Settings, Users } from '$lib/components/ui/icons';
 	import Pedido from '$lib/components/ui/icons/Pedido.svelte';
+	import { browser } from '$app/environment';
+	import { authState } from '$lib/stores/auth.svelte';
 
 	const tabs = [
 		{ href: '/pedidos', label: 'Pedidos', icon: Pedido },
@@ -26,6 +28,18 @@
 	];
 
 	let { children, data }: LayoutProps = $props();
+
+	let user = $derived(data.user);
+	let permisos = $derived(data.permisos);
+
+	$effect(() => {
+		if (browser && user) {
+			authState.user = user;
+			authState.permisos = permisos;
+			authState.isLoading = false;
+			authState.loaded = true;
+		}
+	});
 </script>
 
 <div class="flex min-h-screen flex-col">

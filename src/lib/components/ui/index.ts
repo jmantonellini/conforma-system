@@ -13,3 +13,4 @@ export { default as PageLayout } from './PageLayout.svelte';
 export { default as FormActions } from './FormActions.svelte';
 export { default as FormDireccion } from './FormDireccion.svelte';
 export { default as Toaster } from './Toaster.svelte';
+export { default as Can } from './Can.svelte';

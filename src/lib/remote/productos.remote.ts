@@ -1,4 +1,4 @@
-import { query, command, form, getRequestEvent } from '$app/server';
+import { query, command, form, getRequestEvent, requested } from '$app/server';
 import { getDb } from '$lib/server/db';
 import {
 	productos,
@@ -11,27 +11,7 @@ import {
 } from '$lib/server/db/schema';
 import { eq, count, and, like } from 'drizzle-orm';
 import * as v from 'valibot';
-
-// Schema base
-const ProductoSchema = v.object({
-	codigo: v.pipe(v.string(), v.nonEmpty('Código requerido')),
-	nombre: v.pipe(v.string(), v.nonEmpty('Nombre requerido')),
-	categoria_id: v.optional(v.pipe(v.string(), v.transform(Number), v.number())),
-	precio_base: v.nullable(v.number(), 0),
-	medidas_primario_diametro: v.nullable(v.number()),
-	medidas_primario_largo: v.nullable(v.number()),
-	medidas_secundario_diametro: v.nullable(v.number()),
-	medidas_secundario_largo: v.nullable(v.number()),
-	trombon_diametro_inicial: v.nullable(v.number()),
-	trombon_largo: v.nullable(v.number()),
-	trombon_observaciones: v.optional(v.string()),
-	es_personalizable: v.optional(v.boolean(), false),
-	tipo_vehiculo_id: v.optional(v.pipe(v.string(), v.transform(Number), v.number())),
-	tipo_uso_id: v.optional(v.pipe(v.string(), v.transform(Number), v.number())),
-	categoria_competencia_id: v.optional(v.pipe(v.string(), v.transform(Number), v.number())),
-	marca_id: v.optional(v.pipe(v.string(), v.transform(Number), v.number())),
-	modelo_id: v.optional(v.pipe(v.string(), v.transform(Number), v.number()))
-});
+import { ProductoSchema, ProductoSchemaUpdate } from './productos.schema';
 
 // Query: productos con paginación
 export const getProductos = query(
@@ -42,6 +22,10 @@ export const getProductos = query(
 		limit: v.optional(v.pipe(v.number(), v.minValue(1), v.maxValue(100)), 10)
 	}),
 	async ({ search, categoriaId, page, limit }) => {
+		console.log('GET PRODUCTOSSSS');
+		console.log('SEARCH', search);
+		console.log('CATEGORIA', categoriaId);
+		console.log('PAGE', page);
 		const db = getDb(getRequestEvent().platform?.env?.DB);
 		const offset = (page - 1) * limit;
 
@@ -103,43 +87,40 @@ export const crearProducto = form(ProductoSchema, async (data) => {
 		.insert(productos)
 		.values({
 			...data,
-			categoria_id: data.categoria_id || null,
 			created_at: new Date(),
 			updated_at: new Date()
 		})
 		.returning();
 
+	getProductos({}).refresh();
+
 	return { success: true, producto };
 });
 
-// productos.remote.ts
-export const actualizarProducto = form(
-	v.object({
-		id: v.pipe(v.string(), v.transform(Number), v.number()),
-		...ProductoSchema.entries
-	}),
-	async (data) => {
-		const db = getDb(getRequestEvent().platform?.env?.DB);
-		const { id, ...updateData } = data;
+export const actualizarProducto = form(ProductoSchemaUpdate, async (data) => {
+	console.log('ATUALIZAR ATUALIZAR ACTUALZIAR', data);
 
-		const [producto] = await db
-			.update(productos)
-			.set({
-				...updateData,
-				updated_at: new Date()
-			})
-			.where(eq(productos.id, id))
-			.returning();
+	const db = getDb(getRequestEvent().platform?.env?.DB);
+	const { id, ...updateData } = data;
 
-		return { success: true, producto };
-	}
-);
+	const [producto] = await db
+		.update(productos)
+		.set({
+			...updateData,
+			updated_at: new Date()
+		})
+		.where(eq(productos.id, Number(id)))
+		.returning();
+
+	getProductos({}).refresh();
+	return { success: true, producto };
+});
 
 // Command: eliminar producto
 export const eliminarProducto = command(v.number(), async (id) => {
 	const db = getDb(getRequestEvent().platform?.env?.DB);
 	await db.delete(productos).where(eq(productos.id, id));
-	getProductos({ search: '', page: 1 }).refresh();
+	await requested(getProductos, 1).refreshAll();
 	return { success: true };
 });
 
@@ -153,12 +134,17 @@ export const getTiposVehiculo = query(async () => {
 	return await db.select().from(tipos_vehiculo).orderBy(tipos_vehiculo.nombre);
 });
 
-export const getCategoriasComp = query(v.number(), async (tipoUsoId) => {
+export const getCategoriasComp = query(v.nullish(v.number()), async (tipoVehiculoId) => {
+	console.log('GET CATEOGIRAAAAAAAAA', tipoVehiculoId);
+	if (!tipoVehiculoId || isNaN(tipoVehiculoId) || tipoVehiculoId === 0) {
+		return [];
+	}
+
 	const db = getDb(getRequestEvent().platform?.env?.DB);
 	return await db
 		.select()
 		.from(categorias_competencia)
-		.where(eq(categorias_competencia.tipo_uso_id, tipoUsoId))
+		.where(eq(categorias_competencia.tipo_vehiculo_id, tipoVehiculoId))
 		.orderBy(categorias_competencia.nombre);
 });
 
@@ -168,6 +154,11 @@ export const getMarcas = query(async () => {
 });
 
 export const getModelos = query(v.number(), async (marcaId) => {
+	console.log('GET MODELOS', marcaId);
+
 	const db = getDb(getRequestEvent().platform?.env?.DB);
-	return await db.select().from(modelos).where(eq(modelos.marca_id, marcaId));
+	const data = await db.select().from(modelos).where(eq(modelos.marca_id, marcaId));
+	console.log('DATA', data);
+
+	return data;
 });

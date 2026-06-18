@@ -1,10 +1,11 @@
 import { getRequestEvent, query } from '$app/server';
 import { getDb } from '$lib/server/db';
-import { sesiones, usuarios } from '$lib/server/db/schema';
+import { roles, sesiones, usuarios } from '$lib/server/db/schema';
 import { eq } from 'drizzle-orm';
 
 export const getCurrentUser = query(async () => {
 	const event = getRequestEvent();
+	
 	const sessionId = event.cookies.get('session');
 
 	if (!sessionId) return null;
@@ -17,13 +18,22 @@ export const getCurrentUser = query(async () => {
 		return null;
 	}
 
-	const user = await db.select().from(usuarios).where(eq(usuarios.id, session.user_id)).get();
+	const user = await db
+		.select({
+			id: usuarios.id,
+			username: usuarios.username,
+			rol: {
+				id: roles.id,
+				nombre: roles.nombre,
+				descripcion: roles.descripcion
+			}
+		})
+		.from(usuarios)
+		.leftJoin(roles, eq(roles.id, usuarios.rol_id))
+		.where(eq(usuarios.id, session.user_id))
+		.get();
 
 	if (!user) return null;
 
-	return {
-		id: user.id,
-		username: user.username,
-		rol: String(user.rol_id ?? '')
-	};
+	return user;
 });

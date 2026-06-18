@@ -1,4 +1,3 @@
-// src/lib/stores/toast.svelte.ts
 export type ToastType = 'info' | 'success' | 'error' | 'warning';
 
 export interface Toast {

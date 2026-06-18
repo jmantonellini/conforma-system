@@ -7,14 +7,15 @@ import {
 	logs_pedidos,
 	clientes,
 	estados_pedido,
-	productos
+	productos,
+	ordenes_fabricacion,
+	estados_fabricacion
 } from '$lib/server/db/schema';
-import { getCurrentUser } from './usuarios.remote';
 import { redirect } from '@sveltejs/kit';
 import { generarNumeroPedido } from '../server/utils/pedidos';
 import { resolve } from '$app/paths';
-import { and, count, desc, eq, like } from 'drizzle-orm';
-import { goto } from '$app/navigation';
+import { and, count, desc, eq, inArray, isNull, like, not, sql } from 'drizzle-orm';
+import { getCurrentUser } from './usuarios.remote';
 
 const LineaSchema = v.object({
 	producto_id: v.string(),
@@ -84,8 +85,6 @@ export const getPedidos = query(
 		// Contar total
 		const [totalResult] = await db.select({ count: count() }).from(pedidos).where(where);
 
-		console.log('DATA', data);
-
 		return {
 			data,
 			total: totalResult?.count || 0,
@@ -118,6 +117,8 @@ export const getPedidoById = query(v.number(), async (id) => {
 		.where(eq(pedidos.id, id))
 		.get();
 
+	if (!pedido) throw new Error('Pedido no encontrado');
+
 	const lineas = await db
 		.select({
 			id: lineas_pedido.id,
@@ -128,10 +129,19 @@ export const getPedidoById = query(v.number(), async (id) => {
 			descripcion_personalizada: lineas_pedido.descripcion_personalizada,
 			producto_id: lineas_pedido.producto_id,
 			producto_codigo: productos.codigo,
-			producto_nombre: productos.nombre
+			producto_nombre: productos.nombre,
+			tiene_orden: sql<boolean>`${lineas_pedido.orden_fabricacion_id} IS NOT NULL`,
+			orden: {
+				id: ordenes_fabricacion.id,
+				estado_id: estados_fabricacion.id,
+				estado_nombre: estados_fabricacion.nombre,
+				estado_color: estados_fabricacion.color
+			}
 		})
 		.from(lineas_pedido)
 		.leftJoin(productos, eq(lineas_pedido.producto_id, productos.id))
+		.leftJoin(ordenes_fabricacion, eq(lineas_pedido.orden_fabricacion_id, ordenes_fabricacion.id))
+		.leftJoin(estados_fabricacion, eq(ordenes_fabricacion.estado_id, estados_fabricacion.id))
 		.where(eq(lineas_pedido.pedido_id, id));
 
 	if (!pedido) throw new Error('Pedido no encontrado');
@@ -139,10 +149,13 @@ export const getPedidoById = query(v.number(), async (id) => {
 });
 
 export const crearPedido = form(PedidoSchema, async (data) => {
-	const user = await getCurrentUser();
-	if (!user) throw new Error('No autorizado');
-
 	const event = getRequestEvent();
+
+	const user = await getCurrentUser();
+	if (!user) {
+		throw new Error('Usuario no autenticado');
+	}
+
 	const db = getDb(event.platform?.env?.DB);
 
 	const numero_pedido = await generarNumeroPedido(db);
@@ -199,5 +212,104 @@ export const eliminarPedido = command(v.number(), async (pedidoId) => {
 	console.log('ELIMINAR', pedidoId);
 
 	await db.delete(pedidos).where(eq(pedidos.id, pedidoId));
-	redirect(303, '/pedidos');
+	redirect(303, resolve('/pedidos'));
 });
+
+export const getLineasPedido = query(
+	v.object({
+		pedido_id: v.optional(v.pipe(v.string(), v.transform(Number), v.number())),
+		solo_sin_orden: v.optional(v.boolean(), false),
+		limit: v.optional(v.pipe(v.number(), v.minValue(1), v.maxValue(100)), 50),
+		offset: v.optional(v.pipe(v.number(), v.minValue(0)), 0)
+	}),
+	async ({ pedido_id, solo_sin_orden, limit, offset }) => {
+		const db = getDb(getRequestEvent().platform?.env?.DB);
+
+		// Subquery para líneas que tienen orden
+		const lineasConOrden = db
+			.select({ linea_pedido_id: ordenes_fabricacion.linea_pedido_id })
+			.from(ordenes_fabricacion);
+
+		const conditions = [];
+
+		if (pedido_id) {
+			conditions.push(eq(lineas_pedido.pedido_id, pedido_id));
+		}
+
+		if (solo_sin_orden) {
+			conditions.push(not(inArray(lineas_pedido.id, lineasConOrden)));
+		}
+
+		const whereCondition = conditions.length > 0 ? and(...conditions) : undefined;
+
+		const data = await db
+			.select({
+				id: lineas_pedido.id,
+				pedido_id: lineas_pedido.pedido_id,
+				pedido_numero: pedidos.numero_pedido,
+				producto_id: lineas_pedido.producto_id,
+				producto_nombre: productos.nombre,
+				cantidad: lineas_pedido.cantidad,
+				precio_unitario: lineas_pedido.precio_unitario,
+				subtotal: lineas_pedido.subtotal,
+				es_personalizado: lineas_pedido.es_personalizado,
+				descripcion_personalizada: lineas_pedido.descripcion_personalizada,
+				// Si tiene orden, traer datos de la orden
+				orden_id: ordenes_fabricacion.id,
+				orden_estado_id: ordenes_fabricacion.estado_id,
+				orden_estado_nombre: estados_fabricacion.nombre,
+				orden_estado_color: estados_fabricacion.color,
+				tiene_orden: sql<boolean>`EXISTS (SELECT 1 FROM ordenes_fabricacion WHERE ordenes_fabricacion.linea_pedido_id = lineas_pedido.id)`
+			})
+			.from(lineas_pedido)
+			.leftJoin(pedidos, eq(lineas_pedido.pedido_id, pedidos.id))
+			.leftJoin(productos, eq(lineas_pedido.producto_id, productos.id))
+			.leftJoin(ordenes_fabricacion, eq(lineas_pedido.id, ordenes_fabricacion.linea_pedido_id))
+			.leftJoin(estados_fabricacion, eq(ordenes_fabricacion.estado_id, estados_fabricacion.id))
+			.where(whereCondition)
+			.orderBy(desc(lineas_pedido.id))
+			.limit(limit)
+			.offset(offset);
+
+		const [totalResult] = await db
+			.select({ count: count() })
+			.from(lineas_pedido)
+			.where(whereCondition);
+
+		return {
+			data,
+			total: totalResult?.count || 0
+		};
+	}
+);
+
+// Función simplificada para líneas sin orden (para el formulario de nueva orden)
+export const getLineasPedidoSinOrden = query(
+	v.object({
+		pedido_id: v.optional(v.pipe(v.string(), v.transform(Number), v.number())),
+		limit: v.optional(v.pipe(v.number(), v.minValue(1), v.maxValue(100)), 50)
+	}),
+	async ({ pedido_id, limit }) => {
+		const db = getDb(getRequestEvent().platform?.env?.DB);
+
+		const conditions = [isNull(lineas_pedido.orden_fabricacion_id)];
+		if (pedido_id) {
+			conditions.push(eq(lineas_pedido.pedido_id, pedido_id));
+		}
+
+		return await db
+			.select({
+				id: lineas_pedido.id,
+				pedido_numero: pedidos.numero_pedido,
+				producto_nombre: productos.nombre,
+				cantidad: lineas_pedido.cantidad,
+				descripcion: lineas_pedido.descripcion_personalizada,
+				es_personalizado: lineas_pedido.es_personalizado
+			})
+			.from(lineas_pedido)
+			.leftJoin(pedidos, eq(lineas_pedido.pedido_id, pedidos.id))
+			.leftJoin(productos, eq(lineas_pedido.producto_id, productos.id))
+			.where(and(...conditions))
+			.limit(limit);
+	}
+);

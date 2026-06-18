@@ -1,5 +1,10 @@
 <script lang="ts">
-	let { search = $bindable(), placeholder = 'Buscar...', ...restProps } = $props();
+	let {
+		search = $bindable(),
+		autofocus = false,
+		placeholder = 'Buscar...',
+		...restProps
+	} = $props();
 </script>
 
 <div class="join w-full md:w-auto">
@@ -7,6 +12,7 @@
 		type="search"
 		bind:value={search}
 		{placeholder}
+		{autofocus}
 		{...restProps}
 		class="input join-item w-full"
 	/>

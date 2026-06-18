@@ -1,31 +1,9 @@
 import { query, command, getRequestEvent, form } from '$app/server';
 import { getDb } from '$lib/server/db';
 import { clientes } from '$lib/server/db/schema';
-import { eq, ilike, count, and, or, like } from 'drizzle-orm';
+import { eq, count, or, like } from 'drizzle-orm';
 import * as v from 'valibot';
-
-// Schema de validación
-const ClienteSchemaBase = v.object({
-	nombre: v.pipe(v.string(), v.minLength(3, 'El nombre debe tener al menos 3 caracteres.')),
-	razon_social: v.optional(v.string()),
-	cuit: v.optional(v.string()),
-	email: v.optional(
-		v.pipe(
-			v.string(),
-			v.email('The email is badly formatted.'),
-			v.maxLength(30, 'Your email is too long.')
-		)
-	),
-	telefono: v.optional(v.string()),
-	pais: v.optional(v.string(), 'Argentina'),
-	provincia: v.optional(v.string()),
-	ciudad: v.optional(v.string()),
-	codigo_postal: v.optional(v.string()),
-	calle: v.optional(v.string()),
-	numero: v.optional(v.string()),
-	piso: v.optional(v.string()),
-	departamento: v.optional(v.string())
-});
+import { ClienteSchemaBase } from './clientes.schema';
 
 // Query: Obtener todos los clientes (con paginación y búsqueda)
 export const getClientes = query(

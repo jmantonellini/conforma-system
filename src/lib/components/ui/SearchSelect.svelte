@@ -6,12 +6,14 @@
 		label,
 		field,
 		placeholder = 'Seleccionar...',
+		onChange = () => {},
 		...restProps
 	}: {
 		options: { value: string; label: string }[];
 		label: string;
 		field: any;
 		placeholder?: string;
+		onChange?: (val: string) => void;
 		[key: string]: any;
 	} = $props();
 
@@ -31,6 +33,7 @@
 		field.set(option.value);
 		searchTerm = option.label;
 		isOpen = false;
+		onChange(option.value);
 	}
 </script>
 

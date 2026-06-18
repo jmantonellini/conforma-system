@@ -1,46 +1,60 @@
+<!-- src/routes/login/+page.svelte -->
 <script lang="ts">
-	import { enhance } from '$app/forms';
+	import { goto, invalidateAll } from '$app/navigation';
+	import { resolve } from '$app/paths';
+	import { login } from '$lib/remote/auth.remote';
+	import { toast } from '$lib/stores/toast.svelte';
 
-	let username = $state('');
-	let password = $state('');
-
-	const { form } = $props();
+	const form = login;
 </script>
 
-<div class="flex items-center justify-center">
-	<form method="post" use:enhance class="flex h-full items-center justify-center">
-		<fieldset class="fieldset w-xs rounded-box border border-base-300 bg-base-200 p-4">
-			<legend class="fieldset-legend">Login</legend>
+<div class="flex min-h-screen items-center justify-center">
+	<form
+		{...form.enhance(async (form) => {
+			try {
+				if (await form.submit()) {
+					form.element.reset();
 
-			<label for="username" class="label">Username</label>
+					toast.success('Bienvenido!');
+					invalidateAll();
+					goto(resolve('/'));
+				} else {
+					toast.error('Error de validación');
+				}
+			} catch (error) {
+				console.log(error);
+				toast.error('Error del servidor');
+			}
+		})}
+		class="card w-96 bg-base-100 shadow-xl"
+	>
+		<div class="card-body">
+			<h2 class="card-title">Iniciar Sesión</h2>
+
 			<input
 				type="text"
-				name="username"
-				id="username"
-				class="input"
-				required
-				bind:value={username}
-				placeholder="Username"
-				autocomplete="username"
+				{...form.fields.username.as('text')}
+				placeholder="Usuario"
+				class="input-bordered input"
 			/>
 
-			<label for="password" class="label">Password</label>
 			<input
-				type="password"
-				name="password"
-				id="password"
-				class="input"
-				required
-				bind:value={password}
-				placeholder="Password"
-				autocomplete="current-password"
+				{...form.fields.password.as('password')}
+				placeholder="Contraseña"
+				class="input-bordered input"
+				autocomplete="current-password webauthn"
 			/>
 
-			<button type="submit" class="btn mt-4 btn-neutral">Login</button>
+			{#each form.fields.username.issues() as issue (issue)}
+				<p class="text-sm text-error">{issue.message}</p>
+			{/each}
+			{#each form.fields.password.issues() as issue (issue)}
+				<p class="text-sm text-error">{issue.message}</p>
+			{/each}
 
-			{#if form?.error}
-				<p class="mt-4 text-red-500">{form.error}</p>
-			{/if}
-		</fieldset>
+			<button class="btn btn-primary" type="submit" disabled={!!form.pending}>
+				{form.pending ? 'Ingresando...' : 'Ingresar'}
+			</button>
+		</div>
 	</form>
 </div>

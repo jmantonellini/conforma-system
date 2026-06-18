@@ -11,3 +11,26 @@ export type Toast = {
 	message: string;
 	timeout?: number;
 };
+
+export enum Roles {
+	ADMIN = 'admin',
+	TECNICO = 'tecnico',
+	OPERARIO = 'operario',
+	VENTAS = 'ventas',
+	JEFE_PLATA = 'jefe_plata'
+}
+
+export enum Modulos {
+	PRODUCTOS = 'productos',
+	CLIENTES = 'clientes',
+	PEDIDOS = 'pedidos',
+	FABRICACION = 'fabricacion',
+	CONFIGURACION = 'configuracion'
+}
+
+export enum Acciones {
+	CREATE = 'create',
+	VIEW = 'view',
+	EDIT = 'edit',
+	DELETE = 'delete'
+}

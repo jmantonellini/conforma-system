@@ -1,4 +1,3 @@
-// src/lib/server/db/index.ts
 import { drizzle as drizzleD1 } from 'drizzle-orm/d1';
 import * as schema from './schema';
 

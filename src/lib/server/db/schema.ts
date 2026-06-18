@@ -14,8 +14,8 @@ export const roles = sqliteTable('roles', {
 
 export const permisos = sqliteTable('permisos', {
 	id: integer('id').primaryKey({ autoIncrement: true }),
-	nombre: text('nombre').notNull().unique(),
-	modulo: text('modulo'),
+	accion: text('accion').notNull(),
+	modulo: text('modulo').notNull(),
 	created_at: integer('created_at', { mode: 'timestamp' }).$default(() => new Date())
 });
 
@@ -26,9 +26,7 @@ export const roles_permisos = sqliteTable(
 		permiso_id: integer('permiso_id').references(() => permisos.id, { onDelete: 'cascade' }),
 		created_at: integer('created_at', { mode: 'timestamp' }).$default(() => new Date())
 	},
-	(table) => ({
-		pk: primaryKey({ columns: [table.rol_id, table.permiso_id] })
-	})
+	(table) => [primaryKey({ columns: [table.rol_id, table.permiso_id] })]
 );
 
 export const empleados = sqliteTable('empleados', {
@@ -171,6 +169,9 @@ export const lineas_pedido = sqliteTable('lineas_pedido', {
 		.references(() => pedidos.id, { onDelete: 'cascade' })
 		.notNull(),
 	producto_id: integer('producto_id').references(() => productos.id, { onDelete: 'set null' }),
+	orden_fabricacion_id: integer('orden_fabricacion_id').references(() => ordenes_fabricacion.id, {
+		onDelete: 'set null'
+	}),
 
 	// Datos personalizados (sobreescriben al producto)
 	es_personalizado: integer('es_personalizado', { mode: 'boolean' }).default(false),
@@ -231,8 +232,8 @@ export const categorias_competencia = sqliteTable('categorias_competencia', {
 	id: integer('id').primaryKey({ autoIncrement: true }),
 	nombre: text('nombre').notNull(),
 	descripcion: text('descripcion'),
-	tipo_uso_id: integer('tipo_uso_id')
-		.references(() => tipos_uso.id)
+	tipo_vehiculo_id: integer('tipo_vehiculo_id')
+		.references(() => tipos_vehiculo.id)
 		.notNull(),
 	activa_desde: integer('activa_desde', { mode: 'timestamp' }),
 	activa_hasta: integer('activa_hasta', { mode: 'timestamp' }),
@@ -255,9 +256,6 @@ export const estados_fabricacion = sqliteTable('estados_fabricacion', {
 
 export const ordenes_fabricacion = sqliteTable('ordenes_fabricacion', {
 	id: integer('id').primaryKey({ autoIncrement: true }),
-	linea_pedido_id: integer('linea_pedido_id')
-		.references(() => lineas_pedido.id, { onDelete: 'cascade' })
-		.notNull(),
 
 	nombre_trabajo: text('nombre_trabajo').notNull(),
 	cantidad_total: integer('cantidad_total').notNull().default(1),
@@ -403,6 +401,7 @@ export const logs_sistema = sqliteTable('logs_sistema', {
 
 export type Usuario = typeof usuarios.$inferSelect;
 export type Rol = typeof roles.$inferSelect;
+export type Permiso = typeof permisos.$inferSelect;
 export type Empleado = typeof empleados.$inferSelect;
 export type Cliente = typeof clientes.$inferSelect;
 export type Pedido = typeof pedidos.$inferSelect;

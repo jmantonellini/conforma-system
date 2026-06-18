@@ -50,7 +50,7 @@
 					onchange={onProvinciaChange}
 					{disabled}
 				>
-					<option value="">Seleccionar provincia...</option>
+					<option value={0}>Seleccionar provincia...</option>
 					{#each provincias as provincia (provincia)}
 						<option value={provincia}>{provincia}</option>
 					{/each}

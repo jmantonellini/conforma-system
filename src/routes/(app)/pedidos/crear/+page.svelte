@@ -6,11 +6,13 @@
 	import PageHeader from '$lib/components/ui/PageHeader.svelte';
 	import FormFieldWrapper from '$lib/components/ui/FormFieldWrapper.svelte';
 	import { FormActions, PageLayout } from '$lib/components/ui';
-	import { toast } from '$lib/toast/toast.svelte';
+	import { toast } from '$lib/stores/toast.svelte';
+	import type { Producto } from '$lib/server/db/schema';
 
-	const clientes = await getClientes({});
-	const productos = await getProductos({});
-	const form = crearPedido;
+	let form = crearPedido;
+	let clientes = await getClientes({});
+	let productos = await getProductos({});
+	let producto: Producto | undefined = $state();
 
 	let lineas = $state([
 		{
@@ -58,7 +60,7 @@
 
 	function onProductoChange(idx: number, productoId: string) {
 		if (productoId && productoId !== 'personalizado') {
-			const producto = productos.data.find((p) => p.id.toString() === productoId);
+			producto = productos.data.find((p) => p.id.toString() === productoId);
 			if (producto) {
 				const precio = producto.precio_base ?? 0;
 
@@ -115,7 +117,11 @@
 
 				<!-- Anticipo -->
 				<FormFieldWrapper label="Anticipo (opcional)" id="anticipo">
-					<input class="input remove-arrow" placeholder="0" {...form.fields?.anticipo?.as('number')} />
+					<input
+						class="remove-arrow input"
+						placeholder="0"
+						{...form.fields?.anticipo?.as('number')}
+					/>
 				</FormFieldWrapper>
 			</div>
 		</fieldset>
@@ -168,7 +174,7 @@
 							<!-- Cantidad -->
 							<FormFieldWrapper label="Cantidad" id={`lineas[${idx}].cantidad`}>
 								<input
-									class="input remove-arrow"
+									class="remove-arrow input"
 									id={`lineas[${idx}].cantidad`}
 									{...form.fields.lineas[idx].cantidad.as('number')}
 									min="1"
@@ -178,7 +184,7 @@
 							<!-- Precio -->
 							<FormFieldWrapper label="Precio unitario" id={`lineas[${idx}].precio`}>
 								<input
-									class="input remove-arrow"
+									class="remove-arrow input"
 									{...form.fields.lineas[idx].precio.as('number')}
 									step="0.01"
 									min="0"

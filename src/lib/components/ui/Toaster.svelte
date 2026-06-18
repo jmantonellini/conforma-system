@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { toast, type ToastType } from '$lib/toast/toast.svelte';
+	import { toast, type ToastType } from '$lib/stores/toast.svelte';
 
 	const icons: Record<ToastType, string> = {
 		info: 'ℹ️',

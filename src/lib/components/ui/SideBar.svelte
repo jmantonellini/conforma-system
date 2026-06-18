@@ -26,15 +26,16 @@
 	<div class="drawer-side is-drawer-close:overflow-visible">
 		<label for="my-drawer-4" aria-label="close sidebar" class="drawer-overlay"></label>
 		<div
-			class="flex h-full min-h-screen flex-col items-start overflow-hidden bg-base-200 is-drawer-close:w-14 is-drawer-open:w-64"
+			class="flex h-full min-h-screen flex-col items-start overflow-hidden bg-base-200 px-4 is-drawer-close:w-14 is-drawer-open:w-64"
 		>
 			<aside class="w-full">
-				<nav class="mt-5">
+				<nav class="mt-5 flex flex-col gap-2">
 					{#each tabs ?? [] as tab (tab.href)}
 						<a
 							href={tab.href}
-							class="flex items-center gap-4 px-4 py-2 whitespace-nowrap hover:bg-gray-200"
+							class="flex items-center gap-4 px-4 py-2 text-sm rounded whitespace-nowrap hover:bg-gray-200"
 							class:bg-gray-300={tab.href && page.url.pathname.startsWith(tab.href)}
+							class:text-primary={tab.href && page.url.pathname.startsWith(tab.href)}
 						>
 							{#if tab.icon && typeof tab.icon !== 'string'}
 								{@const Icon = tab.icon}
