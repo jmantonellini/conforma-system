@@ -7,12 +7,14 @@ import {
 	getTiposVehiculo
 } from '$lib/remote/productos.remote';
 import { getCurrentUser } from '$lib/remote/usuarios.remote';
-import { getPermisosByRol } from '$lib/remote/roles.remote';
+import { getPermisos, getPermisosByRol, getRoles } from '$lib/remote/roles.remote';
 
 let categoriasCache: unknown = null;
 let marcasCache: unknown = null;
 let tiposDeUsoCache: unknown = null;
 let tiposVehiculoCache: unknown = null;
+let rolesCache: unknown = null;
+let permisosCache: unknown = null;
 
 export const load = (async ({ cookies }) => {
 	const session = cookies.get('session');
@@ -42,6 +44,14 @@ export const load = (async ({ cookies }) => {
 		tiposVehiculoCache = await getTiposVehiculo();
 	}
 
+	if (!permisosCache) {
+		permisosCache = await getPermisos();
+	}
+
+	if (!rolesCache) {
+		rolesCache = await getRoles();
+	}
+
 	return {
 		user,
 		permisos,
@@ -49,6 +59,8 @@ export const load = (async ({ cookies }) => {
 		categorias: categoriasCache,
 		marcas: marcasCache,
 		tiposDeUso: tiposDeUsoCache,
-		tiposVehiculo: tiposVehiculoCache
+		tiposVehiculo: tiposVehiculoCache,
+		todosPermisos: permisosCache,
+		todosRoles: rolesCache
 	};
 }) satisfies LayoutServerLoad;

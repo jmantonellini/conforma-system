@@ -4,6 +4,7 @@
 	import { page } from '$app/state';
 	import { FormFieldWrapper, PageHeader, PageLayout } from '$lib/components/ui';
 	import { eliminarPedido, getPedidoById } from '$lib/remote/pedidos.remote';
+	import { toast } from '$lib/stores/toast.svelte';
 
 	let { pedido, lineas } = $derived(await getPedidoById(parseInt(page.params.id ?? '')));
 
@@ -16,6 +17,9 @@
 	function irADetalleOrden(ordenId: number | null) {
 		if (ordenId) goto(resolve(`/fabricacion/${ordenId}`));
 	}
+
+	console.log('LINEAS', lineas);
+	
 </script>
 
 <PageLayout>
@@ -98,7 +102,7 @@
 													</button>
 												</div>
 											{:else}
-												<span class="text-sm text-base-content/50">Pendiente</span>
+												<span class="text-sm text-base-content/50">Sin Orden</span>
 											{/if}
 										</td>
 										<td class="text-center">
@@ -150,7 +154,10 @@
 					onclick={async () => {
 						try {
 							if (pedido) {
-								await eliminarPedido(pedido?.id);
+								await eliminarPedido(pedido?.id).then(() => {
+									toast.success('Pedido eliminado');
+									goto(resolve('/pedidos'));
+								});
 							}
 						} catch (error) {
 							console.log(error);

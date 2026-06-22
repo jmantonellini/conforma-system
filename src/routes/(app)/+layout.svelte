@@ -17,9 +17,10 @@
 			label: 'Configuración',
 			icon: Settings,
 			subtabs: [
-				{ href: '/configuracion/categorias-productos', label: 'Categorías de Productos' },
 				{ href: '/configuracion/usuarios', label: 'Usuarios' },
+				{ href: '/configuracion/empleados', label: 'Empleados' },
 				{ href: '/configuracion/roles', label: 'Roles' },
+				{ href: '/configuracion/categorias-productos', label: 'Categorías de Productos' },
 				{ href: '/configuracion/estados-fabricacion', label: 'Estados de Fabricación' },
 				{ href: '/configuracion/estados-pedidos', label: 'Estados de Pedidos' },
 				{ href: '/configuracion/tipos-materiales', label: 'Tipos de Materiales' }

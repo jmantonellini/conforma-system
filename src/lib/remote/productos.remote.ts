@@ -9,7 +9,7 @@ import {
 	tipos_vehiculo,
 	modelos
 } from '$lib/server/db/schema';
-import { eq, count, and, like } from 'drizzle-orm';
+import { eq, count, and, like, or } from 'drizzle-orm';
 import * as v from 'valibot';
 import { ProductoSchema, ProductoSchemaUpdate } from './productos.schema';
 
@@ -22,31 +22,58 @@ export const getProductos = query(
 		limit: v.optional(v.pipe(v.number(), v.minValue(1), v.maxValue(100)), 10)
 	}),
 	async ({ search, categoriaId, page, limit }) => {
-		console.log('GET PRODUCTOSSSS');
-		console.log('SEARCH', search);
-		console.log('CATEGORIA', categoriaId);
-		console.log('PAGE', page);
 		const db = getDb(getRequestEvent().platform?.env?.DB);
 		const offset = (page - 1) * limit;
 
-		let where = undefined;
-		if (search && categoriaId) {
-			where = and(like(productos.nombre, `%${search}%`), eq(productos.categoria_id, categoriaId));
-		} else if (search) {
-			where = like(productos.nombre, `%${search}%`);
-		} else if (categoriaId) {
-			where = eq(productos.categoria_id, categoriaId);
+		const conditions = [];
+
+		if (search) {
+			const searchTerm = `%${search}%`;
+			conditions.push(
+				or(
+					like(productos.nombre, searchTerm),
+					like(productos.codigo, searchTerm),
+					like(marcas.nombre, searchTerm),
+					like(modelos.nombre, searchTerm)
+				)
+			);
 		}
 
+		if (categoriaId) {
+			conditions.push(eq(productos.categoria_id, categoriaId));
+		}
+
+		const whereCondition = conditions.length > 0 ? and(...conditions) : undefined;
 		const data = await db
-			.select()
+			.select({
+				id: productos.id,
+				codigo: productos.codigo,
+				nombre: productos.nombre,
+				categoria_id: productos.categoria_id,
+				precio_base: productos.precio_base,
+				marca: {
+					id: marcas.id,
+					nombre: marcas.nombre
+				},
+				modelo: {
+					id: modelos.id,
+					nombre: modelos.nombre
+				}
+			})
 			.from(productos)
-			.where(where)
+			.leftJoin(marcas, eq(productos.marca_id, marcas.id))
+			.leftJoin(modelos, eq(productos.modelo_id, modelos.id))
+			.where(whereCondition)
 			.orderBy(productos.nombre)
 			.limit(limit)
 			.offset(offset);
 
-		const [totalResult] = await db.select({ count: count() }).from(productos).where(where);
+		const [totalResult] = await db
+			.select({ count: count() })
+			.from(productos)
+			.leftJoin(marcas, eq(productos.marca_id, marcas.id))
+			.leftJoin(modelos, eq(productos.modelo_id, modelos.id))
+			.where(whereCondition);
 
 		return {
 			data,

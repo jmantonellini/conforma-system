@@ -71,14 +71,18 @@
 				<th>Código</th>
 				<th>Nombre</th>
 				<th>Categoría</th>
+				<th>Marca</th>
+				<th>Modelo</th>
 				<th class="text-right">Precio Base</th>
 				<th class="text-center">Acciones</th>
 			{/snippet}
 
-			{#snippet row(producto: Producto)}
+			{#snippet row(producto)}
 				<td class="font-mono text-sm">{producto.codigo}</td>
 				<td class="font-medium">{producto.nombre}</td>
 				<td>{categorias.find((c) => c.id === producto.categoria_id)?.nombre || '-'}</td>
+				<td>{producto.marca?.nombre}</td>
+				<td>{producto.modelo?.nombre}</td>
 				<td class="text-right">
 					{producto.precio_base ? `$${producto.precio_base.toLocaleString()}` : '-'}
 				</td>

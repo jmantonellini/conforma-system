@@ -33,7 +33,7 @@
 					{#each tabs ?? [] as tab (tab.href)}
 						<a
 							href={tab.href}
-							class="flex items-center gap-4 px-4 py-2 text-sm rounded whitespace-nowrap hover:bg-gray-200"
+							class="flex items-center gap-4 rounded px-4 py-2 text-sm whitespace-nowrap hover:bg-gray-200"
 							class:bg-gray-300={tab.href && page.url.pathname.startsWith(tab.href)}
 							class:text-primary={tab.href && page.url.pathname.startsWith(tab.href)}
 						>
@@ -46,11 +46,11 @@
 							{/if}
 						</a>
 						{#if tab.subtabs && tab.href && page.url.pathname.startsWith(tab.href) && drawerOpen}
-							<div class="mt-2 ml-4">
+							<div class="flex flex-col gap-2 ml-4">
 								{#each tab.subtabs as subtab (subtab.href)}
 									<a
 										href={subtab.href}
-										class="block px-4 py-2 whitespace-nowrap hover:bg-gray-200"
+										class="block rounded px-4 py-2 text-sm whitespace-nowrap hover:bg-gray-200"
 										class:bg-gray-300={subtab.href && page.url.pathname.startsWith(subtab.href)}
 									>
 										{subtab.label}

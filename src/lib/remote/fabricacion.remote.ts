@@ -9,9 +9,10 @@ import {
 	productos,
 	estados_fabricacion,
 	empleados,
-	clientes
+	clientes,
+	acciones_fabricacion
 } from '$lib/server/db/schema';
-import { eq, desc, count } from 'drizzle-orm';
+import { eq, desc, count, sql, and } from 'drizzle-orm';
 import { getCurrentUser } from './usuarios.remote';
 import { CrearOrdenSchema } from './fabricacion.schema';
 
@@ -22,18 +23,6 @@ import { CrearOrdenSchema } from './fabricacion.schema';
 export const getEstadosFabricacion = query(async () => {
 	const db = getDb(getRequestEvent().platform?.env?.DB);
 	return await db.select().from(estados_fabricacion).orderBy(estados_fabricacion.orden);
-});
-
-export const getEmpleados = query(async () => {
-	const db = getDb(getRequestEvent().platform?.env?.DB);
-	return await db
-		.select({
-			id: empleados.id,
-			nombre: empleados.nombre,
-			apellido: empleados.apellido
-		})
-		.from(empleados)
-		.where(eq(empleados.activo, true));
 });
 
 export const getOrdenesFabricacion = query(
@@ -51,7 +40,7 @@ export const getOrdenesFabricacion = query(
 			where = eq(ordenes_fabricacion.estado_id, estado);
 		}
 
-		const data = await db
+		const ordenes = await db
 			.select({
 				id: ordenes_fabricacion.id,
 				numero_orden: ordenes_fabricacion.id,
@@ -77,13 +66,25 @@ export const getOrdenesFabricacion = query(
 					id: pedidos.id,
 					numero: pedidos.numero_pedido
 				},
-				producto_nombre: productos.nombre
+				producto_nombre: productos.nombre,
+				estado_comentario: ordenes_fabricacion.estado_comentario,
+				unidades: sql<string>`
+          json_group_array(
+            json_object(
+              'estado_nombre', ${estados_fabricacion.nombre}
+            )
+          )
+        `
 			})
 			.from(ordenes_fabricacion)
 			.leftJoin(estados_fabricacion, eq(ordenes_fabricacion.estado_id, estados_fabricacion.id))
 			.leftJoin(empleados, eq(ordenes_fabricacion.asignado_a, empleados.id))
 			.leftJoin(lineas_pedido, eq(lineas_pedido.orden_fabricacion_id, ordenes_fabricacion.id))
 			.leftJoin(pedidos, eq(lineas_pedido.pedido_id, pedidos.id))
+			.leftJoin(
+				unidades_fabricacion,
+				eq(unidades_fabricacion.orden_fabricacion_id, ordenes_fabricacion.id)
+			)
 			.leftJoin(productos, eq(lineas_pedido.producto_id, productos.id))
 			.where(where)
 			.orderBy(desc(ordenes_fabricacion.prioridad), desc(ordenes_fabricacion.id))
@@ -96,7 +97,7 @@ export const getOrdenesFabricacion = query(
 			.where(where);
 
 		return {
-			data,
+			ordenes,
 			total: totalResult?.count || 0,
 			totalPages: Math.ceil((totalResult?.count || 0) / limit),
 			currentPage: page
@@ -106,6 +107,58 @@ export const getOrdenesFabricacion = query(
 
 export const getOrdenFabricacion = query(v.number(), async (id) => {
 	const db = getDb(getRequestEvent().platform?.env?.DB);
+
+	const unidades = await db
+		.select({
+			id: unidades_fabricacion.id,
+			numero_serie: unidades_fabricacion.numero_serie,
+			estado: {
+				id: estados_fabricacion.id,
+				nombre: estados_fabricacion.nombre,
+				color: estados_fabricacion.color,
+				comentario: unidades_fabricacion.estado_comentario,
+				es_final: estados_fabricacion.es_final
+			},
+			es_defectuoso: unidades_fabricacion.es_defectuoso,
+			defecto_descripcion: unidades_fabricacion.defecto_descripcion,
+			fecha_entrada_estado: unidades_fabricacion.fecha_entrada_estado,
+			observaciones: unidades_fabricacion.observaciones,
+			acciones: sql<string>`
+        json_group_array(
+					CASE 
+						WHEN ${acciones_fabricacion.id} IS NOT NULL 
+						THEN json_object(
+							'id', ${acciones_fabricacion.id},
+							'nombre', ${acciones_fabricacion.nombre},
+							'estado_destino_id', ${acciones_fabricacion.estado_destino_id}
+						)
+						ELSE NULL
+					END
+				)
+			`
+		})
+		.from(unidades_fabricacion)
+		.leftJoin(estados_fabricacion, eq(unidades_fabricacion.estado_id, estados_fabricacion.id))
+		.leftJoin(
+			acciones_fabricacion,
+			sql`
+      (
+        ${acciones_fabricacion.estado_origen_id} = ${unidades_fabricacion.estado_id}
+        OR ${acciones_fabricacion.estado_origen_id} IS NULL
+      )
+      AND ${estados_fabricacion.es_final} = 0
+    `
+		)
+		.where(
+			and(
+				eq(unidades_fabricacion.orden_fabricacion_id, id),
+				sql`${acciones_fabricacion.estado_destino_id} IS NULL OR ${acciones_fabricacion.estado_destino_id} != ${unidades_fabricacion.estado_id}`
+			)
+		)
+		.groupBy(unidades_fabricacion.id)
+		.orderBy(unidades_fabricacion.id);
+
+	console.log(unidades);
 
 	const orden = await db
 		.select({
@@ -131,10 +184,12 @@ export const getOrdenFabricacion = query(v.number(), async (id) => {
 			estado: {
 				id: estados_fabricacion.id,
 				nombre: estados_fabricacion.nombre,
-				color: estados_fabricacion.color
+				color: estados_fabricacion.color,
+				es_final: estados_fabricacion.es_final
 			},
 			pedido_numero: pedidos.numero_pedido,
-			producto_nombre: productos.nombre
+			producto_nombre: productos.nombre,
+			estado_comentario: ordenes_fabricacion.estado_comentario
 		})
 		.from(ordenes_fabricacion)
 		.leftJoin(estados_fabricacion, eq(ordenes_fabricacion.estado_id, estados_fabricacion.id))
@@ -143,31 +198,20 @@ export const getOrdenFabricacion = query(v.number(), async (id) => {
 		.leftJoin(clientes, eq(pedidos.cliente_id, clientes.id))
 		.leftJoin(productos, eq(lineas_pedido.producto_id, productos.id))
 		.leftJoin(empleados, eq(ordenes_fabricacion.asignado_a, empleados.id))
+
 		.where(eq(ordenes_fabricacion.id, id))
 		.get();
 
 	if (!orden) throw new Error('Orden no encontrada');
 
-	const unidades = await db
-		.select({
-			id: unidades_fabricacion.id,
-			numero_serie: unidades_fabricacion.numero_serie,
-			estado: {
-				id: estados_fabricacion.id,
-				nombre: estados_fabricacion.nombre,
-				color: estados_fabricacion.color
-			},
-			es_defectuoso: unidades_fabricacion.es_defectuoso,
-			defecto_descripcion: unidades_fabricacion.defecto_descripcion,
-			fecha_entrada_estado: unidades_fabricacion.fecha_entrada_estado,
-			observaciones: unidades_fabricacion.observaciones
-		})
-		.from(unidades_fabricacion)
-		.leftJoin(estados_fabricacion, eq(unidades_fabricacion.estado_id, estados_fabricacion.id))
-		.where(eq(unidades_fabricacion.orden_fabricacion_id, id))
-		.orderBy(unidades_fabricacion.id);
+	const unidadesConAcciones = unidades.map((u) => ({
+		...u,
+		acciones: u.acciones
+			? JSON.parse(u.acciones).filter((a) => a?.id !== null && a?.id !== undefined)
+			: []
+	}));
 
-	return { ...orden, unidades };
+	return { ...orden, unidadesConAcciones };
 });
 
 // ============================================
@@ -181,21 +225,12 @@ export const crearOrdenFabricacion = form(CrearOrdenSchema, async (data) => {
 
 	if (!user) throw new Error('No autorizado');
 
-	// Obtener estado inicial (Pendiente)
-	const [estadoInicial] = await db
-		.select()
-		.from(estados_fabricacion)
-		.where(eq(estados_fabricacion.slug, 'pendiente'))
-		.limit(1);
-
-	if (!estadoInicial) throw new Error('Estado "Pendiente" no encontrado');
-
 	const [orden] = await db
 		.insert(ordenes_fabricacion)
 		.values({
 			nombre_trabajo: data.nombre_trabajo,
 			cantidad_total: data.cantidad_total,
-			estado_id: estadoInicial.id,
+			estado_id: 1,
 			prioridad: data.prioridad,
 			fecha_fin_estimada: data.fecha_fin_estimada ? new Date(data.fecha_fin_estimada) : null,
 			asignado_a: data.asignado_a || null,
@@ -216,7 +251,7 @@ export const crearOrdenFabricacion = form(CrearOrdenSchema, async (data) => {
 			.values({
 				orden_fabricacion_id: orden.id,
 				numero_serie: `${orden.id}-${i.toString().padStart(3, '0')}`,
-				estado_id: estadoInicial.id,
+				estado_id: 1,
 				fecha_entrada_estado: new Date()
 			})
 			.returning();
@@ -230,78 +265,119 @@ export const crearOrdenFabricacion = form(CrearOrdenSchema, async (data) => {
 // COMMANDS
 // ============================================
 
-export const actualizarEstadoOrden = command(
+export const ejecutarAccionFabricacion = command(
 	v.object({
-		orden_id: v.number(),
-		estado_id: v.number()
+		unidad_id: v.pipe(v.string(), v.transform(Number), v.number()),
+		accion_id: v.pipe(v.string(), v.transform(Number), v.number()),
+		comentario: v.optional(v.string())
 	}),
 	async (data) => {
 		const db = getDb(getRequestEvent().platform?.env?.DB);
-		const user = await getCurrentUser();
 
-		if (!user) throw new Error('No autorizado');
+		// 1. Obtener acción y unidad
+		const result = await db
+			.select({
+				accion_id: acciones_fabricacion.id,
+				estado_destino_id: acciones_fabricacion.estado_destino_id,
+				estado_actual_id: unidades_fabricacion.estado_id,
+				estado_anterior_id: unidades_fabricacion.estado_anterior_id,
+				orden_id: unidades_fabricacion.orden_fabricacion_id,
+				unidad_id: unidades_fabricacion.id
+			})
+			.from(acciones_fabricacion)
+			.leftJoin(unidades_fabricacion, eq(unidades_fabricacion.id, data.unidad_id))
+			.where(eq(acciones_fabricacion.id, data.accion_id))
+			.get();
 
-		const [orden] = await db
+		if (!result || !result.orden_id) throw new Error('Acción no encontrada');
+
+		let estadoDestino = result.estado_destino_id;
+
+		// Reanudar: usar estado anterior
+		if (result.accion_id === 7) {
+			if (!result.estado_anterior_id) throw new Error('No hay estado anterior');
+			estadoDestino = result.estado_anterior_id;
+		}
+
+		if (!estadoDestino) throw new Error('No hay estado destino');
+
+		// 2. ACTUALIZAR LA UNIDAD PRIMERO
+		const [unidad] = await db
+			.update(unidades_fabricacion)
+			.set({
+				estado_id: estadoDestino,
+				estado_anterior_id: result.estado_actual_id,
+				estado_comentario: data.comentario,
+				updated_at: new Date()
+			})
+			.where(eq(unidades_fabricacion.id, data.unidad_id))
+			.returning();
+
+		if (!unidad) throw new Error('Unidad no encontrada');
+
+		// 3. CALCULAR EL ESTADO DE LA ORDEN CON LAS UNIDADES YA ACTUALIZADAS
+		const [estadoResult] = await db
+			.select({
+				estado: sql<number>`
+          CASE 
+            WHEN COUNT(CASE WHEN ${estados_fabricacion.slug} = 'pausado' THEN 1 END) > 0 
+              THEN (SELECT id FROM ${estados_fabricacion} WHERE slug = 'pausado')
+            WHEN COUNT(*) = COUNT(CASE WHEN ${estados_fabricacion.es_final} = 1 THEN 1 END) 
+              THEN (SELECT id FROM ${estados_fabricacion} WHERE slug = 'terminado')
+            WHEN COUNT(CASE WHEN ${estados_fabricacion.slug} != 'preparando' THEN 1 END) = 0 
+              THEN (SELECT id FROM ${estados_fabricacion} WHERE slug = 'preparando')
+            ELSE (SELECT id FROM ${estados_fabricacion} WHERE slug = 'en_produccion')
+          END
+        `
+			})
+			.from(unidades_fabricacion)
+			.leftJoin(estados_fabricacion, eq(unidades_fabricacion.estado_id, estados_fabricacion.id))
+			.where(eq(unidades_fabricacion.orden_fabricacion_id, result.orden_id));
+
+		// 4. ACTUALIZAR LA ORDEN CON EL NUEVO ESTADO
+		await db
 			.update(ordenes_fabricacion)
 			.set({
-				estado_id: data.estado_id,
+				estado_id: estadoResult?.estado || 2,
 				updated_at: new Date()
 			})
-			.where(eq(ordenes_fabricacion.id, data.orden_id))
-			.returning();
+			.where(eq(ordenes_fabricacion.id, result.orden_id));
 
-		getOrdenFabricacion(orden.id).refresh();
-		return { success: true, orden };
+		getOrdenFabricacion(result.orden_id).refresh();
+		return { success: true };
 	}
 );
 
-export const actualizarEstadoUnidad = command(
-	v.object({
-		unidad_id: v.pipe(v.string(), v.transform(Number), v.number()),
-		estado_id: v.pipe(v.string(), v.transform(Number), v.number())
-	}),
-	async (data) => {
+export const eliminarOrdenFabricacion = command(
+	v.pipe(v.string(), v.transform(Number), v.number()),
+	async (id) => {
 		const db = getDb(getRequestEvent().platform?.env?.DB);
 
-		const [unidad] = await db
-			.update(unidades_fabricacion)
-			.set({
-				estado_id: data.estado_id,
-				fecha_entrada_estado: new Date(),
-				updated_at: new Date()
-			})
-			.where(eq(unidades_fabricacion.id, data.unidad_id))
-			.returning();
-		getOrdenFabricacion(unidad.orden_fabricacion_id).refresh();
-		return { success: true, unidad };
+		// Verificar que la orden no esté en estado final
+		const orden = await db
+			.select({ estado_id: ordenes_fabricacion.estado_id })
+			.from(ordenes_fabricacion)
+			.where(eq(ordenes_fabricacion.id, id))
+			.get();
+
+		if (!orden) throw new Error('Orden no encontrada');
+
+		const estado = await db
+			.select()
+			.from(estados_fabricacion)
+			.where(eq(estados_fabricacion.id, orden.estado_id))
+			.get();
+
+		if (estado?.es_final) {
+			throw new Error('No se puede eliminar una orden ya entregada');
+		}
+
+		// Eliminar orden (cascade elimina unidades)
+		await db.delete(ordenes_fabricacion).where(eq(ordenes_fabricacion.id, id));
+
+		// Refrescar
+		getOrdenesFabricacion({}).refresh();
+
+		return { success: true };
 	}
 );
-
-export const marcarUnidadDefectuosa = command(
-	v.object({
-		unidad_id: v.pipe(v.string(), v.transform(Number), v.number()),
-		descripcion: v.string()
-	}),
-	async (data) => {
-		const db = getDb(getRequestEvent().platform?.env?.DB);
-
-		const [unidad] = await db
-			.update(unidades_fabricacion)
-			.set({
-				es_defectuoso: true,
-				defecto_descripcion: data.descripcion,
-				updated_at: new Date()
-			})
-			.where(eq(unidades_fabricacion.id, data.unidad_id))
-			.returning();
-
-		return { success: true, unidad };
-	}
-);
-
-export const eliminarOrdenFabricacion = command(v.number(), async (id) => {
-	const db = getDb(getRequestEvent().platform?.env?.DB);
-	await db.delete(ordenes_fabricacion).where(eq(ordenes_fabricacion.id, id));
-	getOrdenesFabricacion({}).refresh();
-	return { success: true };
-});

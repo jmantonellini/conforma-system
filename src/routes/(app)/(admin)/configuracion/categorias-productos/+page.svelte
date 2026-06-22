@@ -1,10 +1,11 @@
 <script lang="ts">
-	import type { PageProps } from './$types';
-
-	let { data }: PageProps = $props();
+	import { PageLayout } from '$lib/components/ui';
+	import PageHeader from '$lib/components/ui/PageHeader.svelte';
 </script>
 
-<div>
-	<h1 class="text-2xl font-bold">Categorías de Productos</h1>
-	<p>Gestión de categorías para organizar los productos.</p>
-</div>
+<PageLayout>
+	<PageHeader
+		title="Categorías de Productos"
+		description="Gestión de categorías para organizar los productos."
+	/>
+</PageLayout>

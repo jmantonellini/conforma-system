@@ -150,7 +150,6 @@
 	</div>
 </PageLayout>
 
-<!-- Modal (sin cambios) -->
 <Modal
 	bind:open={showModal}
 	title={editingCliente ? 'Editar Cliente' : 'Nuevo Cliente'}
@@ -198,10 +197,7 @@
 					/>
 				</FormFieldWrapper>
 				<FormFieldWrapper id="email" label="Email">
-					<input
-						class="input"
-						{...activeForm.fields?.email?.as('email', editingCliente?.email || undefined)}
-					/>
+					<input class="input" {...activeForm.fields?.email?.as('text', editingCliente?.email || '')} />
 				</FormFieldWrapper>
 				<FormFieldWrapper id="telefono" label="Teléfono">
 					<input

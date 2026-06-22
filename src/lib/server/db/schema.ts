@@ -170,12 +170,14 @@ export const lineas_pedido = sqliteTable('lineas_pedido', {
 		.notNull(),
 	producto_id: integer('producto_id').references(() => productos.id, { onDelete: 'set null' }),
 	orden_fabricacion_id: integer('orden_fabricacion_id').references(() => ordenes_fabricacion.id, {
-		onDelete: 'set null'
+		onDelete: 'cascade'
 	}),
 
 	// Datos personalizados (sobreescriben al producto)
 	es_personalizado: integer('es_personalizado', { mode: 'boolean' }).default(false),
 	descripcion_personalizada: text('descripcion_personalizada'),
+
+	fecha_envio_parcial: integer('fecha_envio_parcial', { mode: 'timestamp' }),
 
 	// Medidas específicas (copia o sobreescribe al producto)
 	medidas_primario_diametro: integer('medidas_primario_diametro'),
@@ -254,6 +256,14 @@ export const estados_fabricacion = sqliteTable('estados_fabricacion', {
 	created_at: integer('created_at', { mode: 'timestamp' }).$default(() => new Date())
 });
 
+export const acciones_fabricacion = sqliteTable('acciones_fabricacion', {
+	id: integer('id').primaryKey({ autoIncrement: true }),
+	nombre: text('nombre').notNull().unique(), // 'iniciar_corte', 'iniciar_curvado', etc
+	estado_origen_id: integer('estado_origen_id').references(() => estados_fabricacion.id),
+	estado_destino_id: integer('estado_destino_id').references(() => estados_fabricacion.id),
+	created_at: integer('created_at', { mode: 'timestamp' }).$default(() => new Date())
+});
+
 export const ordenes_fabricacion = sqliteTable('ordenes_fabricacion', {
 	id: integer('id').primaryKey({ autoIncrement: true }),
 
@@ -265,6 +275,7 @@ export const ordenes_fabricacion = sqliteTable('ordenes_fabricacion', {
 	estado_id: integer('estado_id')
 		.references(() => estados_fabricacion.id, { onDelete: 'restrict' })
 		.notNull(),
+	estado_comentario: text('estado_comentario'),
 
 	prioridad: integer('prioridad').default(0), // 0=normal, 1=urgente, 2=crítica
 	fecha_inicio: integer('fecha_inicio', { mode: 'timestamp' }),
@@ -288,6 +299,10 @@ export const unidades_fabricacion = sqliteTable('unidades_fabricacion', {
 	estado_id: integer('estado_id')
 		.references(() => estados_fabricacion.id, { onDelete: 'restrict' })
 		.notNull(),
+	estado_anterior_id: integer('estado_anterior_id').references(() => estados_fabricacion.id, {
+		onDelete: 'set null'
+	}),
+	estado_comentario: text('estado_comentario'),
 
 	fecha_entrada_estado: integer('fecha_entrada_estado', { mode: 'timestamp' }).$default(
 		() => new Date()
@@ -416,3 +431,4 @@ export type Marca = typeof marcas.$inferSelect;
 export type TipoUso = typeof tipos_uso.$inferSelect;
 export type TipoVehiculo = typeof tipos_vehiculo.$inferSelect;
 export type CategoriaComp = typeof categorias_competencia.$inferSelect;
+export type AccionFabricacion = typeof acciones_fabricacion.$inferSelect;

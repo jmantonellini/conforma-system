@@ -1,9 +1,163 @@
 {
   "version": "6",
   "dialect": "sqlite",
-  "id": "9c977c87-d704-4baa-bfa8-47c91c8bb656",
+  "id": "7607a2aa-01bd-4114-8dfb-2032143c0373",
   "prevId": "00000000-0000-0000-0000-000000000000",
   "tables": {
+    "acciones_fabricacion": {
+      "name": "acciones_fabricacion",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "integer",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": true
+        },
+        "nombre": {
+          "name": "nombre",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "estado_origen_id": {
+          "name": "estado_origen_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "estado_destino_id": {
+          "name": "estado_destino_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        }
+      },
+      "indexes": {
+        "acciones_fabricacion_nombre_unique": {
+          "name": "acciones_fabricacion_nombre_unique",
+          "columns": [
+            "nombre"
+          ],
+          "isUnique": true
+        }
+      },
+      "foreignKeys": {
+        "acciones_fabricacion_estado_origen_id_estados_fabricacion_id_fk": {
+          "name": "acciones_fabricacion_estado_origen_id_estados_fabricacion_id_fk",
+          "tableFrom": "acciones_fabricacion",
+          "tableTo": "estados_fabricacion",
+          "columnsFrom": [
+            "estado_origen_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "acciones_fabricacion_estado_destino_id_estados_fabricacion_id_fk": {
+          "name": "acciones_fabricacion_estado_destino_id_estados_fabricacion_id_fk",
+          "tableFrom": "acciones_fabricacion",
+          "tableTo": "estados_fabricacion",
+          "columnsFrom": [
+            "estado_destino_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {}
+    },
+    "categorias_competencia": {
+      "name": "categorias_competencia",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "integer",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": true
+        },
+        "nombre": {
+          "name": "nombre",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "descripcion": {
+          "name": "descripcion",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "tipo_vehiculo_id": {
+          "name": "tipo_vehiculo_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "activa_desde": {
+          "name": "activa_desde",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "activa_hasta": {
+          "name": "activa_hasta",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "vigente": {
+          "name": "vigente",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false,
+          "default": true
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "categorias_competencia_tipo_vehiculo_id_tipos_vehiculo_id_fk": {
+          "name": "categorias_competencia_tipo_vehiculo_id_tipos_vehiculo_id_fk",
+          "tableFrom": "categorias_competencia",
+          "tableTo": "tipos_vehiculo",
+          "columnsFrom": [
+            "tipo_vehiculo_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {}
+    },
     "categorias_productos": {
       "name": "categorias_productos",
       "columns": {
@@ -95,8 +249,58 @@
           "notNull": false,
           "autoincrement": false
         },
-        "direccion": {
-          "name": "direccion",
+        "pais": {
+          "name": "pais",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false,
+          "default": "'Argentina'"
+        },
+        "provincia": {
+          "name": "provincia",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "ciudad": {
+          "name": "ciudad",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "codigo_postal": {
+          "name": "codigo_postal",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "calle": {
+          "name": "calle",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "numero": {
+          "name": "numero",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "piso": {
+          "name": "piso",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "departamento": {
+          "name": "departamento",
           "type": "text",
           "primaryKey": false,
           "notNull": false,
@@ -112,6 +316,13 @@
         },
         "created_at": {
           "name": "created_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "updated_at": {
+          "name": "updated_at",
           "type": "integer",
           "primaryKey": false,
           "notNull": false,
@@ -410,6 +621,13 @@
           "notNull": false,
           "autoincrement": false
         },
+        "orden_fabricacion_id": {
+          "name": "orden_fabricacion_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
         "es_personalizado": {
           "name": "es_personalizado",
           "type": "integer",
@@ -421,6 +639,13 @@
         "descripcion_personalizada": {
           "name": "descripcion_personalizada",
           "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "fecha_envio_parcial": {
+          "name": "fecha_envio_parcial",
+          "type": "integer",
           "primaryKey": false,
           "notNull": false,
           "autoincrement": false
@@ -548,6 +773,19 @@
             "id"
           ],
           "onDelete": "set null",
+          "onUpdate": "no action"
+        },
+        "lineas_pedido_orden_fabricacion_id_ordenes_fabricacion_id_fk": {
+          "name": "lineas_pedido_orden_fabricacion_id_ordenes_fabricacion_id_fk",
+          "tableFrom": "lineas_pedido",
+          "tableTo": "ordenes_fabricacion",
+          "columnsFrom": [
+            "orden_fabricacion_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
           "onUpdate": "no action"
         }
       },
@@ -728,6 +966,13 @@
         },
         "ip_address": {
           "name": "ip_address",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "user_agent": {
+          "name": "user_agent",
           "type": "text",
           "primaryKey": false,
           "notNull": false,
@@ -959,6 +1204,46 @@
       "uniqueConstraints": {},
       "checkConstraints": {}
     },
+    "marcas": {
+      "name": "marcas",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "integer",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": true
+        },
+        "nombre": {
+          "name": "nombre",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "activo": {
+          "name": "activo",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false,
+          "default": true
+        }
+      },
+      "indexes": {
+        "marcas_nombre_unique": {
+          "name": "marcas_nombre_unique",
+          "columns": [
+            "nombre"
+          ],
+          "isUnique": true
+        }
+      },
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {}
+    },
     "materiales_empleados": {
       "name": "materiales_empleados",
       "columns": {
@@ -1070,6 +1355,93 @@
       "uniqueConstraints": {},
       "checkConstraints": {}
     },
+    "modelos": {
+      "name": "modelos",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "integer",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": true
+        },
+        "marca_id": {
+          "name": "marca_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "tipo_vehiculo_id": {
+          "name": "tipo_vehiculo_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "nombre": {
+          "name": "nombre",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "anio_desde": {
+          "name": "anio_desde",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "anio_hasta": {
+          "name": "anio_hasta",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "activo": {
+          "name": "activo",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false,
+          "default": true
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "modelos_marca_id_marcas_id_fk": {
+          "name": "modelos_marca_id_marcas_id_fk",
+          "tableFrom": "modelos",
+          "tableTo": "marcas",
+          "columnsFrom": [
+            "marca_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "restrict",
+          "onUpdate": "no action"
+        },
+        "modelos_tipo_vehiculo_id_tipos_vehiculo_id_fk": {
+          "name": "modelos_tipo_vehiculo_id_tipos_vehiculo_id_fk",
+          "tableFrom": "modelos",
+          "tableTo": "tipos_vehiculo",
+          "columnsFrom": [
+            "tipo_vehiculo_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "restrict",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {}
+    },
     "ordenes_fabricacion": {
       "name": "ordenes_fabricacion",
       "columns": {
@@ -1079,13 +1451,6 @@
           "primaryKey": true,
           "notNull": true,
           "autoincrement": true
-        },
-        "linea_pedido_id": {
-          "name": "linea_pedido_id",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
         },
         "nombre_trabajo": {
           "name": "nombre_trabajo",
@@ -1123,6 +1488,13 @@
           "type": "integer",
           "primaryKey": false,
           "notNull": true,
+          "autoincrement": false
+        },
+        "estado_comentario": {
+          "name": "estado_comentario",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
           "autoincrement": false
         },
         "prioridad": {
@@ -1185,19 +1557,6 @@
       },
       "indexes": {},
       "foreignKeys": {
-        "ordenes_fabricacion_linea_pedido_id_lineas_pedido_id_fk": {
-          "name": "ordenes_fabricacion_linea_pedido_id_lineas_pedido_id_fk",
-          "tableFrom": "ordenes_fabricacion",
-          "tableTo": "lineas_pedido",
-          "columnsFrom": [
-            "linea_pedido_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
-        },
         "ordenes_fabricacion_estado_id_estados_fabricacion_id_fk": {
           "name": "ordenes_fabricacion_estado_id_estados_fabricacion_id_fk",
           "tableFrom": "ordenes_fabricacion",
@@ -1288,8 +1647,8 @@
           "notNull": false,
           "autoincrement": false
         },
-        "seña": {
-          "name": "seña",
+        "anticipo": {
+          "name": "anticipo",
           "type": "real",
           "primaryKey": false,
           "notNull": false,
@@ -1298,13 +1657,6 @@
         "saldo_pendiente": {
           "name": "saldo_pendiente",
           "type": "real",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "creado_por": {
-          "name": "creado_por",
-          "type": "integer",
           "primaryKey": false,
           "notNull": false,
           "autoincrement": false
@@ -1366,19 +1718,6 @@
           ],
           "onDelete": "restrict",
           "onUpdate": "no action"
-        },
-        "pedidos_creado_por_usuarios_id_fk": {
-          "name": "pedidos_creado_por_usuarios_id_fk",
-          "tableFrom": "pedidos",
-          "tableTo": "usuarios",
-          "columnsFrom": [
-            "creado_por"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "set null",
-          "onUpdate": "no action"
         }
       },
       "compositePrimaryKeys": {},
@@ -1395,8 +1734,8 @@
           "notNull": true,
           "autoincrement": true
         },
-        "nombre": {
-          "name": "nombre",
+        "accion": {
+          "name": "accion",
           "type": "text",
           "primaryKey": false,
           "notNull": true,
@@ -1406,7 +1745,7 @@
           "name": "modulo",
           "type": "text",
           "primaryKey": false,
-          "notNull": false,
+          "notNull": true,
           "autoincrement": false
         },
         "created_at": {
@@ -1417,15 +1756,7 @@
           "autoincrement": false
         }
       },
-      "indexes": {
-        "permisos_nombre_unique": {
-          "name": "permisos_nombre_unique",
-          "columns": [
-            "nombre"
-          ],
-          "isUnique": true
-        }
-      },
+      "indexes": {},
       "foreignKeys": {},
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
@@ -1511,6 +1842,41 @@
           "notNull": false,
           "autoincrement": false
         },
+        "tipo_vehiculo_id": {
+          "name": "tipo_vehiculo_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "marca_id": {
+          "name": "marca_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "modelo_id": {
+          "name": "modelo_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "tipo_uso_id": {
+          "name": "tipo_uso_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "categoria_competencia_id": {
+          "name": "categoria_competencia_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
         "precio_base": {
           "name": "precio_base",
           "type": "real",
@@ -1540,6 +1906,13 @@
           "primaryKey": false,
           "notNull": false,
           "autoincrement": false
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
         }
       },
       "indexes": {
@@ -1563,6 +1936,71 @@
             "id"
           ],
           "onDelete": "set null",
+          "onUpdate": "no action"
+        },
+        "productos_tipo_vehiculo_id_tipos_vehiculo_id_fk": {
+          "name": "productos_tipo_vehiculo_id_tipos_vehiculo_id_fk",
+          "tableFrom": "productos",
+          "tableTo": "tipos_vehiculo",
+          "columnsFrom": [
+            "tipo_vehiculo_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "productos_marca_id_marcas_id_fk": {
+          "name": "productos_marca_id_marcas_id_fk",
+          "tableFrom": "productos",
+          "tableTo": "marcas",
+          "columnsFrom": [
+            "marca_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "productos_modelo_id_modelos_id_fk": {
+          "name": "productos_modelo_id_modelos_id_fk",
+          "tableFrom": "productos",
+          "tableTo": "modelos",
+          "columnsFrom": [
+            "modelo_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "productos_tipo_uso_id_tipos_uso_id_fk": {
+          "name": "productos_tipo_uso_id_tipos_uso_id_fk",
+          "tableFrom": "productos",
+          "tableTo": "tipos_uso",
+          "columnsFrom": [
+            "tipo_uso_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "productos_categoria_competencia_id_categorias_competencia_id_fk": {
+          "name": "productos_categoria_competencia_id_categorias_competencia_id_fk",
+          "tableFrom": "productos",
+          "tableTo": "categorias_competencia",
+          "columnsFrom": [
+            "categoria_competencia_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
           "onUpdate": "no action"
         }
       },
@@ -1794,6 +2232,92 @@
       "uniqueConstraints": {},
       "checkConstraints": {}
     },
+    "tipos_uso": {
+      "name": "tipos_uso",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "integer",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": true
+        },
+        "nombre": {
+          "name": "nombre",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "slug": {
+          "name": "slug",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        }
+      },
+      "indexes": {
+        "tipos_uso_slug_unique": {
+          "name": "tipos_uso_slug_unique",
+          "columns": [
+            "slug"
+          ],
+          "isUnique": true
+        }
+      },
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {}
+    },
+    "tipos_vehiculo": {
+      "name": "tipos_vehiculo",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "integer",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": true
+        },
+        "nombre": {
+          "name": "nombre",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "slug": {
+          "name": "slug",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "activo": {
+          "name": "activo",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false,
+          "default": true
+        }
+      },
+      "indexes": {
+        "tipos_vehiculo_slug_unique": {
+          "name": "tipos_vehiculo_slug_unique",
+          "columns": [
+            "slug"
+          ],
+          "isUnique": true
+        }
+      },
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {}
+    },
     "unidades_fabricacion": {
       "name": "unidades_fabricacion",
       "columns": {
@@ -1823,6 +2347,20 @@
           "type": "integer",
           "primaryKey": false,
           "notNull": true,
+          "autoincrement": false
+        },
+        "estado_anterior_id": {
+          "name": "estado_anterior_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "estado_comentario": {
+          "name": "estado_comentario",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
           "autoincrement": false
         },
         "fecha_entrada_estado": {
@@ -1902,6 +2440,19 @@
             "id"
           ],
           "onDelete": "restrict",
+          "onUpdate": "no action"
+        },
+        "unidades_fabricacion_estado_anterior_id_estados_fabricacion_id_fk": {
+          "name": "unidades_fabricacion_estado_anterior_id_estados_fabricacion_id_fk",
+          "tableFrom": "unidades_fabricacion",
+          "tableTo": "estados_fabricacion",
+          "columnsFrom": [
+            "estado_anterior_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "set null",
           "onUpdate": "no action"
         }
       },

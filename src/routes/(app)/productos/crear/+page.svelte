@@ -57,7 +57,7 @@
 					<select {...crearProducto.fields.categoria_id.as('select')} class="select w-full">
 						<option value="">Seleccionar...</option>
 						{#each categorias as cat (cat.id)}
-							<option value={cat.id.toString()}>{cat.nombre}</option>
+							<option value={String(cat.id)}>{cat.nombre}</option>
 						{/each}
 					</select>
 				</FormFieldWrapper>
@@ -76,7 +76,7 @@
 						<select {...crearProducto.fields.tipo_vehiculo_id.as('select')} class="select w-full">
 							<option value="">Seleccionar...</option>
 							{#each tiposVehiculo as tv (tv.id)}
-								<option value={tv.id.toString()}>{tv.nombre}</option>
+								<option value={String(tv.id)}>{tv.nombre}</option>
 							{/each}
 						</select>
 					</FormFieldWrapper>
@@ -89,7 +89,7 @@
 						>
 							<option value="">Seleccionar...</option>
 							{#each marcas as m (m.id)}
-								<option value={m.id.toString()}>{m.nombre}</option>
+								<option value={String(m.id)}>{m.nombre}</option>
 							{/each}
 						</select>
 					</FormFieldWrapper>
@@ -102,7 +102,7 @@
 						>
 							<option value="">Seleccionar...</option>
 							{#each modelos as mod (mod.id)}
-								<option value={mod.id.toString()}>{mod.nombre}</option>
+								<option value={String(mod.id)}>{mod.nombre}</option>
 							{/each}
 						</select>
 					</FormFieldWrapper>
@@ -113,7 +113,7 @@
 						<select {...crearProducto.fields.tipo_uso_id.as('select')} class="select w-full">
 							<option value="">Seleccionar...</option>
 							{#each tiposDeUso as tu (tu.id)}
-								<option value={tu.id.toString()}>{tu.nombre}</option>
+								<option value={String(tu.id)}>{tu.nombre}</option>
 							{/each}
 						</select>
 					</FormFieldWrapper>
@@ -126,7 +126,7 @@
 							>
 								<option value="">Seleccionar...</option>
 								{#each await getCategoriasComp(parseInt(crearProducto.fields.tipo_vehiculo_id.value() as string)) as cat (cat.id)}
-									<option value={cat.id.toString()}>{cat.nombre}</option>
+									<option value={String(cat.id)}>{cat.nombre}</option>
 								{/each}
 							</select>
 						</FormFieldWrapper>

@@ -1,3 +1,25 @@
+CREATE TABLE `acciones_fabricacion` (
+	`id` integer PRIMARY KEY AUTOINCREMENT NOT NULL,
+	`nombre` text NOT NULL,
+	`estado_origen_id` integer,
+	`estado_destino_id` integer,
+	`created_at` integer,
+	FOREIGN KEY (`estado_origen_id`) REFERENCES `estados_fabricacion`(`id`) ON UPDATE no action ON DELETE no action,
+	FOREIGN KEY (`estado_destino_id`) REFERENCES `estados_fabricacion`(`id`) ON UPDATE no action ON DELETE no action
+);
+--> statement-breakpoint
+CREATE UNIQUE INDEX `acciones_fabricacion_nombre_unique` ON `acciones_fabricacion` (`nombre`);--> statement-breakpoint
+CREATE TABLE `categorias_competencia` (
+	`id` integer PRIMARY KEY AUTOINCREMENT NOT NULL,
+	`nombre` text NOT NULL,
+	`descripcion` text,
+	`tipo_vehiculo_id` integer NOT NULL,
+	`activa_desde` integer,
+	`activa_hasta` integer,
+	`vigente` integer DEFAULT true,
+	FOREIGN KEY (`tipo_vehiculo_id`) REFERENCES `tipos_vehiculo`(`id`) ON UPDATE no action ON DELETE no action
+);
+--> statement-breakpoint
 CREATE TABLE `categorias_productos` (
 	`id` integer PRIMARY KEY AUTOINCREMENT NOT NULL,
 	`nombre` text NOT NULL,
@@ -13,9 +35,17 @@ CREATE TABLE `clientes` (
 	`cuit` text,
 	`email` text,
 	`telefono` text,
-	`direccion` text,
+	`pais` text DEFAULT 'Argentina',
+	`provincia` text,
+	`ciudad` text,
+	`codigo_postal` text,
+	`calle` text,
+	`numero` text,
+	`piso` text,
+	`departamento` text,
 	`activo` integer DEFAULT true,
-	`created_at` integer
+	`created_at` integer,
+	`updated_at` integer
 );
 --> statement-breakpoint
 CREATE UNIQUE INDEX `clientes_cuit_unique` ON `clientes` (`cuit`);--> statement-breakpoint
@@ -63,8 +93,10 @@ CREATE TABLE `lineas_pedido` (
 	`id` integer PRIMARY KEY AUTOINCREMENT NOT NULL,
 	`pedido_id` integer NOT NULL,
 	`producto_id` integer,
+	`orden_fabricacion_id` integer,
 	`es_personalizado` integer DEFAULT false,
 	`descripcion_personalizada` text,
+	`fecha_envio_parcial` integer,
 	`medidas_primario_diametro` integer,
 	`medidas_primario_largo` integer,
 	`medidas_secundario_diametro` integer,
@@ -79,7 +111,8 @@ CREATE TABLE `lineas_pedido` (
 	`created_at` integer,
 	`updated_at` integer,
 	FOREIGN KEY (`pedido_id`) REFERENCES `pedidos`(`id`) ON UPDATE no action ON DELETE cascade,
-	FOREIGN KEY (`producto_id`) REFERENCES `productos`(`id`) ON UPDATE no action ON DELETE set null
+	FOREIGN KEY (`producto_id`) REFERENCES `productos`(`id`) ON UPDATE no action ON DELETE set null,
+	FOREIGN KEY (`orden_fabricacion_id`) REFERENCES `ordenes_fabricacion`(`id`) ON UPDATE no action ON DELETE cascade
 );
 --> statement-breakpoint
 CREATE TABLE `logs_estados_pedido` (
@@ -106,6 +139,7 @@ CREATE TABLE `logs_pedidos` (
 	`valor_nuevo` text,
 	`accion` text NOT NULL,
 	`ip_address` text,
+	`user_agent` text,
 	`created_at` integer,
 	FOREIGN KEY (`pedido_id`) REFERENCES `pedidos`(`id`) ON UPDATE no action ON DELETE cascade,
 	FOREIGN KEY (`usuario_id`) REFERENCES `usuarios`(`id`) ON UPDATE no action ON DELETE set null
@@ -136,6 +170,13 @@ CREATE TABLE `logs_unidades_fabricacion` (
 	FOREIGN KEY (`estado_nuevo_id`) REFERENCES `estados_fabricacion`(`id`) ON UPDATE no action ON DELETE no action
 );
 --> statement-breakpoint
+CREATE TABLE `marcas` (
+	`id` integer PRIMARY KEY AUTOINCREMENT NOT NULL,
+	`nombre` text NOT NULL,
+	`activo` integer DEFAULT true
+);
+--> statement-breakpoint
+CREATE UNIQUE INDEX `marcas_nombre_unique` ON `marcas` (`nombre`);--> statement-breakpoint
 CREATE TABLE `materiales_empleados` (
 	`id` integer PRIMARY KEY AUTOINCREMENT NOT NULL,
 	`orden_fabricacion_id` integer NOT NULL,
@@ -151,14 +192,26 @@ CREATE TABLE `materiales_empleados` (
 	FOREIGN KEY (`tipo_id`) REFERENCES `tipos_material`(`id`) ON UPDATE no action ON DELETE restrict
 );
 --> statement-breakpoint
+CREATE TABLE `modelos` (
+	`id` integer PRIMARY KEY AUTOINCREMENT NOT NULL,
+	`marca_id` integer NOT NULL,
+	`tipo_vehiculo_id` integer NOT NULL,
+	`nombre` text NOT NULL,
+	`anio_desde` integer,
+	`anio_hasta` integer,
+	`activo` integer DEFAULT true,
+	FOREIGN KEY (`marca_id`) REFERENCES `marcas`(`id`) ON UPDATE no action ON DELETE restrict,
+	FOREIGN KEY (`tipo_vehiculo_id`) REFERENCES `tipos_vehiculo`(`id`) ON UPDATE no action ON DELETE restrict
+);
+--> statement-breakpoint
 CREATE TABLE `ordenes_fabricacion` (
 	`id` integer PRIMARY KEY AUTOINCREMENT NOT NULL,
-	`linea_pedido_id` integer NOT NULL,
 	`nombre_trabajo` text NOT NULL,
 	`cantidad_total` integer DEFAULT 1 NOT NULL,
 	`cantidad_producida` integer DEFAULT 0,
 	`cantidad_defectuosa` integer DEFAULT 0,
 	`estado_id` integer NOT NULL,
+	`estado_comentario` text,
 	`prioridad` integer DEFAULT 0,
 	`fecha_inicio` integer,
 	`fecha_fin_estimada` integer,
@@ -167,7 +220,6 @@ CREATE TABLE `ordenes_fabricacion` (
 	`observaciones` text,
 	`created_at` integer,
 	`updated_at` integer,
-	FOREIGN KEY (`linea_pedido_id`) REFERENCES `lineas_pedido`(`id`) ON UPDATE no action ON DELETE cascade,
 	FOREIGN KEY (`estado_id`) REFERENCES `estados_fabricacion`(`id`) ON UPDATE no action ON DELETE restrict,
 	FOREIGN KEY (`asignado_a`) REFERENCES `empleados`(`id`) ON UPDATE no action ON DELETE set null
 );
@@ -181,26 +233,23 @@ CREATE TABLE `pedidos` (
 	`fecha_entrega_real` integer,
 	`estado_id` integer NOT NULL,
 	`precio_total` real,
-	`seña` real,
+	`anticipo` real,
 	`saldo_pendiente` real,
-	`creado_por` integer,
 	`observaciones` text,
 	`created_at` integer,
 	`updated_at` integer,
 	FOREIGN KEY (`cliente_id`) REFERENCES `clientes`(`id`) ON UPDATE no action ON DELETE restrict,
-	FOREIGN KEY (`estado_id`) REFERENCES `estados_pedido`(`id`) ON UPDATE no action ON DELETE restrict,
-	FOREIGN KEY (`creado_por`) REFERENCES `usuarios`(`id`) ON UPDATE no action ON DELETE set null
+	FOREIGN KEY (`estado_id`) REFERENCES `estados_pedido`(`id`) ON UPDATE no action ON DELETE restrict
 );
 --> statement-breakpoint
 CREATE UNIQUE INDEX `pedidos_numero_pedido_unique` ON `pedidos` (`numero_pedido`);--> statement-breakpoint
 CREATE TABLE `permisos` (
 	`id` integer PRIMARY KEY AUTOINCREMENT NOT NULL,
-	`nombre` text NOT NULL,
-	`modulo` text,
+	`accion` text NOT NULL,
+	`modulo` text NOT NULL,
 	`created_at` integer
 );
 --> statement-breakpoint
-CREATE UNIQUE INDEX `permisos_nombre_unique` ON `permisos` (`nombre`);--> statement-breakpoint
 CREATE TABLE `productos` (
 	`id` integer PRIMARY KEY AUTOINCREMENT NOT NULL,
 	`codigo` text NOT NULL,
@@ -213,11 +262,22 @@ CREATE TABLE `productos` (
 	`trombon_diametro_inicial` integer,
 	`trombon_largo` integer,
 	`trombon_observaciones` text,
+	`tipo_vehiculo_id` integer,
+	`marca_id` integer,
+	`modelo_id` integer,
+	`tipo_uso_id` integer,
+	`categoria_competencia_id` integer,
 	`precio_base` real,
 	`es_personalizable` integer DEFAULT true,
 	`activo` integer DEFAULT true,
 	`created_at` integer,
-	FOREIGN KEY (`categoria_id`) REFERENCES `categorias_productos`(`id`) ON UPDATE no action ON DELETE set null
+	`updated_at` integer,
+	FOREIGN KEY (`categoria_id`) REFERENCES `categorias_productos`(`id`) ON UPDATE no action ON DELETE set null,
+	FOREIGN KEY (`tipo_vehiculo_id`) REFERENCES `tipos_vehiculo`(`id`) ON UPDATE no action ON DELETE no action,
+	FOREIGN KEY (`marca_id`) REFERENCES `marcas`(`id`) ON UPDATE no action ON DELETE no action,
+	FOREIGN KEY (`modelo_id`) REFERENCES `modelos`(`id`) ON UPDATE no action ON DELETE no action,
+	FOREIGN KEY (`tipo_uso_id`) REFERENCES `tipos_uso`(`id`) ON UPDATE no action ON DELETE no action,
+	FOREIGN KEY (`categoria_competencia_id`) REFERENCES `categorias_competencia`(`id`) ON UPDATE no action ON DELETE no action
 );
 --> statement-breakpoint
 CREATE UNIQUE INDEX `productos_codigo_unique` ON `productos` (`codigo`);--> statement-breakpoint
@@ -256,11 +316,28 @@ CREATE TABLE `tipos_material` (
 );
 --> statement-breakpoint
 CREATE UNIQUE INDEX `tipos_material_nombre_unique` ON `tipos_material` (`nombre`);--> statement-breakpoint
+CREATE TABLE `tipos_uso` (
+	`id` integer PRIMARY KEY AUTOINCREMENT NOT NULL,
+	`nombre` text NOT NULL,
+	`slug` text NOT NULL
+);
+--> statement-breakpoint
+CREATE UNIQUE INDEX `tipos_uso_slug_unique` ON `tipos_uso` (`slug`);--> statement-breakpoint
+CREATE TABLE `tipos_vehiculo` (
+	`id` integer PRIMARY KEY AUTOINCREMENT NOT NULL,
+	`nombre` text NOT NULL,
+	`slug` text NOT NULL,
+	`activo` integer DEFAULT true
+);
+--> statement-breakpoint
+CREATE UNIQUE INDEX `tipos_vehiculo_slug_unique` ON `tipos_vehiculo` (`slug`);--> statement-breakpoint
 CREATE TABLE `unidades_fabricacion` (
 	`id` integer PRIMARY KEY AUTOINCREMENT NOT NULL,
 	`orden_fabricacion_id` integer NOT NULL,
 	`numero_serie` text NOT NULL,
 	`estado_id` integer NOT NULL,
+	`estado_anterior_id` integer,
+	`estado_comentario` text,
 	`fecha_entrada_estado` integer,
 	`es_defectuoso` integer DEFAULT false,
 	`defecto_descripcion` text,
@@ -269,7 +346,8 @@ CREATE TABLE `unidades_fabricacion` (
 	`created_at` integer,
 	`updated_at` integer,
 	FOREIGN KEY (`orden_fabricacion_id`) REFERENCES `ordenes_fabricacion`(`id`) ON UPDATE no action ON DELETE cascade,
-	FOREIGN KEY (`estado_id`) REFERENCES `estados_fabricacion`(`id`) ON UPDATE no action ON DELETE restrict
+	FOREIGN KEY (`estado_id`) REFERENCES `estados_fabricacion`(`id`) ON UPDATE no action ON DELETE restrict,
+	FOREIGN KEY (`estado_anterior_id`) REFERENCES `estados_fabricacion`(`id`) ON UPDATE no action ON DELETE set null
 );
 --> statement-breakpoint
 CREATE TABLE `usuarios` (

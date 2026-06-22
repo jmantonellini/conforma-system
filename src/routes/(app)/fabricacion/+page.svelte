@@ -4,17 +4,23 @@
 		getEstadosFabricacion,
 		eliminarOrdenFabricacion
 	} from '$lib/remote/fabricacion.remote';
-	import { Table, PageHeader, PageLayout, Pagination } from '$lib/components/ui';
+	import { Table, PageHeader, PageLayout, Pagination, Modal } from '$lib/components/ui';
 	import { goto } from '$app/navigation';
 	import { SvelteURLSearchParams } from 'svelte/reactivity';
 	import { resolve } from '$app/paths';
 	import { Delete, Eye } from '$lib/components/ui/icons';
 	import { page } from '$app/state';
+	import { toast } from '$lib/stores/toast.svelte';
 
 	let estados = await getEstadosFabricacion();
-
+	let showModal = $state(false);
+	let deleteOrdenId = $state('');
 	let estadoFilter = $derived(Number(page.url.searchParams.get('estado')) || 0);
 	let currentPage = $derived(Number(page.url.searchParams.get('page')) || 1);
+
+	function closeModal() {
+		showModal = false;
+	}
 
 	let ordenesData = $derived(
 		await getOrdenesFabricacion({
@@ -79,6 +85,11 @@
 					<span class={`badge badge-sm badge-${orden.estado.color}`}>
 						{orden.estado.nombre}
 					</span>
+					{#if orden.estado_comentario}
+						<span class="tooltip" data-tip={orden.estado_comentario}>
+							<span class="text-xs text-base-content/50">💬</span>
+						</span>
+					{/if}
 				</td>
 				<td>
 					{#if orden.prioridad === 2}
@@ -101,7 +112,8 @@
 						class="btn btn-circle text-error btn-ghost btn-sm"
 						title="Eliminar"
 						onclick={() => {
-							eliminarOrdenFabricacion(orden.id);
+							deleteOrdenId = String(orden.id);
+							showModal = true;
 						}}
 					>
 						<Delete />
@@ -110,7 +122,7 @@
 			{/snippet}
 
 			<Table
-				data={ordenesData.data}
+				data={ordenesData.ordenes}
 				loading={false}
 				emptyMessage="No hay órdenes de fabricación"
 				{header}
@@ -132,3 +144,25 @@
 		</div>
 	</div>
 </PageLayout>
+
+<Modal bind:open={showModal} title="Elimnar Orden de Fabricación" onClose={closeModal}>
+	<div class="py-4">
+		<p>¿Seguro que quieres eliminar esta orden de fabricación?</p>
+	</div>
+	{#snippet actions()}
+		<button class="btn" onclick={closeModal}>Cancelar</button>
+		<button
+			class="btn btn-error"
+			onclick={async () => {
+				try {
+					await eliminarOrdenFabricacion(deleteOrdenId);
+					closeModal();
+					toast.success('Orden eliminada');
+				} catch (error) {
+					console.log(error);
+					toast.error('Error al eliminar');
+				}
+			}}>Eliminar</button
+		>
+	{/snippet}
+</Modal>

@@ -34,3 +34,14 @@ export enum Acciones {
 	EDIT = 'edit',
 	DELETE = 'delete'
 }
+
+export type ModalType = 'create' | 'edit' | 'delete' | 'confirm';
+
+export interface ModalState {
+	open: boolean;
+	type: ModalType;
+	title: string;
+	data?: unknown;
+	onConfirm?: (data?: unknown) => Promise<void> | void;
+	onCancel?: () => void;
+}

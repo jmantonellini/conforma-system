@@ -1,8 +1,12 @@
 <script lang="ts">
-	import { crearOrdenFabricacion, getEmpleados } from '$lib/remote/fabricacion.remote';
+	import { page } from '$app/state';
+	import { crearOrdenFabricacion } from '$lib/remote/fabricacion.remote';
+	import { getEmpleados } from '$lib/remote/empleados.remote';
 	import { getLineasPedidoSinOrden } from '$lib/remote/pedidos.remote';
 	import { PageLayout, PageHeader, FormFieldWrapper, FormActions } from '$lib/components/ui';
-	import { page } from '$app/state';
+	import { toast } from '$lib/stores/toast.svelte';
+	import { goto } from '$app/navigation';
+	import { resolve } from '$app/paths';
 
 	let id = $derived(page.url.searchParams.get('linea'));
 
@@ -15,7 +19,22 @@
 <PageLayout>
 	<PageHeader title="Nueva Orden de Fabricación" />
 
-	<form {...form} class="space-y-6">
+	<form
+		{...form.enhance(async (form) => {
+			try {
+				if (await form.submit()) {
+					toast.success('Orden creada!');
+					goto(resolve('/fabricacion'));
+				} else {
+					toast.error('Error de validación');
+				}
+			} catch (error) {
+				console.log(error);
+				toast.error('Error del servidor');
+			}
+		})}
+		class="space-y-6"
+	>
 		<fieldset class="fieldset rounded-box border p-4">
 			<legend class="fieldset-legend">Datos de la orden</legend>
 

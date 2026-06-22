@@ -1,27 +1,60 @@
 <script lang="ts">
-	import { enhance } from "$app/forms";
+	import { goto } from '$app/navigation';
+	import { resolve } from '$app/paths';
+	import { FormFieldWrapper } from '$lib/components/ui';
+	import { register } from '$lib/remote/auth.remote';
+	import { toast } from '$lib/stores/toast.svelte';
 
-	let username = $state('');
-	let password = $state('');
-	let error = $state('');
+	const form = register;
 </script>
 
-<div>
-	<form method="post" use:enhance class="flex h-full items-center justify-center" >
+<div class="flex min-h-screen items-center justify-center">
+	<form
+		{...form.enhance(async (form) => {
+			try {
+				if (await form.submit()) {
+					form.element.reset();
+					toast.success('Usuario registrado!');
+					goto(resolve('/login'));
+				} else {
+					toast.error('Error de validación');
+				}
+			} catch (error) {
+				console.log(error);
+				toast.error('Error del servidor');
+			}
+		})}
+	>
 		<fieldset class="fieldset w-xs rounded-box border border-base-300 bg-base-200 p-4">
 			<legend class="fieldset-legend">Register</legend>
 
-			<label for="username" class="label">Username</label>
-			<input type="text" name="username" id="username" class="input" bind:value={username} placeholder="Username" />
+			<FormFieldWrapper id="email" label="Email">
+				<input
+					type="text"
+					{...form.fields.username.as('text')}
+					placeholder="Usuario"
+					class="input-bordered input"
+				/>
+				{#each form.fields.username.issues() as issue (issue)}
+					<p class="text-sm text-error">{issue.message}</p>
+				{/each}
+			</FormFieldWrapper>
 
-			<label for="password" class="label">Password</label>
-			<input type="password" name="password" id="password" class="input" bind:value={password} placeholder="Password" />
+			<FormFieldWrapper id="password" label="Password">
+				<input
+					{...form.fields.password.as('password')}
+					placeholder="Contraseña"
+					class="input-bordered input"
+					autocomplete="current-password webauthn"
+				/>
+				{#each form.fields.password.issues() as issue (issue)}
+					<p class="text-sm text-error">{issue.message}</p>
+				{/each}
+			</FormFieldWrapper>
 
-			<button type="submit" class="btn mt-4 btn-neutral">Register</button>
-
-			{#if error}
-				<p class="mt-4 text-red-500">{error}</p>
-			{/if}
+			<button class="btn mt-4 btn-neutral" type="submit" disabled={!!form.pending}>
+				{form.pending ? 'Registrando...' : 'Registrar'}
+			</button>
 		</fieldset>
 	</form>
 </div>
