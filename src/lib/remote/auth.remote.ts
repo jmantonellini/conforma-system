@@ -1,10 +1,11 @@
 import { command, form, getRequestEvent } from '$app/server';
 import { getDb } from '$lib/server/db';
-import { usuarios, sesiones } from '$lib/server/db/schema';
+import { usuarios, sesiones, feedback } from '$lib/server/db/schema';
 import { eq } from 'drizzle-orm';
 import bcrypt from 'bcryptjs';
 import { redirect } from '@sveltejs/kit';
 import { LoginSchema } from './auth.schema';
+import * as v from 'valibot';
 
 export const login = form(LoginSchema, async (data) => {
 	const event = getRequestEvent();
@@ -80,3 +81,20 @@ export const logout = command(async () => {
 
 	return { success: true };
 });
+
+export const enviarFeedback = form(
+	v.object({
+		mensaje: v.pipe(v.string(), v.nonEmpty('El mensaje es requerido'))
+	}),
+	async (data) => {
+		const event = getRequestEvent();
+		const db = getDb(event.platform?.env?.DB);
+		console.log('MENSAJE', data.mensaje);
+
+		await db.insert(feedback).values({
+			mensaje: data.mensaje
+		});
+
+		return { success: true };
+	}
+);

@@ -45,10 +45,8 @@
 
 <div class="flex min-h-screen flex-col">
 	<Header session={data.session} />
-	<div class="flex h-full w-full">
-		<!-- Sidebar -->
-		<SideBar {tabs}>
-			{@render children()}
-		</SideBar>
-	</div>
+	<!-- Sidebar -->
+	<SideBar {tabs}>
+		{@render children()}
+	</SideBar>
 </div>

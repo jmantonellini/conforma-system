@@ -1,8 +1,5 @@
 <script lang="ts">
-	import type { PageProps } from './$types';
 	import { PageHeader, PageLayout } from '$lib/components/ui';
-
-	let { data }: PageProps = $props();
 </script>
 
 <PageLayout>

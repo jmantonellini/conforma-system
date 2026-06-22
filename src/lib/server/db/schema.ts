@@ -64,6 +64,12 @@ export const sesiones = sqliteTable('sesiones', {
 	created_at: integer('created_at', { mode: 'timestamp' }).$default(() => new Date())
 });
 
+export const feedback = sqliteTable('feedback', {
+	id: integer('id').primaryKey({ autoIncrement: true }),
+	mensaje: text('mensaje').notNull(),
+	created_at: integer('created_at', { mode: 'timestamp' }).$default(() => new Date())
+});
+
 // ============================================
 // 2. CLIENTES Y PEDIDOS
 // ============================================
