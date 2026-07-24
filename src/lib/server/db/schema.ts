@@ -1,82 +1,145 @@
-import { sqliteTable, text, integer, real, primaryKey } from 'drizzle-orm/sqlite-core';
+import {
+	pgTable,
+	text,
+	integer,
+	real,
+	primaryKey,
+	index,
+	timestamp,
+	serial,
+	boolean,
+	jsonb,
+	uniqueIndex
+} from 'drizzle-orm/pg-core';
 import { sql } from 'drizzle-orm';
+import { EstadosTarea, Prioridades } from '$lib/types';
 
-// ============================================
-// 1. SEGURIDAD Y AUTENTICACIÓN
-// ============================================
+// ============================================================
+// CATÁLOGO DE ESTADOS — Con campo GRUPO para rollup
+// ============================================================
 
-export const roles = sqliteTable('roles', {
-	id: integer('id').primaryKey({ autoIncrement: true }),
+export const estados_fabricacion = pgTable('estados_fabricacion', {
+	id: serial('id').primaryKey(),
+	nombre: text('nombre').notNull().unique(),
+	slug: text('slug').notNull().unique(),
+	grupo: text('grupo').notNull(), // "preparacion" | "activo" | "pausado" | "final"
+	orden: integer('orden').notNull(),
+	color: text('color'),
+	es_final: boolean('es_final').default(false),
+	created_at: timestamp('created_at').defaultNow()
+});
+
+export const estados_pedido = pgTable('estados_pedido', {
+	id: serial('id').primaryKey(),
+	nombre: text('nombre').notNull().unique(),
+	slug: text('slug').notNull().unique(),
+	grupo: text('grupo').notNull(), // "inicial" | "proceso" | "final" | "excepcion"
+	orden: integer('orden').notNull(),
+	color: text('color'),
+	es_final: boolean('es_final').default(false),
+	created_at: timestamp('created_at').defaultNow()
+});
+
+// ============================================================
+// STATE MACHINE — Transiciones permitidas
+// ============================================================
+
+export const transiciones_estado = pgTable(
+	'transiciones_estado',
+	{
+		id: serial('id').primaryKey(),
+		tipo: text('tipo').notNull(), // "fabricacion" | "pedido"
+		estado_origen_id: integer('estado_origen_id').notNull(),
+		estado_destino_id: integer('estado_destino_id').notNull(),
+		requiere_rol: text('requiere_rol'),
+		created_at: timestamp('created_at').defaultNow()
+	},
+	(table) => [
+		uniqueIndex('idx_transicion_unica').on(
+			table.tipo,
+			table.estado_origen_id,
+			table.estado_destino_id
+		)
+	]
+);
+
+// ============================================================
+// SEGURIDAD Y AUTENTICACIÓN
+// ============================================================
+
+export const roles = pgTable('roles', {
+	id: serial('id').primaryKey(),
 	nombre: text('nombre').notNull().unique(),
 	descripcion: text('descripcion'),
-	created_at: integer('created_at', { mode: 'timestamp' }).$default(() => new Date())
+	created_at: timestamp('created_at').defaultNow()
 });
 
-export const permisos = sqliteTable('permisos', {
-	id: integer('id').primaryKey({ autoIncrement: true }),
+export const permisos = pgTable('permisos', {
+	id: serial('id').primaryKey(),
 	accion: text('accion').notNull(),
 	modulo: text('modulo').notNull(),
-	created_at: integer('created_at', { mode: 'timestamp' }).$default(() => new Date())
+	created_at: timestamp('created_at').defaultNow()
 });
 
-export const roles_permisos = sqliteTable(
+export const roles_permisos = pgTable(
 	'roles_permisos',
 	{
 		rol_id: integer('rol_id').references(() => roles.id, { onDelete: 'cascade' }),
 		permiso_id: integer('permiso_id').references(() => permisos.id, { onDelete: 'cascade' }),
-		created_at: integer('created_at', { mode: 'timestamp' }).$default(() => new Date())
+		created_at: timestamp('created_at').defaultNow()
 	},
 	(table) => [primaryKey({ columns: [table.rol_id, table.permiso_id] })]
 );
 
-export const empleados = sqliteTable('empleados', {
-	id: integer('id').primaryKey({ autoIncrement: true }),
+export const empleados = pgTable('empleados', {
+	id: serial('id').primaryKey(),
 	nombre: text('nombre').notNull(),
 	apellido: text('apellido').notNull(),
 	email: text('email').unique(),
 	telefono: text('telefono'),
 	dni: text('dni').unique(),
 	direccion: text('direccion'),
-	fecha_ingreso: integer('fecha_ingreso', { mode: 'timestamp' }),
-	activo: integer('activo', { mode: 'boolean' }).default(true),
-	created_at: integer('created_at', { mode: 'timestamp' }).$default(() => new Date())
+	fecha_ingreso: timestamp('fecha_ingreso'),
+	activo: boolean('activo').default(true),
+	created_at: timestamp('created_at').defaultNow()
 });
 
-export const usuarios = sqliteTable('usuarios', {
-	id: integer('id').primaryKey({ autoIncrement: true }),
+export const usuarios = pgTable('usuarios', {
+	id: serial('id').primaryKey(),
 	username: text('username').notNull().unique(),
 	password_hash: text('password_hash').notNull(),
 	rol_id: integer('rol_id').references(() => roles.id, { onDelete: 'set null' }),
 	empleado_id: integer('empleado_id')
 		.references(() => empleados.id, { onDelete: 'set null' })
 		.unique(),
-	activo: integer('activo', { mode: 'boolean' }).default(true),
-	ultimo_acceso: integer('ultimo_acceso', { mode: 'timestamp' }),
-	created_at: integer('created_at', { mode: 'timestamp' }).$default(() => new Date())
+	activo: boolean('activo').default(true),
+	ultimo_acceso: integer('ultimo_acceso'),
+	created_at: timestamp('created_at').defaultNow()
 });
 
-export const sesiones = sqliteTable('sesiones', {
+export const sesiones = pgTable('sesiones', {
 	id: text('id').primaryKey(),
 	user_id: integer('user_id').references(() => usuarios.id, { onDelete: 'cascade' }),
-	expires_at: integer('expires_at', { mode: 'timestamp' }).notNull(),
+	expires_at: timestamp('expires_at').notNull(),
 	ip_address: text('ip_address'),
 	user_agent: text('user_agent'),
-	created_at: integer('created_at', { mode: 'timestamp' }).$default(() => new Date())
+	created_at: timestamp('created_at').defaultNow()
 });
 
-export const feedback = sqliteTable('feedback', {
-	id: integer('id').primaryKey({ autoIncrement: true }),
+export const feedback = pgTable('feedback', {
+	id: serial('id').primaryKey(),
 	mensaje: text('mensaje').notNull(),
-	created_at: integer('created_at', { mode: 'timestamp' }).$default(() => new Date())
+	created_at: timestamp('created_at').defaultNow()
 });
 
-// ============================================
-// 2. CLIENTES Y PEDIDOS
-// ============================================
+// ============================================================
+// CLIENTES Y PEDIDOS
+// ============================================================
 
-export const clientes = sqliteTable('clientes', {
-	id: integer('id').primaryKey({ autoIncrement: true }),
+export const clientes = pgTable('clientes', {
+	id: serial('id').primaryKey(),
 	nombre: text('nombre').notNull(),
+	apellido: text('apellido'),
 	razon_social: text('razon_social'),
 	cuit: text('cuit').unique(),
 	email: text('email'),
@@ -89,38 +152,27 @@ export const clientes = sqliteTable('clientes', {
 	numero: text('numero'),
 	piso: text('piso'),
 	departamento: text('departamento'),
-	activo: integer('activo', { mode: 'boolean' }).default(true),
-	created_at: integer('created_at', { mode: 'timestamp' }).$default(() => new Date()),
-	updated_at: integer('updated_at', { mode: 'timestamp' }).$onUpdate(() => new Date())
+	activo: boolean('activo').default(true),
+	created_at: timestamp('created_at').defaultNow(),
+	updated_at: timestamp('updated_at').$onUpdate(() => new Date())
 });
 
-export const categorias_productos = sqliteTable('categorias_productos', {
-	id: integer('id').primaryKey({ autoIncrement: true }),
-	nombre: text('nombre').notNull().unique(), // escape, baranda, estructura, etc
-	descripcion: text('descripcion'),
-	created_at: integer('created_at', { mode: 'timestamp' }).$default(() => new Date())
-});
-
-export const estados_pedido = sqliteTable('estados_pedido', {
-	id: integer('id').primaryKey({ autoIncrement: true }),
+export const categorias_productos = pgTable('categorias_productos', {
+	id: serial('id').primaryKey(),
 	nombre: text('nombre').notNull().unique(),
-	slug: text('slug').notNull().unique(), // en_espera_seña, señalado, falta_pago, en_proceso, listo_enviar, enviado, entregado, cancelado
-	orden: integer('orden').notNull(),
-	color: text('color'), // Hex o nombre de color
-	requiere_notificacion: integer('requiere_notificacion', { mode: 'boolean' }).default(false),
-	es_final: integer('es_final', { mode: 'boolean' }).default(false), // Para saber si es estado terminal
-	created_at: integer('created_at', { mode: 'timestamp' }).$default(() => new Date())
+	descripcion: text('descripcion'),
+	created_at: timestamp('created_at').defaultNow()
 });
 
-export const pedidos = sqliteTable('pedidos', {
-	id: integer('id').primaryKey({ autoIncrement: true }),
+export const pedidos = pgTable('pedidos', {
+	id: serial('id').primaryKey(),
 	numero_pedido: text('numero_pedido').notNull().unique(),
 	cliente_id: integer('cliente_id')
-		.references(() => clientes.id, { onDelete: 'restrict' })
+		.references(() => clientes.id, { onDelete: 'set null' })
 		.notNull(),
-	fecha_pedido: integer('fecha_pedido', { mode: 'timestamp' }).notNull(),
-	fecha_entrega_prometida: integer('fecha_entrega_prometida', { mode: 'timestamp' }),
-	fecha_entrega_real: integer('fecha_entrega_real', { mode: 'timestamp' }),
+	fecha_pedido: timestamp('fecha_pedido').notNull(),
+	fecha_entrega_prometida: timestamp('fecha_entrega_prometida'),
+	fecha_entrega_real: timestamp('fecha_entrega_real'),
 	estado_id: integer('estado_id')
 		.references(() => estados_pedido.id, { onDelete: 'restrict' })
 		.notNull(),
@@ -128,96 +180,58 @@ export const pedidos = sqliteTable('pedidos', {
 	anticipo: real('anticipo'),
 	saldo_pendiente: real('saldo_pendiente'),
 	observaciones: text('observaciones'),
-	created_at: integer('created_at', { mode: 'timestamp' }).$default(() => new Date()),
-	updated_at: integer('updated_at', { mode: 'timestamp' }).$onUpdate(() => new Date())
+	created_at: timestamp('created_at').defaultNow(),
+	updated_at: timestamp('updated_at').$onUpdate(() => new Date())
 });
 
-// ============================================
-// 3. PRODUCTOS Y LÍNEAS DE PEDIDO
-// ============================================
+export const lineas_pedido = pgTable(
+	'lineas_pedido',
+	{
+		id: serial('id').primaryKey(),
+		pedido_id: integer('pedido_id')
+			.references(() => pedidos.id, { onDelete: 'cascade' })
+			.notNull(),
+		producto_id: integer('producto_id').references(() => productos.id, { onDelete: 'set null' }),
+		es_personalizado: boolean('es_personalizado').default(false),
+		descripcion_personalizada: text('descripcion_personalizada'),
+		fecha_envio_parcial: timestamp('fecha_envio_parcial'),
+		medidas_primario_diametro: integer('medidas_primario_diametro'),
+		medidas_primario_largo: integer('medidas_primario_largo'),
+		medidas_secundario_diametro: integer('medidas_secundario_diametro'),
+		medidas_secundario_largo: integer('medidas_secundario_largo'),
+		trombon_diametro_inicial: integer('trombon_diametro_inicial'),
+		trombon_largo: integer('trombon_largo'),
+		trombon_observaciones: text('trombon_observaciones'),
+		cantidad: integer('cantidad').notNull().default(1),
+		precio_unitario: real('precio_unitario').notNull(),
+		subtotal: real('subtotal').generatedAlwaysAs(sql`cantidad * precio_unitario`),
+		orden_linea: integer('orden_linea'),
+		created_at: timestamp('created_at').defaultNow(),
+		updated_at: timestamp('updated_at').$onUpdate(() => new Date())
+	},
+	(table) => [index('idx_lineas_pedido').on(table.pedido_id)]
+);
 
-export const productos = sqliteTable('productos', {
-	id: integer('id').primaryKey({ autoIncrement: true }),
-	codigo: text('codigo').unique().notNull(),
+// ============================================================
+// PRODUCTOS
+// ============================================================
+
+export const tipos_vehiculo = pgTable('tipos_vehiculo', {
+	id: serial('id').primaryKey(),
 	nombre: text('nombre').notNull(),
-	categoria_id: integer('categoria_id').references(() => categorias_productos.id, {
-		onDelete: 'set null'
-	}),
-
-	// Especificaciones técnicas estándar
-	medidas_primario_diametro: integer('medidas_primario_diametro'),
-	medidas_primario_largo: integer('medidas_primario_largo'),
-	medidas_secundario_diametro: integer('medidas_secundario_diametro'),
-	medidas_secundario_largo: integer('medidas_secundario_largo'),
-	trombon_diametro_inicial: integer('trombon_diametro_inicial'),
-	trombon_largo: integer('trombon_largo'),
-	trombon_observaciones: text('trombon_observaciones'),
-
-	tipo_vehiculo_id: integer('tipo_vehiculo_id').references(() => tipos_vehiculo.id),
-	marca_id: integer('marca_id').references(() => marcas.id),
-	modelo_id: integer('modelo_id').references(() => modelos.id),
-
-	tipo_uso_id: integer('tipo_uso_id').references(() => tipos_uso.id),
-	categoria_competencia_id: integer('categoria_competencia_id').references(
-		() => categorias_competencia.id
-	),
-
-	precio_base: real('precio_base'),
-	es_personalizable: integer('es_personalizable', { mode: 'boolean' }).default(true),
-	activo: integer('activo', { mode: 'boolean' }).default(true),
-	created_at: integer('created_at', { mode: 'timestamp' }).$default(() => new Date()),
-	updated_at: integer('updated_at', { mode: 'timestamp' }).$onUpdate(() => new Date())
+	slug: text('slug').notNull().unique(),
+	activo: boolean('activo').default(true)
 });
 
-export const lineas_pedido = sqliteTable('lineas_pedido', {
-	id: integer('id').primaryKey({ autoIncrement: true }),
-	pedido_id: integer('pedido_id')
-		.references(() => pedidos.id, { onDelete: 'cascade' })
-		.notNull(),
-	producto_id: integer('producto_id').references(() => productos.id, { onDelete: 'set null' }),
-	orden_fabricacion_id: integer('orden_fabricacion_id').references(() => ordenes_fabricacion.id, {
-		onDelete: 'cascade'
-	}),
-
-	// Datos personalizados (sobreescriben al producto)
-	es_personalizado: integer('es_personalizado', { mode: 'boolean' }).default(false),
-	descripcion_personalizada: text('descripcion_personalizada'),
-
-	fecha_envio_parcial: integer('fecha_envio_parcial', { mode: 'timestamp' }),
-
-	// Medidas específicas (copia o sobreescribe al producto)
-	medidas_primario_diametro: integer('medidas_primario_diametro'),
-	medidas_primario_largo: integer('medidas_primario_largo'),
-	medidas_secundario_diametro: integer('medidas_secundario_diametro'),
-	medidas_secundario_largo: integer('medidas_secundario_largo'),
-	trombon_diametro_inicial: integer('trombon_diametro_inicial'),
-	trombon_largo: integer('trombon_largo'),
-	trombon_observaciones: text('trombon_observaciones'),
-
-	cantidad: integer('cantidad').notNull().default(1),
-	precio_unitario: real('precio_unitario').notNull(),
-	subtotal: real('subtotal').generatedAlwaysAs(sql`cantidad * precio_unitario`),
-
-	orden_linea: integer('orden_linea'), // Para ordenar líneas dentro del pedido
-	created_at: integer('created_at', { mode: 'timestamp' }).$default(() => new Date()),
-	updated_at: integer('updated_at', { mode: 'timestamp' }).$onUpdate(() => new Date())
-});
-
-export const tipos_vehiculo = sqliteTable('tipos_vehiculo', {
-	id: integer('id').primaryKey({ autoIncrement: true }),
-	nombre: text('nombre').notNull(), // Auto, Moto, Camioneta, Avión
-	slug: text('slug').notNull().unique(), // auto, moto, camioneta, avion
-	activo: integer('activo', { mode: 'boolean' }).default(true)
-});
-
-export const marcas = sqliteTable('marcas', {
-	id: integer('id').primaryKey({ autoIncrement: true }),
+export const marcas = pgTable('marcas', {
+	id: serial('id').primaryKey(),
 	nombre: text('nombre').notNull().unique(),
-	activo: integer('activo', { mode: 'boolean' }).default(true)
+	logo_url: text('logo_url'),
+	activo: boolean('activo').default(true)
 });
 
-export const modelos = sqliteTable('modelos', {
-	id: integer('id').primaryKey({ autoIncrement: true }),
+export const modelos = pgTable('modelos', {
+	id: serial('id').primaryKey(),
 	marca_id: integer('marca_id')
 		.references(() => marcas.id, { onDelete: 'restrict' })
 		.notNull(),
@@ -227,116 +241,126 @@ export const modelos = sqliteTable('modelos', {
 	nombre: text('nombre').notNull(),
 	anio_desde: integer('anio_desde'),
 	anio_hasta: integer('anio_hasta'),
-	activo: integer('activo', { mode: 'boolean' }).default(true)
+	activo: boolean('activo').default(true)
 });
 
-export const tipos_uso = sqliteTable('tipos_uso', {
-	id: integer('id').primaryKey({ autoIncrement: true }),
-	nombre: text('nombre').notNull(), // Calle, Competición
+export const tipos_uso = pgTable('tipos_uso', {
+	id: serial('id').primaryKey(),
+	nombre: text('nombre').notNull(),
 	slug: text('slug').notNull().unique()
 });
 
-export const categorias_competencia = sqliteTable('categorias_competencia', {
-	id: integer('id').primaryKey({ autoIncrement: true }),
+export const categorias_competencia = pgTable('categorias_competencia', {
+	id: serial('id').primaryKey(),
 	nombre: text('nombre').notNull(),
 	descripcion: text('descripcion'),
 	tipo_vehiculo_id: integer('tipo_vehiculo_id')
 		.references(() => tipos_vehiculo.id)
 		.notNull(),
-	activa_desde: integer('activa_desde', { mode: 'timestamp' }),
-	activa_hasta: integer('activa_hasta', { mode: 'timestamp' }),
-	vigente: integer('vigente', { mode: 'boolean' }).default(true)
+	activa_desde: integer('activa_desde'),
+	activa_hasta: integer('activa_hasta'),
+	vigente: boolean('vigente').default(true)
 });
 
-// ============================================
-// 4. FABRICACIÓN Y PRODUCCIÓN
-// ============================================
-
-export const estados_fabricacion = sqliteTable('estados_fabricacion', {
-	id: integer('id').primaryKey({ autoIncrement: true }),
-	nombre: text('nombre').notNull().unique(),
-	slug: text('slug').notNull().unique(), // pendiente, en_corte, en_curvado, ensamblando, soldando, alistando, listo, entregado
-	orden: integer('orden').notNull(),
-	color: text('color'),
-	es_final: integer('es_final', { mode: 'boolean' }).default(false),
-	created_at: integer('created_at', { mode: 'timestamp' }).$default(() => new Date())
-});
-
-export const acciones_fabricacion = sqliteTable('acciones_fabricacion', {
-	id: integer('id').primaryKey({ autoIncrement: true }),
-	nombre: text('nombre').notNull().unique(), // 'iniciar_corte', 'iniciar_curvado', etc
-	estado_origen_id: integer('estado_origen_id').references(() => estados_fabricacion.id),
-	estado_destino_id: integer('estado_destino_id').references(() => estados_fabricacion.id),
-	created_at: integer('created_at', { mode: 'timestamp' }).$default(() => new Date())
-});
-
-export const ordenes_fabricacion = sqliteTable('ordenes_fabricacion', {
-	id: integer('id').primaryKey({ autoIncrement: true }),
-
-	nombre_trabajo: text('nombre_trabajo').notNull(),
-	cantidad_total: integer('cantidad_total').notNull().default(1),
-	cantidad_producida: integer('cantidad_producida').default(0),
-	cantidad_defectuosa: integer('cantidad_defectuosa').default(0),
-
-	estado_id: integer('estado_id')
-		.references(() => estados_fabricacion.id, { onDelete: 'restrict' })
-		.notNull(),
-	estado_comentario: text('estado_comentario'),
-
-	prioridad: integer('prioridad').default(0), // 0=normal, 1=urgente, 2=crítica
-	fecha_inicio: integer('fecha_inicio', { mode: 'timestamp' }),
-	fecha_fin_estimada: integer('fecha_fin_estimada', { mode: 'timestamp' }),
-	fecha_fin_real: integer('fecha_fin_real', { mode: 'timestamp' }),
-
-	asignado_a: integer('asignado_a').references(() => empleados.id, { onDelete: 'set null' }),
-	observaciones: text('observaciones'),
-
-	created_at: integer('created_at', { mode: 'timestamp' }).$default(() => new Date()),
-	updated_at: integer('updated_at', { mode: 'timestamp' }).$onUpdate(() => new Date())
-});
-
-export const unidades_fabricacion = sqliteTable('unidades_fabricacion', {
-	id: integer('id').primaryKey({ autoIncrement: true }),
-	orden_fabricacion_id: integer('orden_fabricacion_id')
-		.references(() => ordenes_fabricacion.id, { onDelete: 'cascade' })
-		.notNull(),
-
-	numero_serie: text('numero_serie').notNull(),
-	estado_id: integer('estado_id')
-		.references(() => estados_fabricacion.id, { onDelete: 'restrict' })
-		.notNull(),
-	estado_anterior_id: integer('estado_anterior_id').references(() => estados_fabricacion.id, {
+export const productos = pgTable('productos', {
+	id: serial('id').primaryKey(),
+	codigo: text('codigo').unique().notNull(),
+	nombre: text('nombre').notNull(),
+	categoria_id: integer('categoria_id').references(() => categorias_productos.id, {
 		onDelete: 'set null'
 	}),
-	estado_comentario: text('estado_comentario'),
-
-	fecha_entrada_estado: integer('fecha_entrada_estado', { mode: 'timestamp' }).$default(
-		() => new Date()
+	medidas_primario_diametro: integer('medidas_primario_diametro'),
+	medidas_primario_largo: integer('medidas_primario_largo'),
+	medidas_secundario_diametro: integer('medidas_secundario_diametro'),
+	medidas_secundario_largo: integer('medidas_secundario_largo'),
+	trombon_diametro_inicial: integer('trombon_diametro_inicial'),
+	trombon_largo: integer('trombon_largo'),
+	trombon_observaciones: text('trombon_observaciones'),
+	tipo_vehiculo_id: integer('tipo_vehiculo_id').references(() => tipos_vehiculo.id),
+	marca_id: integer('marca_id').references(() => marcas.id),
+	modelo_id: integer('modelo_id').references(() => modelos.id),
+	tipo_uso_id: integer('tipo_uso_id').references(() => tipos_uso.id),
+	categoria_competencia_id: integer('categoria_competencia_id').references(
+		() => categorias_competencia.id
 	),
-
-	es_defectuoso: integer('es_defectuoso', { mode: 'boolean' }).default(false),
-	defecto_descripcion: text('defecto_descripcion'),
-
-	foto_urls: text('foto_urls'), // JSON array
-	observaciones: text('observaciones'),
-
-	created_at: integer('created_at', { mode: 'timestamp' }).$default(() => new Date()),
-	updated_at: integer('updated_at', { mode: 'timestamp' }).$onUpdate(() => new Date())
+	precio_base: real('precio_base'),
+	es_personalizable: boolean('es_personalizable').default(true),
+	activo: boolean('activo').default(true),
+	created_at: timestamp('created_at').defaultNow(),
+	updated_at: timestamp('updated_at').$onUpdate(() => new Date())
 });
 
-// ============================================
-// 5. MATERIALES Y COSTOS
-// ============================================
+// ============================================================
+// FABRICACIÓN — Solo unidades tienen estado real
+// ============================================================
 
-export const tipos_material = sqliteTable('tipos_material', {
-	id: integer('id').primaryKey({ autoIncrement: true }),
-	nombre: text('nombre').notNull().unique(), // bridas, caños_curvas, otros, personal, horas
-	unidad_por_defecto: text('unidad'), // unidad, hora, kg, metro
-	created_at: integer('created_at', { mode: 'timestamp' }).$default(() => new Date())
+export const ordenes_fabricacion = pgTable(
+	'ordenes_fabricacion',
+	{
+		id: serial('id').primaryKey(),
+		linea_pedido_id: integer('linea_pedido_id')
+			.references(() => lineas_pedido.id, { onDelete: 'restrict' })
+			.notNull()
+			.unique(),
+		nombre_trabajo: text('nombre_trabajo').notNull(),
+		cantidad_total: integer('cantidad_total').notNull().default(1),
+		prioridad: integer('prioridad').default(0),
+		fecha_inicio: timestamp('fecha_inicio'),
+		fecha_fin_estimada: timestamp('fecha_fin_estimada'),
+		fecha_fin_real: timestamp('fecha_fin_real'),
+		asignado_a: integer('asignado_a').references(() => empleados.id, { onDelete: 'set null' }),
+		observaciones: text('observaciones'),
+		created_at: timestamp('created_at').defaultNow(),
+		updated_at: timestamp('updated_at').$onUpdate(() => new Date())
+	},
+	(table) => [
+		index('idx_ordenes_linea').on(table.linea_pedido_id),
+		index('idx_ordenes_prioridad').on(table.prioridad)
+	]
+);
+
+// UNIDAD: ÚNICA tabla con estado real. Ground truth.
+export const unidades_fabricacion = pgTable(
+	'unidades_fabricacion',
+	{
+		id: serial('id').primaryKey(),
+		orden_fabricacion_id: integer('orden_fabricacion_id')
+			.references(() => ordenes_fabricacion.id, { onDelete: 'cascade' })
+			.notNull(),
+		numero_serie: text('numero_serie').notNull(),
+		estado_id: integer('estado_id')
+			.references(() => estados_fabricacion.id, { onDelete: 'restrict' })
+			.notNull(),
+		historial_estados: jsonb('historial_estados')
+			.$type<Array<{ estado_id: number; fecha: string; comentario?: string }>>()
+			.default(sql`'[]'::jsonb`),
+		comentario_estado: text('comentario_estado'),
+		es_defectuoso: boolean('es_defectuoso').default(false),
+		defecto_descripcion: text('defecto_descripcion'),
+		foto_urls: text('foto_urls'), // JSON array
+		observaciones: text('observaciones'),
+		created_at: timestamp('created_at').defaultNow(),
+		updated_at: timestamp('updated_at').$onUpdate(() => new Date())
+	},
+	(table) => [
+		index('idx_unidades_orden').on(table.orden_fabricacion_id),
+		index('idx_unidades_estado').on(table.estado_id)
+	]
+);
+
+// ============================================================
+// MATERIALES Y COSTOS
+// ============================================================
+
+export const tipos_material = pgTable('tipos_material', {
+	id: serial('id').primaryKey(),
+	nombre: text('nombre').notNull().unique(),
+	unidad_por_defecto: text('unidad'),
+	created_at: timestamp('created_at').defaultNow()
 });
 
-export const materiales_empleados = sqliteTable('materiales_empleados', {
-	id: integer('id').primaryKey({ autoIncrement: true }),
+export const materiales_empleados = pgTable('materiales_empleados', {
+	id: serial('id').primaryKey(),
 	orden_fabricacion_id: integer('orden_fabricacion_id')
 		.references(() => ordenes_fabricacion.id, { onDelete: 'cascade' })
 		.notNull(),
@@ -349,76 +373,68 @@ export const materiales_empleados = sqliteTable('materiales_empleados', {
 	costo_unitario: real('costo_unitario'),
 	costo_total: real('costo_total').generatedAlwaysAs(sql`cantidad * costo_unitario`),
 	observaciones: text('observaciones'),
-	created_at: integer('created_at', { mode: 'timestamp' }).$default(() => new Date())
+	created_at: timestamp('created_at').defaultNow()
 });
 
-// ============================================
-// 6. AUDITORÍA Y LOGS
-// ============================================
+// ============================================================
+// AUDITORÍA — Logs polimórficos
+// ============================================================
 
-export const logs_pedidos = sqliteTable('logs_pedidos', {
-	id: integer('id').primaryKey({ autoIncrement: true }),
-	pedido_id: integer('pedido_id')
-		.references(() => pedidos.id, { onDelete: 'cascade' })
-		.notNull(),
-	usuario_id: integer('usuario_id')
-		.references(() => usuarios.id, { onDelete: 'set null' })
-		.notNull(),
-	campo: text('campo'),
-	valor_anterior: text('valor_anterior'),
-	valor_nuevo: text('valor_nuevo'),
-	accion: text('accion').notNull(),
-	ip_address: text('ip_address'),
-	user_agent: text('user_agent'),
-	created_at: integer('created_at', { mode: 'timestamp' }).$default(() => new Date())
-});
+export const logs_cambios_estado = pgTable(
+	'logs_cambios_estado',
+	{
+		id: serial('id').primaryKey(),
+		entidad_tipo: text('entidad_tipo').notNull(), // "unidad" | "pedido"
+		entidad_id: integer('entidad_id').notNull(),
+		usuario_id: integer('usuario_id')
+			.references(() => usuarios.id, { onDelete: 'set null' })
+			.notNull(),
+		estado_anterior_id: integer('estado_anterior_id'),
+		estado_nuevo_id: integer('estado_nuevo_id').notNull(),
+		comentario: text('comentario'),
+		created_at: timestamp('created_at').defaultNow()
+	},
+	(table) => [
+		index('idx_logs_entidad').on(table.entidad_tipo, table.entidad_id),
+		index('idx_logs_usuario').on(table.usuario_id)
+	]
+);
 
-export const logs_estados_pedido = sqliteTable('logs_estados_pedido', {
-	id: integer('id').primaryKey({ autoIncrement: true }),
-	pedido_id: integer('pedido_id')
-		.references(() => pedidos.id, { onDelete: 'cascade' })
-		.notNull(),
-	usuario_id: integer('usuario_id')
-		.references(() => usuarios.id, { onDelete: 'set null' })
-		.notNull(),
-	estado_anterior_id: integer('estado_anterior_id').references(() => estados_pedido.id),
-	estado_nuevo_id: integer('estado_nuevo_id')
-		.references(() => estados_pedido.id)
-		.notNull(),
-	tiempo_empleado: integer('tiempo_empleado'), // minutos
-	comentario: text('comentario'),
-	created_at: integer('created_at', { mode: 'timestamp' }).$default(() => new Date())
-});
-
-export const logs_unidades_fabricacion = sqliteTable('logs_unidades_fabricacion', {
-	id: integer('id').primaryKey({ autoIncrement: true }),
-	unidad_id: integer('unidad_id')
-		.references(() => unidades_fabricacion.id, { onDelete: 'cascade' })
-		.notNull(),
-	usuario_id: integer('usuario_id')
-		.references(() => usuarios.id, { onDelete: 'set null' })
-		.notNull(),
-	estado_anterior_id: integer('estado_anterior_id').references(() => estados_fabricacion.id),
-	estado_nuevo_id: integer('estado_nuevo_id')
-		.references(() => estados_fabricacion.id)
-		.notNull(),
-	tiempo_transcurrido: integer('tiempo_transcurrido'), // minutos
-	comentario: text('comentario'),
-	created_at: integer('created_at', { mode: 'timestamp' }).$default(() => new Date())
-});
-
-export const logs_sistema = sqliteTable('logs_sistema', {
-	id: integer('id').primaryKey({ autoIncrement: true }),
+export const logs_sistema = pgTable('logs_sistema', {
+	id: serial('id').primaryKey(),
 	usuario_id: integer('usuario_id').references(() => usuarios.id, { onDelete: 'set null' }),
 	accion: text('accion').notNull(),
 	detalles: text('detalles'),
 	ip_address: text('ip_address'),
-	created_at: integer('created_at', { mode: 'timestamp' }).$default(() => new Date())
+	created_at: timestamp('created_at').defaultNow()
 });
 
-// ============================================
-// 7. TIPOS DE TYPESCRIPT
-// ============================================
+// ============================================================
+// TAREAS
+// ============================================================
+
+export const tareas = pgTable('tareas', {
+	id: serial('id').primaryKey(),
+	titulo: text('titulo').notNull(),
+	descripcion: text('descripcion'),
+	estado: text('estado', {
+		enum: [EstadosTarea.PENDIENTE, EstadosTarea.EN_PROGRESO, EstadosTarea.COMPLETADA]
+	})
+		.notNull()
+		.default(EstadosTarea.PENDIENTE),
+	orden: integer('orden').default(0),
+	prioridad: text('prioridad', { enum: [Prioridades.BAJA, Prioridades.MEDIA, Prioridades.ALTA] })
+		.notNull()
+		.default(Prioridades.MEDIA),
+	fecha_entrega: timestamp('fecha_entrega'),
+	asignado_a: integer('asignado_a').references(() => empleados.id, { onDelete: 'set null' }),
+	created_at: timestamp('created_at').defaultNow(),
+	updated_at: timestamp('updated_at').$onUpdate(() => new Date())
+});
+
+// ============================================================
+// TIPOS
+// ============================================================
 
 export type Usuario = typeof usuarios.$inferSelect;
 export type Rol = typeof roles.$inferSelect;
@@ -426,15 +442,15 @@ export type Permiso = typeof permisos.$inferSelect;
 export type Empleado = typeof empleados.$inferSelect;
 export type Cliente = typeof clientes.$inferSelect;
 export type Pedido = typeof pedidos.$inferSelect;
+export type LineaPedido = typeof lineas_pedido.$inferSelect;
+export type Producto = typeof productos.$inferSelect;
 export type OrdenFabricacion = typeof ordenes_fabricacion.$inferSelect;
 export type UnidadFabricacion = typeof unidades_fabricacion.$inferSelect;
-export type Producto = typeof productos.$inferSelect;
-export type LineaPedido = typeof lineas_pedido.$inferSelect;
-export type EstadoPedido = typeof estados_pedido.$inferSelect;
 export type EstadoFabricacion = typeof estados_fabricacion.$inferSelect;
-export type Modelo = typeof modelos.$inferSelect;
-export type Marca = typeof marcas.$inferSelect;
-export type TipoUso = typeof tipos_uso.$inferSelect;
-export type TipoVehiculo = typeof tipos_vehiculo.$inferSelect;
-export type CategoriaComp = typeof categorias_competencia.$inferSelect;
-export type AccionFabricacion = typeof acciones_fabricacion.$inferSelect;
+export type EstadoPedido = typeof estados_pedido.$inferSelect;
+export type TransicionEstado = typeof transiciones_estado.$inferSelect;
+export type LogCambioEstado = typeof logs_cambios_estado.$inferSelect;
+export type LogSistema = typeof logs_sistema.$inferSelect;
+export type Tarea = typeof tareas.$inferSelect;
+export type TipoMaterial = typeof tipos_material.$inferSelect;
+export type MaterialEmpleado = typeof materiales_empleados.$inferSelect;

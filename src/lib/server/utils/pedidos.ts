@@ -1,19 +1,18 @@
-import { getDb } from '$lib/server/db';
+import { db } from '$lib/server/db';
 import { pedidos } from '$lib/server/db/schema';
 import { desc } from 'drizzle-orm';
 
-export async function generarNumeroPedido(db: ReturnType<typeof getDb>) {
+export async function generarNumeroPedido() {
 	const primerPedido = 'P-0001';
-	
+
 	// Buscar el último pedido
-	const ultimoPedido = await db
+	const [ultimoPedido] = await db
 		.select({
 			numero_pedido: pedidos.numero_pedido
 		})
 		.from(pedidos)
 		.orderBy(desc(pedidos.id))
-		.limit(1)
-		.get();
+		.limit(1);
 
 	if (!ultimoPedido) {
 		return primerPedido;

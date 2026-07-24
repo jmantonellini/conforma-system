@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { getModelos, getCategoriasComp, crearProducto } from '$lib/remote/productos.remote';
-	import { PageLayout, PageHeader, FormFieldWrapper, FormActions } from '$lib/components/ui';
+	import { PageLayout, FormFieldWrapper, FormActions } from '$lib/components/ui';
 	import { toast } from '$lib/stores/toast.svelte';
 	import { page } from '$app/state';
 	import { goto } from '$app/navigation';
@@ -19,8 +19,6 @@
 </script>
 
 <PageLayout>
-	<PageHeader title="Nuevo Producto" description="Completa los datos del producto" />
-
 	<form
 		{...crearProducto.enhance(async (form) => {
 			try {
@@ -42,17 +40,15 @@
 		<!-- Datos básicos -->
 		<fieldset class="fieldset rounded-box border border-base-300 bg-base-200 p-4">
 			<legend class="fieldset-legend">Datos básicos</legend>
-			<div class="grid grid-cols-1 gap-4 md:grid-cols-2">
+			<div class="grid grid-cols-1 gap-4 md:grid-cols-4">
 				<FormFieldWrapper label="Código" id="codigo">
 					<input class="input" {...crearProducto.fields.codigo.as('text')} />
 				</FormFieldWrapper>
 				<FormFieldWrapper label="Nombre" id="nombre">
 					<input class="input" {...crearProducto.fields.nombre.as('text')} />
 				</FormFieldWrapper>
-			</div>
 
-			<!-- Categoría de producto y precio -->
-			<div class="grid grid-cols-1 gap-4 md:grid-cols-2">
+				<!-- Categoría de producto y precio -->
 				<FormFieldWrapper label="Categoría de producto" id="categoria_id">
 					<select {...crearProducto.fields.categoria_id.as('select')} class="select w-full">
 						<option value="">Seleccionar...</option>
@@ -89,7 +85,15 @@
 						>
 							<option value="">Seleccionar...</option>
 							{#each marcas as m (m.id)}
-								<option value={String(m.id)}>{m.nombre}</option>
+								<option value={String(m.id)}>
+									{#if m.logo_url}<img
+											src={m.logo_url}
+											alt={m.nombre}
+											class="h-5 w-5 object-contain"
+										/>
+									{/if}
+									{m.nombre}</option
+								>
 							{/each}
 						</select>
 					</FormFieldWrapper>
@@ -136,61 +140,66 @@
 
 			<!-- Medidas (solo si categoría_id === 1) -->
 			{#if crearProducto.fields.categoria_id.value() === '1'}
-				<fieldset class="fieldset rounded-box border border-base-300 bg-base-200 p-4">
-					<legend class="fieldset-legend">📐 Medidas Primario</legend>
-					<div class="grid grid-cols-2 gap-4">
-						<FormFieldWrapper label="Diámetro" id="medidas_primario_diametro">
-							<input
-								class="remove-arrow input"
-								{...crearProducto.fields.medidas_primario_diametro.as('number')}
-							/>
-						</FormFieldWrapper>
-						<FormFieldWrapper label="Largo" id="medidas_primario_largo">
-							<input
-								class="remove-arrow input"
-								{...crearProducto.fields.medidas_primario_largo.as('number')}
-							/></FormFieldWrapper
-						>
-					</div>
-				</fieldset>
+				<div class="grid gap-4 md:grid-cols-3">
+					<fieldset class="fieldset rounded-box border border-base-300 bg-base-200 p-4">
+						<legend class="fieldset-legend">Medidas Primario</legend>
+						<div class="grid grid-cols-2 gap-4">
+							<FormFieldWrapper label="Diámetro" id="medidas_primario_diametro">
+								<input
+									class="remove-arrow input"
+									{...crearProducto.fields.medidas_primario_diametro.as('number')}
+								/>
+							</FormFieldWrapper>
+							<FormFieldWrapper label="Largo" id="medidas_primario_largo">
+								<input
+									class="remove-arrow input"
+									{...crearProducto.fields.medidas_primario_largo.as('number')}
+								/></FormFieldWrapper
+							>
+						</div>
+					</fieldset>
 
-				<fieldset class="fieldset rounded-box border border-base-300 bg-base-200 p-4">
-					<legend class="fieldset-legend">📐 Medidas Secundario</legend>
-					<div class="grid grid-cols-2 gap-4">
-						<FormFieldWrapper label="Diámetro" id="medidas_secundario_diametro">
-							<input
-								class="remove-arrow input"
-								{...crearProducto.fields.medidas_secundario_diametro.as('number')}
-							/>
-						</FormFieldWrapper>
-						<FormFieldWrapper label="Largo" id="medidas_secundario_largo"
-							><input
-								class="remove-arrow input"
-								{...crearProducto.fields.medidas_secundario_largo.as('number')}
-							/>
-						</FormFieldWrapper>
-					</div>
-				</fieldset>
+					<fieldset class="fieldset rounded-box border border-base-300 bg-base-200 p-4">
+						<legend class="fieldset-legend">Medidas Secundario</legend>
+						<div class="grid grid-cols-2 gap-4">
+							<FormFieldWrapper label="Diámetro" id="medidas_secundario_diametro">
+								<input
+									class="remove-arrow input"
+									{...crearProducto.fields.medidas_secundario_diametro.as('number')}
+								/>
+							</FormFieldWrapper>
+							<FormFieldWrapper label="Largo" id="medidas_secundario_largo"
+								><input
+									class="remove-arrow input"
+									{...crearProducto.fields.medidas_secundario_largo.as('number')}
+								/>
+							</FormFieldWrapper>
+						</div>
+					</fieldset>
 
+					<fieldset class="fieldset rounded-box border border-base-300 bg-base-200 p-4">
+						<legend class="fieldset-legend">Trombon</legend>
+						<div class="grid grid-cols-2 gap-4">
+							<FormFieldWrapper label="Diámetro Inicial" id="trombon_diametro_inicial">
+								<input
+									class="remove-arrow input"
+									{...crearProducto.fields.trombon_diametro_inicial.as('number')}
+								/>
+							</FormFieldWrapper>
+							<FormFieldWrapper label="Largo" id="trombon_largo">
+								<input
+									class="remove-arrow input"
+									{...crearProducto.fields.trombon_largo.as('number')}
+								/>
+							</FormFieldWrapper>
+						</div>
+					</fieldset>
+				</div>
 				<fieldset class="fieldset rounded-box border border-base-300 bg-base-200 p-4">
-					<legend class="fieldset-legend">🎺 Trombon</legend>
-					<div class="grid grid-cols-2 gap-4">
-						<FormFieldWrapper label="Diámetro Inicial" id="trombon_diametro_inicial">
-							<input
-								class="remove-arrow input"
-								{...crearProducto.fields.trombon_diametro_inicial.as('number')}
-							/>
-						</FormFieldWrapper>
-						<FormFieldWrapper label="Largo" id="trombon_largo">
-							<input
-								class="remove-arrow input"
-								{...crearProducto.fields.trombon_largo.as('number')}
-							/>
-						</FormFieldWrapper>
-					</div>
-					<FormFieldWrapper label="Observaciones" id="trombon_observaciones">
+					<legend class="fieldset-legend">Observaciones</legend>
+					<FormFieldWrapper id="trombon_observaciones">
 						<textarea
-							class="textarea resize-none"
+							class="textarea w-full resize-none"
 							rows={3}
 							{...crearProducto.fields.trombon_observaciones.as('text')}
 						>

@@ -16,11 +16,6 @@ declare global {
 		}
 		// interface PageData {}
 		// interface PageState {}
-		interface Platform {
-			env: Env;
-			cf: CfProperties;
-			ctx: ExecutionContext;
-		}
 	}
 }
 

@@ -5,6 +5,13 @@
 	let { tabs, children } = $props();
 
 	let drawerOpen = $state(true);
+
+	function isActive(href: string) {
+		if (href === '/') {
+			return page.url.pathname === '/';
+		}
+		return href && page.url.pathname.startsWith(href);
+	}
 </script>
 
 <div class="drawer lg:drawer-open">
@@ -33,9 +40,9 @@
 				{#each tabs ?? [] as tab (tab.href)}
 					<a
 						href={tab.href}
-						class="flex w-fullitems-center gap-4 rounded px-4 py-2 text-sm whitespace-nowrap hover:bg-gray-200"
-						class:bg-gray-300={tab.href && page.url.pathname.startsWith(tab.href)}
-						class:text-primary={tab.href && page.url.pathname.startsWith(tab.href)}
+						class="w-fullitems-center flex gap-4 rounded px-4 py-2 text-sm whitespace-nowrap hover:bg-gray-200"
+						class:bg-gray-300={isActive(tab.href)}
+						class:text-primary={isActive(tab.href)}
 					>
 						{#if tab.icon && typeof tab.icon !== 'string'}
 							{@const Icon = tab.icon}

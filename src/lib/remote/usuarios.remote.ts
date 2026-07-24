@@ -1,5 +1,5 @@
 import { command, form, getRequestEvent, query } from '$app/server';
-import { getDb } from '$lib/server/db';
+import { db } from '$lib/server/db';
 import { empleados, roles, sesiones, usuarios } from '$lib/server/db/schema';
 import bcrypt from 'bcryptjs';
 import { eq } from 'drizzle-orm';
@@ -14,15 +14,13 @@ export const getCurrentUser = query(async () => {
 
 	if (!sessionId) return null;
 
-	const db = getDb(event.platform?.env?.DB);
-
-	const session = await db.select().from(sesiones).where(eq(sesiones.id, sessionId)).get();
+	const [session] = await db.select().from(sesiones).where(eq(sesiones.id, sessionId)).limit(1);
 
 	if (!session || session.user_id == null || new Date(session.expires_at) < new Date()) {
 		return null;
 	}
 
-	const user = await db
+	const [user] = await db
 		.select({
 			id: usuarios.id,
 			username: usuarios.username,
@@ -35,7 +33,7 @@ export const getCurrentUser = query(async () => {
 		.from(usuarios)
 		.leftJoin(roles, eq(roles.id, usuarios.rol_id))
 		.where(eq(usuarios.id, session.user_id))
-		.get();
+		.limit(1);
 
 	if (!user) return null;
 
@@ -43,8 +41,6 @@ export const getCurrentUser = query(async () => {
 });
 
 export const getUsuarios = query(async () => {
-	const event = getRequestEvent();
-	const db = getDb(event.platform?.env?.DB);
 	return await db
 		.select({
 			id: usuarios.id,
@@ -64,17 +60,12 @@ export const getUsuarios = query(async () => {
 });
 
 export const deleteUsuario = command(v.number(), async (id) => {
-	const db = getDb(getRequestEvent().platform?.env?.DB);
 	await db.delete(usuarios).where(eq(usuarios.id, id));
 	getUsuarios().refresh();
 	return { success: true };
 });
 
 export const crearUsuario = form(CrearUsuarioSchema, async (data) => {
-	console.log('DATA', data);
-
-	const db = getDb(getRequestEvent().platform?.env?.DB);
-
 	const [usuario] = await db
 		.insert(usuarios)
 		.values({
@@ -84,7 +75,6 @@ export const crearUsuario = form(CrearUsuarioSchema, async (data) => {
 			rol_id: data.rol_id
 		})
 		.returning();
-	console.log('USUARIO', usuario);
 
 	getUsuarios().refresh();
 
@@ -92,7 +82,6 @@ export const crearUsuario = form(CrearUsuarioSchema, async (data) => {
 });
 
 export const actualizarUsuario = form(ActualizarUsuarioSchema, async (data) => {
-	const db = getDb(getRequestEvent().platform?.env?.DB);
 	const { id, ...updateData } = data;
 
 	if (data.password_hash) {

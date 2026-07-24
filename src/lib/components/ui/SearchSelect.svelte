@@ -7,12 +7,16 @@
 		field,
 		placeholder = 'Seleccionar...',
 		onChange = () => {},
+		id = '',
+		class: className = '',
 		...restProps
 	}: {
 		options: { value: string; label: string }[];
 		label: string;
 		field: any;
 		placeholder?: string;
+		id: string;
+		class?: string;
 		onChange?: (val: string) => void;
 		[key: string]: any;
 	} = $props();
@@ -37,8 +41,8 @@
 	}
 </script>
 
-<div class="relative">
-	<FormFieldWrapper {label} id={field.value()}>
+<div class="relative  {className || ''}">
+	<FormFieldWrapper {label} id={id}>
 		<!-- Input visible para búsqueda -->
 		<input
 			type="text"

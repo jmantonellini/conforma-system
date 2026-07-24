@@ -6,3 +6,6 @@ export { default as Edit } from './Edit.svelte';
 export { default as Delete } from './Delete.svelte';
 export { default as Producto } from './Producto.svelte';
 export { default as Eye } from './Eye.svelte';
+export { default as Rocket } from './Rocket.svelte';
+export { default as User } from './User.svelte';
+export { default as Calendar } from './Calendar.svelte';

@@ -2,6 +2,7 @@ import * as v from 'valibot';
 
 export const ClienteSchemaBase = v.object({
 	nombre: v.pipe(v.string(), v.minLength(3, 'El nombre debe tener al menos 3 caracteres.')),
+	apellido: v.optional(v.string()),
 	razon_social: v.optional(v.string()),
 	cuit: v.optional(v.string()),
 	email: v.optional(v.string()),

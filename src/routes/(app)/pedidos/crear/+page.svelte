@@ -3,7 +3,6 @@
 	import { getClientes } from '$lib/remote/clientes.remote';
 	import { getProductos } from '$lib/remote/productos.remote';
 	import SearchSelect from '$lib/components/ui/SearchSelect.svelte';
-	import PageHeader from '$lib/components/ui/PageHeader.svelte';
 	import FormFieldWrapper from '$lib/components/ui/FormFieldWrapper.svelte';
 	import { FormActions, PageLayout } from '$lib/components/ui';
 	import { toast } from '$lib/stores/toast.svelte';
@@ -34,7 +33,10 @@
 		clientes.data.length > 0
 			? clientes.data.map((c) => ({
 					value: c.id.toString(),
-					label: c.nombre
+					label:
+						c.nombre +
+						(c.apellido ? ` ${c.apellido}` : '') +
+						(c.razon_social ? ` (${c.razon_social})` : '')
 				}))
 			: [];
 
@@ -72,12 +74,6 @@
 </script>
 
 <PageLayout>
-	<!-- Header -->
-	<PageHeader
-		title="Nuevo Pedido"
-		description="Completa el formulario para crear un nuevo pedido"
-	/>
-
 	<!-- Form -->
 	<form
 		{...form.enhance(async (form) => {
@@ -97,10 +93,10 @@
 		class="space-y-6"
 	>
 		<!-- Datos del Cliente -->
-		<fieldset class="fieldset">
+		<fieldset class="fieldset rounded-box border border-base-300 bg-base-200 p-4">
 			<legend class="fieldset-legend text-lg">Información del Cliente</legend>
 
-			<div class="space-y-4">
+			<div class="grid gap-4 md:grid-cols-3">
 				<!-- Cliente -->
 				<SearchSelect
 					id="cliente_id"
@@ -127,30 +123,25 @@
 		</fieldset>
 
 		<!-- Productos -->
-		<fieldset class="fieldset">
-			<div class="flex items-center justify-between">
-				<legend class="fieldset-legend text-lg">Productos</legend>
-				<button type="button" onclick={agregarLinea} class="btn btn-outline btn-sm">
-					+ Agregar producto
-				</button>
-			</div>
-
+		<fieldset class="fieldset gap-2 rounded-box border border-base-300 bg-base-200 p-4">
+			<legend class="fieldset-legend text-lg">Productos</legend>
 			<div class="space-y-3">
 				{#each lineas as linea, idx (linea.idx)}
-					<div class="card border border-base-300 bg-base-100 p-4">
+					<div class="card border border-base-300 bg-base-100 p-6">
 						<button
 							type="button"
 							onclick={() => eliminarLinea(linea.idx)}
-							class="btn absolute top-2 right-2 btn-circle btn-ghost btn-xs"
+							class="btn absolute top-1 right-1 btn-circle btn-ghost btn-xs"
 							class:hidden={lineas.length === 1}
 						>
 							✕
 						</button>
 
-						<div class="grid gap-4 md:grid-cols-4">
+						<div class="grid gap-4 md:grid-cols-8">
 							<!-- Producto -->
 							<SearchSelect
 								label="Producto"
+								class="col-span-3"
 								id={`lineas[${idx}].producto_id`}
 								field={form.fields.lineas[idx].producto_id}
 								options={[
@@ -161,15 +152,17 @@
 							/>
 
 							<!-- Descripción (si es personalizado) -->
-							{#if form.fields.lineas[idx].producto_id.value() === 'personalizado'}
-								<FormFieldWrapper label="Descripción" id={`lineas[${idx}].descripcion`}>
-									<input
-										class="input"
-										id={`lineas[${idx}].descripcion`}
-										{...form.fields.lineas[idx].descripcion.as('text')}
-									/>
-								</FormFieldWrapper>
-							{/if}
+							<FormFieldWrapper
+								label="Descripción"
+								id={`lineas[${idx}].descripcion`}
+								class="col-span-3"
+							>
+								<input
+									class="input"
+									id={`lineas[${idx}].descripcion`}
+									{...form.fields.lineas[idx].descripcion.as('text')}
+								/>
+							</FormFieldWrapper>
 
 							<!-- Cantidad -->
 							<FormFieldWrapper label="Cantidad" id={`lineas[${idx}].cantidad`}>
@@ -193,10 +186,15 @@
 						</div>
 					</div>
 				{/each}
+				<div class="flex w-full items-center justify-end">
+					<button type="button" onclick={agregarLinea} class="btn btn-outline btn-sm">
+						+ Agregar producto
+					</button>
+				</div>
 			</div>
 
 			<!-- Total -->
-			<div class="divider my-4"></div>
+			<div class="divider"></div>
 			<div class="flex justify-end">
 				<div class="text-right">
 					<p class="text-sm text-base-content/70">Total</p>
@@ -208,7 +206,7 @@
 		</fieldset>
 
 		<!-- Observaciones -->
-		<fieldset class="fieldset">
+		<fieldset class="fieldset gap-2 rounded-box border border-base-300 bg-base-200 p-4">
 			<legend class="fieldset-legend text-lg">Notas</legend>
 
 			<FormFieldWrapper label="Observaciones" id="observaciones">
@@ -216,7 +214,7 @@
 					placeholder="Notas adicionales sobre el pedido..."
 					rows={3}
 					{...form.fields?.observaciones?.as('text')}
-					class="textarea resize-none"
+					class="textarea w-full resize-none"
 				>
 				</textarea>
 			</FormFieldWrapper>

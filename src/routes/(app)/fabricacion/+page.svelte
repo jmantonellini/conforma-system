@@ -4,7 +4,7 @@
 		getEstadosFabricacion,
 		eliminarOrdenFabricacion
 	} from '$lib/remote/fabricacion.remote';
-	import { Table, PageHeader, PageLayout, Pagination, Modal } from '$lib/components/ui';
+	import { Table, PageLayout, Pagination, Modal } from '$lib/components/ui';
 	import { goto } from '$app/navigation';
 	import { SvelteURLSearchParams } from 'svelte/reactivity';
 	import { resolve } from '$app/paths';
@@ -33,16 +33,12 @@
 		const params = new SvelteURLSearchParams();
 		if (estadoFilter) params.set('estado', String(estadoFilter));
 		if (currentPage > 1) params.set('page', String(currentPage));
-		console.log('ESTADO', estadoFilter);
-		console.log(params.toString());
 
 		goto(resolve(`/fabricacion?${params.toString()}`));
 	}
 </script>
 
 <PageLayout>
-	<PageHeader title="Fabricación" description="Control de órdenes de producción" />
-
 	<div class="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
 		<div class="flex flex-1 flex-wrap gap-4">
 			<select bind:value={estadoFilter} class="select w-48" onchange={handleSearch}>
@@ -59,16 +55,26 @@
 		<div class="card-body p-0">
 			{#snippet header()}
 				<th>N° Orden</th>
+				<th>Estado</th>
 				<th>Trabajo</th>
 				<th>Producto</th>
 				<th class="text-center">Progreso</th>
-				<th>Estado</th>
 				<th>Prioridad</th>
 				<th class="text-center">Acciones</th>
 			{/snippet}
 
 			{#snippet row(orden)}
 				<td class="font-mono text-sm">OF-{orden.id}</td>
+				<td>
+					<span class={`whitespace-nowrap badge badge-sm badge-${orden.estado?.color}`}>
+						{orden.estado?.nombre}
+					</span>
+					{#if orden.estado_comentario}
+						<span class="tooltip" data-tip={orden.estado_comentario}>
+							<span class="text-xs text-base-content/50">💬</span>
+						</span>
+					{/if}
+				</td>
 				<td class="font-medium">{orden.nombre_trabajo}</td>
 				<td>{orden.producto_nombre || '-'}</td>
 				<td class="text-center">
@@ -82,16 +88,6 @@
 					</div>
 				</td>
 				<td>
-					<span class={`badge badge-sm badge-${orden.estado.color}`}>
-						{orden.estado.nombre}
-					</span>
-					{#if orden.estado_comentario}
-						<span class="tooltip" data-tip={orden.estado_comentario}>
-							<span class="text-xs text-base-content/50">💬</span>
-						</span>
-					{/if}
-				</td>
-				<td>
 					{#if orden.prioridad === 2}
 						<span class="badge badge-error">Crítica</span>
 					{:else if orden.prioridad === 1}
@@ -100,7 +96,7 @@
 						<span class="badge badge-ghost">Normal</span>
 					{/if}
 				</td>
-				<td class="text-center">
+				<td class="flex items-center gap-1 flex-nowrap">
 					<a
 						class="btn btn-circle btn-ghost btn-sm"
 						title="Ver cliente"

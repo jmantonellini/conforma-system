@@ -5,6 +5,18 @@ export enum ToastTypeEnum {
 	Error = 'error'
 }
 
+export enum Prioridades {
+	BAJA = 'baja',
+	MEDIA = 'media',
+	ALTA = 'alta'
+}
+
+export enum EstadosTarea {
+	PENDIENTE = 'pendiente',
+	EN_PROGRESO = 'en_progreso',
+	COMPLETADA = 'completada'
+}
+
 export type Toast = {
 	id: number;
 	type: ToastTypes;

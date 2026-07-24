@@ -1,20 +1,22 @@
 import * as v from 'valibot';
-import { command, form, getRequestEvent, query } from '$app/server';
-import { getDb } from '$lib/server/db';
+import { command, form, query } from '$app/server';
+import { db } from '$lib/server/db';
 import {
 	pedidos,
 	lineas_pedido,
-	logs_pedidos,
 	clientes,
 	estados_pedido,
 	productos,
 	ordenes_fabricacion,
-	estados_fabricacion
+	unidades_fabricacion,
+	estados_fabricacion,
+	logs_cambios_estado,
+	transiciones_estado
 } from '$lib/server/db/schema';
 import { redirect } from '@sveltejs/kit';
 import { generarNumeroPedido } from '../server/utils/pedidos';
 import { resolve } from '$app/paths';
-import { and, count, desc, eq, inArray, isNull, like, not, sql } from 'drizzle-orm';
+import { and, count, desc, eq, isNull, like } from 'drizzle-orm';
 import { getCurrentUser } from './usuarios.remote';
 
 const LineaSchema = v.object({
@@ -31,6 +33,10 @@ const PedidoSchema = v.object({
 	anticipo: v.optional(v.pipe(v.number(), v.toMinValue(0)), 0),
 	observaciones: v.optional(v.string())
 });
+
+// ============================================================
+// QUERIES
+// ============================================================
 
 export const getPedidos = query(
 	v.object({
@@ -50,7 +56,6 @@ export const getPedidos = query(
 		page?: number;
 		limit?: number;
 	}) => {
-		const db = getDb(getRequestEvent().platform?.env?.DB);
 		const offset = (page - 1) * limit;
 
 		let where = undefined;
@@ -62,7 +67,6 @@ export const getPedidos = query(
 			where = eq(pedidos.estado_id, estadoId);
 		}
 
-		// Obtener pedidos con datos del cliente
 		const data = await db
 			.select({
 				id: pedidos.id,
@@ -82,7 +86,6 @@ export const getPedidos = query(
 			.limit(limit)
 			.offset(offset);
 
-		// Contar total
 		const [totalResult] = await db.select({ count: count() }).from(pedidos).where(where);
 
 		return {
@@ -95,12 +98,16 @@ export const getPedidos = query(
 );
 
 export const getPedidoById = query(v.number(), async (id) => {
-	const db = getDb(getRequestEvent().platform?.env?.DB);
-	const pedido = await db
+	const [pedido] = await db
 		.select({
 			id: pedidos.id,
 			numero_pedido: pedidos.numero_pedido,
-			cliente_nombre: clientes.nombre,
+			cliente: {
+				id: clientes.id,
+				nombre: clientes.nombre,
+				apellido: clientes.apellido,
+				razon_social: clientes.razon_social
+			},
 			fecha: pedidos.fecha_pedido,
 			observaciones: pedidos.observaciones,
 			anticipo: pedidos.anticipo,
@@ -115,7 +122,7 @@ export const getPedidoById = query(v.number(), async (id) => {
 		.leftJoin(clientes, eq(pedidos.cliente_id, clientes.id))
 		.leftJoin(estados_pedido, eq(pedidos.estado_id, estados_pedido.id))
 		.where(eq(pedidos.id, id))
-		.get();
+		.limit(1);
 
 	if (!pedido) throw new Error('Pedido no encontrado');
 
@@ -130,35 +137,186 @@ export const getPedidoById = query(v.number(), async (id) => {
 			producto_id: lineas_pedido.producto_id,
 			producto_codigo: productos.codigo,
 			producto_nombre: productos.nombre,
-			tiene_orden: sql<boolean>`${lineas_pedido.orden_fabricacion_id} IS NOT NULL`,
-			orden: {
-				id: ordenes_fabricacion.id,
-				estado_id: estados_fabricacion.id,
-				estado_nombre: estados_fabricacion.nombre,
-				estado_color: estados_fabricacion.color
-			}
+			orden_id: ordenes_fabricacion.id
 		})
 		.from(lineas_pedido)
 		.leftJoin(productos, eq(lineas_pedido.producto_id, productos.id))
-		.leftJoin(ordenes_fabricacion, eq(lineas_pedido.orden_fabricacion_id, ordenes_fabricacion.id))
-		.leftJoin(estados_fabricacion, eq(ordenes_fabricacion.estado_id, estados_fabricacion.id))
+		.leftJoin(ordenes_fabricacion, eq(lineas_pedido.id, ordenes_fabricacion.linea_pedido_id))
 		.where(eq(lineas_pedido.pedido_id, id));
 
-	if (!pedido) throw new Error('Pedido no encontrado');
-	return { pedido, lineas };
+	// Para cada línea con orden, calcular estado de producción
+	const lineasConProduccion = await Promise.all(
+		lineas.map(async (linea) => {
+			if (!linea.orden_id) return { ...linea, produccion: null };
+
+			const [unidades, estadosFab] = await Promise.all([
+				db
+					.select({ estado_id: unidades_fabricacion.estado_id })
+					.from(unidades_fabricacion)
+					.where(eq(unidades_fabricacion.orden_fabricacion_id, linea.orden_id)),
+				db.select().from(estados_fabricacion)
+			]);
+
+			const terminadas = unidades.filter(
+				(u) => estadosFab.find((e) => e.id === u.estado_id)?.es_final
+			).length;
+			const total = unidades.length;
+
+			return {
+				...linea,
+				produccion: {
+					orden_id: linea.orden_id,
+					estado: total === 0 ? 'Sin unidades' : terminadas === total ? 'Terminado' : 'En progreso',
+					porcentaje: total > 0 ? Math.round((terminadas / total) * 100) : 0,
+					terminadas,
+					total
+				}
+			};
+		})
+	);
+
+	return { pedido, lineas: lineasConProduccion };
 });
 
-export const crearPedido = form(PedidoSchema, async (data) => {
-	const event = getRequestEvent();
+// ============================================================
+// RESUMEN DE PRODUCCIÓN (para que el vendedor decida)
+// ============================================================
 
+export const getResumenProduccionPedido = query(v.number(), async (pedido_id) => {
+	const ordenes = await db
+		.select({
+			orden_id: ordenes_fabricacion.id,
+			cantidad_total: ordenes_fabricacion.cantidad_total
+		})
+		.from(ordenes_fabricacion)
+		.innerJoin(lineas_pedido, eq(lineas_pedido.id, ordenes_fabricacion.linea_pedido_id))
+		.where(eq(lineas_pedido.pedido_id, pedido_id));
+
+	const ordenesConEstado = await Promise.all(
+		ordenes.map(async (o) => {
+			const unidades = await db
+				.select({ estado_id: unidades_fabricacion.estado_id })
+				.from(unidades_fabricacion)
+				.where(eq(unidades_fabricacion.orden_fabricacion_id, o.orden_id));
+
+			const estadosFab = await db.select().from(estados_fabricacion);
+			const terminadas = unidades.filter(
+				(u) => estadosFab.find((e) => e.id === u.estado_id)?.es_final
+			).length;
+
+			return {
+				...o,
+				terminadas,
+				completada: terminadas === o.cantidad_total && o.cantidad_total > 0
+			};
+		})
+	);
+
+	const todasTerminadas = ordenesConEstado.every((o) => o.completada);
+	const porcentajeTotal =
+		ordenesConEstado.length > 0
+			? Math.round(
+					ordenesConEstado.reduce((sum, o) => sum + (o.terminadas / o.cantidad_total) * 100, 0) /
+						ordenesConEstado.length
+				)
+			: 0;
+
+	return {
+		ordenes: ordenesConEstado,
+		todasTerminadas,
+		porcentaje_avance_total: porcentajeTotal,
+		cantidad_ordenes: ordenesConEstado.length,
+		ordenes_terminadas: ordenesConEstado.filter((o) => o.completada).length
+	};
+});
+
+// ============================================================
+// CAMBIO DE ESTADO DE PEDIDO (vendedor)
+// ============================================================
+
+export const cambiarEstadoPedido = command(
+	v.object({
+		pedido_id: v.pipe(v.string(), v.transform(Number), v.number()),
+		estado_destino_id: v.pipe(v.string(), v.transform(Number), v.number()),
+		comentario: v.optional(v.string())
+	}),
+	async ({ pedido_id, estado_destino_id, comentario }) => {
+		const user = await getCurrentUser();
+		if (!user) throw new Error('No autorizado');
+
+		const now = new Date();
+
+		// Obtener estado actual
+		const pedido = await db
+			.select({ estado_id: pedidos.estado_id })
+			.from(pedidos)
+			.where(eq(pedidos.id, pedido_id))
+			.then((rows) => rows[0]);
+
+		if (!pedido) throw new Error('Pedido no encontrado');
+
+		// Validar transición
+		const transicion = await db
+			.select()
+			.from(transiciones_estado)
+			.where(
+				and(
+					eq(transiciones_estado.tipo, 'pedido'),
+					eq(transiciones_estado.estado_origen_id, pedido.estado_id),
+					eq(transiciones_estado.estado_destino_id, estado_destino_id)
+				)
+			)
+			.then((rows) => rows[0]);
+
+		if (!transicion) {
+			const [actual, destino] = await Promise.all([
+				db
+					.select()
+					.from(estados_pedido)
+					.where(eq(estados_pedido.id, pedido.estado_id))
+					.then((r) => r[0]),
+				db
+					.select()
+					.from(estados_pedido)
+					.where(eq(estados_pedido.id, estado_destino_id))
+					.then((r) => r[0])
+			]);
+			throw new Error(
+				`Transición no permitida: ${actual?.nombre ?? '?'} → ${destino?.nombre ?? '?'}`
+			);
+		}
+
+		// Ejecutar en transacción
+		await db.transaction(async (tx) => {
+			await tx
+				.update(pedidos)
+				.set({ estado_id: estado_destino_id, updated_at: now })
+				.where(eq(pedidos.id, pedido_id));
+
+			await tx.insert(logs_cambios_estado).values({
+				entidad_tipo: 'pedido',
+				entidad_id: pedido_id,
+				usuario_id: user.id,
+				estado_anterior_id: pedido.estado_id,
+				estado_nuevo_id: estado_destino_id,
+				comentario: comentario ?? null,
+				created_at: now
+			});
+		});
+
+		getPedidos({ search: '', page: 1 }).refresh();
+
+		return { success: true };
+	}
+);
+
+export const crearPedido = form(PedidoSchema, async (data) => {
 	const user = await getCurrentUser();
 	if (!user) {
 		throw new Error('Usuario no autenticado');
 	}
 
-	const db = getDb(event.platform?.env?.DB);
-
-	const numero_pedido = await generarNumeroPedido(db);
+	const numero_pedido = await generarNumeroPedido();
 
 	const precio_total = data.lineas.reduce((sum, l) => sum + l.cantidad * l.precio, 0);
 	const saldo_pendiente = precio_total - data.anticipo;
@@ -191,28 +349,14 @@ export const crearPedido = form(PedidoSchema, async (data) => {
 		});
 	}
 
-	await db.insert(logs_pedidos).values({
-		pedido_id: pedido.id,
-		usuario_id: user.id,
-		accion: 'crear',
-		ip_address: event.getClientAddress(),
-		user_agent: event.request.headers.get('user-agent') || undefined
-	});
-
 	redirect(303, resolve(`/pedidos/${pedido.id}`));
 });
 
-export const getEstadosPedido = query(async () => {
-	const db = getDb(getRequestEvent().platform?.env?.DB);
-	return await db.select().from(estados_pedido).orderBy(estados_pedido.nombre);
-});
-
 export const eliminarPedido = command(v.number(), async (pedidoId) => {
-	const db = getDb(getRequestEvent().platform?.env?.DB);
 	await db.delete(pedidos).where(eq(pedidos.id, pedidoId));
 	await db.delete(lineas_pedido).where(eq(lineas_pedido.pedido_id, pedidoId));
 
-	getPedidos({}).refresh();
+	getPedidos({ search: '', page: 1 }).refresh();
 	return { success: true };
 });
 
@@ -223,9 +367,8 @@ export const getLineasPedidoSinOrden = query(
 		limit: v.optional(v.pipe(v.number(), v.minValue(1), v.maxValue(100)), 50)
 	}),
 	async ({ pedido_id, limit }) => {
-		const db = getDb(getRequestEvent().platform?.env?.DB);
-
-		const conditions = [isNull(lineas_pedido.orden_fabricacion_id)];
+		// const conditions = [isNull(lineas_pedido.orden_fabricacion_id)];  // TODO: manejar bien la relación
+		const conditions = [isNull(ordenes_fabricacion.linea_pedido_id)];
 		if (pedido_id) {
 			conditions.push(eq(lineas_pedido.pedido_id, pedido_id));
 		}
@@ -246,3 +389,32 @@ export const getLineasPedidoSinOrden = query(
 			.limit(limit);
 	}
 );
+
+// ESTADOS DE PEDIDO
+
+export const getEstadosPedido = query(async () => {
+	return await db.select().from(estados_pedido).orderBy(estados_pedido.nombre);
+});
+
+export const crearEstadoPedido = form(
+	v.object({
+		nombre: v.string(),
+		color: v.string(),
+		grupo: v.string(), // TODO: manejar grupo
+		esFinal: v.optional(v.boolean(), false),
+		orden: v.optional(v.number(), 0)
+	}),
+	async (data) => {
+		const slug = data.nombre.toLowerCase().replace(/\s+/g, '-');
+
+		await db.insert(estados_pedido).values({ slug, ...data });
+		getEstadosPedido().refresh();
+		return { success: true };
+	}
+);
+
+export const eliminarEstadoPedido = command(v.number(), async (id) => {
+	await db.delete(estados_pedido).where(eq(estados_pedido.id, id));
+	getEstadosPedido().refresh();
+	return { success: true };
+});

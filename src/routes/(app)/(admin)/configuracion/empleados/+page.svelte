@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { resolve } from '$app/paths';
-	import { FormFieldWrapper, Modal, PageHeader, PageLayout, Table } from '$lib/components/ui';
+	import { FormFieldWrapper, Modal, PageLayout, Table } from '$lib/components/ui';
 	import FormDireccion from '$lib/components/ui/FormDireccion.svelte';
 	import { Delete, Edit } from '$lib/components/ui/icons';
 	import {
@@ -28,8 +28,6 @@
 </script>
 
 <PageLayout>
-	<PageHeader title="Empleados" description="Gestión de empleados" />
-
 	<div class="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
 		<a href={resolve('/configuracion')} class="btn btn-ghost btn-sm">← Volver</a>
 		<button class="btn btn-primary" onclick={() => abrirModal()}> + Nuevo Empleado </button>

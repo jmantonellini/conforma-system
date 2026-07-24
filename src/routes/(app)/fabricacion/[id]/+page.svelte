@@ -1,14 +1,14 @@
 <script lang="ts">
 	import {
 		getOrdenFabricacion,
-		ejecutarAccionFabricacion,
+		cambiarEstadoUnidad,
+		reanudarUnidad,
 		eliminarOrdenFabricacion
 	} from '$lib/remote/fabricacion.remote';
-	import { PageLayout, PageHeader, Modal } from '$lib/components/ui';
+	import { PageLayout, Modal } from '$lib/components/ui';
 	import { toast } from '$lib/stores/toast.svelte';
 	import { goto } from '$app/navigation';
 	import { resolve } from '$app/paths';
-	import type { AccionFabricacion } from '$lib/server/db/schema';
 
 	let { params } = $props();
 	const orden = $derived(await getOrdenFabricacion(Number(params.id)));
@@ -25,21 +25,16 @@
 
 	let comentario = $state('');
 
-	async function ejecutarAccionDirecta(
-		unidadId: number,
-		accion: AccionFabricacion,
-		comentario?: string
-	) {
+	async function cambiarEstado(unidadId: number, estadoDestinoId: number, comentarioText?: string) {
 		if (isLoading) return;
 		isLoading = true;
 		try {
-			await ejecutarAccionFabricacion({
+			await cambiarEstadoUnidad({
 				unidad_id: String(unidadId),
-				accion_id: String(accion.id),
-				comentario: comentario
+				estado_destino_id: String(estadoDestinoId),
+				comentario: comentarioText
 			});
-			toast.success(`"${accion.nombre}" ejecutada`);
-			goto(resolve(`/fabricacion/${orden.id}`));
+			toast.success('Estado cambiado');
 		} catch (error) {
 			toast.error(error instanceof Error ? error.message : 'Error');
 		} finally {
@@ -47,34 +42,49 @@
 		}
 	}
 
-	function manejarAccion(unidadId: number, accion: AccionFabricacion) {
-		if (accion.nombre === 'Pausar') {
-			// Abrir modal para pausa
-			modal = {
-				open: true,
-				tipo: 'pausa',
-				titulo: 'Motivo de la pausa',
-				mensaje: 'Describe el motivo de la pausa...',
-				onConfirm: async () => {
-					await ejecutarAccionDirecta(unidadId, accion, comentario.trim());
-					modal.open = false;
-					comentario = '';
-				}
-			};
-			return;
+	async function reanudar(unidadId: number, comentarioText?: string) {
+		if (isLoading) return;
+		isLoading = true;
+		try {
+			await reanudarUnidad({
+				unidad_id: String(unidadId),
+				comentario: comentarioText
+			});
+			toast.success('Unidad reanudada');
+		} catch (error) {
+			toast.error(error instanceof Error ? error.message : 'Error');
+		} finally {
+			isLoading = false;
 		}
-
-		ejecutarAccionDirecta(unidadId, accion);
 	}
 
-	function manejarEliminar(id: string) {
+	function manejarPausa(unidadId: number) {
+		modal = {
+			open: true,
+			tipo: 'pausa',
+			titulo: 'Motivo de la pausa',
+			mensaje: 'Describe el motivo de la pausa...',
+			onConfirm: async () => {
+				// Buscar el estado "pausado" entre las transiciones disponibles
+				const unidad = orden.unidades.find((u) => u.id === unidadId);
+				const estadoPausado = unidad?.transiciones_disponibles.find((t) => t.slug === 'pausado');
+				if (estadoPausado) {
+					await cambiarEstado(unidadId, estadoPausado.id, comentario.trim());
+				}
+				modal.open = false;
+				comentario = '';
+			}
+		};
+	}
+
+	function manejarEliminar() {
 		modal = {
 			open: true,
 			tipo: 'eliminar',
 			titulo: 'Eliminar Orden de Fabricación',
 			mensaje: '¿Seguro que quieres eliminar esta orden?',
 			onConfirm: async () => {
-				await eliminarOrdenFabricacion(id);
+				await eliminarOrdenFabricacion(String(orden.id));
 				modal.open = false;
 				toast.success('Orden eliminada');
 				goto(resolve('/fabricacion'));
@@ -90,16 +100,12 @@
 
 <PageLayout>
 	<div class="flex flex-col gap-4">
-		<PageHeader title={`Orden de Fabricación #${orden.id}`} description={orden.nombre_trabajo} />
 		<p class="text-sm text-base-content/70">
 			Pedido: {orden.pedido_numero} · Producto: {orden.producto_nombre || 'Personalizado'}
 		</p>
 		<div class="flex items-center justify-between">
 			<a href={resolve('/fabricacion')} class="btn btn-ghost btn-sm">← Volver</a>
-			<button
-				class="btn btn-outline btn-sm btn-error"
-				onclick={() => manejarEliminar(String(orden.id))}>Eliminar</button
-			>
+			<button class="btn btn-outline btn-error btn-sm" onclick={manejarEliminar}> Eliminar </button>
 		</div>
 
 		<!-- Cards de resumen -->
@@ -111,25 +117,19 @@
 					class="progress w-full"
 					value={orden.cantidad_producida}
 					max={orden.cantidad_total}
-				>
-				</progress>
+				></progress>
 			</div>
 			<div class="stat bg-base-200">
 				<div class="stat-title">Cliente</div>
-				<div class="stat-value text-lg">{orden.cliente.nombre}</div>
+				<div class="stat-value text-lg">{orden.cliente_nombre}</div>
 			</div>
 			<div class="stat bg-base-200">
 				<div class="stat-title">Estado</div>
 				<div class="stat-value">
-					<span class={`badge badge-${orden.estado?.color}`}>
+					<span class="badge" style="background-color: {orden.estado?.color}">
 						{orden.estado?.nombre}
 					</span>
 				</div>
-				{#if orden.estado_comentario}
-					<div class="stat-desc text-error">
-						<span>{orden.estado_comentario}</span>
-					</div>
-				{/if}
 			</div>
 			<div class="stat bg-base-200">
 				<div class="stat-title">Prioridad</div>
@@ -145,7 +145,7 @@
 			</div>
 			<div class="stat bg-base-200">
 				<div class="stat-title">Asignado a</div>
-				<div class="stat-value text-lg">{orden.empleado.nombre || 'Sin asignar'}</div>
+				<div class="stat-value text-lg">{orden.empleado?.nombre || 'Sin asignar'}</div>
 			</div>
 		</div>
 
@@ -164,32 +164,48 @@
 							</tr>
 						</thead>
 						<tbody>
-							{#each orden.unidadesConAcciones as unidad (unidad.id)}
+							{#each orden.unidades as unidad (unidad.id)}
 								<tr class={unidad.es_defectuoso ? 'bg-error/10' : ''}>
 									<td class="font-mono">{unidad.numero_serie}</td>
 									<td>
-										<span class="badge badge-sm badge-{unidad.estado?.color}">
+										<span class="badge badge-sm" style="background-color: {unidad.estado?.color}">
 											{unidad.estado?.nombre}
 										</span>
 									</td>
-									<td>{unidad.estado.comentario}</td>
+									<td>{unidad.comentario_estado ?? ''}</td>
 									<td class="text-right">
 										<div class="flex flex-wrap justify-center gap-1">
-											{#each unidad.acciones as accion (accion.id)}
+											{#if unidad.esta_pausada}
 												<button
-													class="btn btn-xs {accion.nombre === 'Pausar'
-														? 'btn-warning'
-														: accion.nombre === 'Reanudar'
-															? 'btn-success'
-															: 'btn-primary'}"
-													onclick={() => manejarAccion(unidad.id, accion)}
+													class="btn btn-success btn-xs"
+													onclick={() => reanudar(unidad.id)}
 													disabled={isLoading}
 												>
-													{accion.nombre}
+													Reanudar
 												</button>
 											{:else}
-												<span class="text-xs text-base-content/50">Sin acciones</span>
-											{/each}
+												{#each unidad.transiciones_disponibles as transicion (transicion.id)}
+													{#if transicion.slug === 'pausado'}
+														<button
+															class="btn btn-warning btn-xs"
+															onclick={() => manejarPausa(unidad.id)}
+															disabled={isLoading}
+														>
+															Pausar
+														</button>
+													{:else}
+														<button
+															class="btn btn-primary btn-xs"
+															onclick={() => cambiarEstado(unidad.id, transicion.id)}
+															disabled={isLoading}
+														>
+															{transicion.nombre}
+														</button>
+													{/if}
+												{:else}
+													<span class="text-xs text-base-content/50">Sin acciones</span>
+												{/each}
+											{/if}
 										</div>
 									</td>
 								</tr>

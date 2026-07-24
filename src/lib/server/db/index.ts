@@ -1,13 +1,14 @@
-import { drizzle as drizzleD1 } from 'drizzle-orm/d1';
+import { drizzle } from 'drizzle-orm/node-postgres';
+import { Pool } from 'pg';
 import * as schema from './schema';
+import { env } from '$env/dynamic/private';
 
-export function getDb(db?: D1Database) {
-	if (db) {
-		return drizzleD1(db, { schema });
-	}
+const pool = new Pool({
+	host: env.DB_HOST || 'localhost',
+	port: parseInt(env.DB_PORT || '5432'),
+	user: env.DB_USER || 'postgres',
+	password: env.DB_PASSWORD || 'postgres',
+	database: env.DB_NAME || 'erp_db'
+});
 
-	console.error('❌ No database binding found');
-	throw new Error('No database binding found');
-}
-
-export type DrizzleClient = ReturnType<typeof getDb>;
+export const db = drizzle(pool, { schema });

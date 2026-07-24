@@ -1,5 +1,5 @@
 import { command, form, getRequestEvent } from '$app/server';
-import { getDb } from '$lib/server/db';
+import { db } from '$lib/server/db';
 import { usuarios, sesiones, feedback } from '$lib/server/db/schema';
 import { eq } from 'drizzle-orm';
 import bcrypt from 'bcryptjs';
@@ -9,7 +9,6 @@ import * as v from 'valibot';
 
 export const login = form(LoginSchema, async (data) => {
 	const event = getRequestEvent();
-	const db = getDb(event.platform?.env?.DB);
 
 	const user = await db.select().from(usuarios).where(eq(usuarios.username, data.username)).get();
 
@@ -34,19 +33,16 @@ export const login = form(LoginSchema, async (data) => {
 		maxAge: 60 * 60 * 24 * 30
 	});
 
-	redirect(303, '/');
+	return { success: true, message: 'Inicio de sesión exitoso' };
 });
 
 export const register = form(LoginSchema, async (data) => {
-	const event = getRequestEvent();
-	const db = getDb(event.platform?.env?.DB);
-
 	// Verificar si el usuario ya existe
-	const existingUser = await db
+	const [existingUser] = await db
 		.select()
 		.from(usuarios)
 		.where(eq(usuarios.username, data.username))
-		.get();
+		.limit(1);
 
 	if (existingUser) {
 		throw new Error('El usuario ya existe');
@@ -73,7 +69,6 @@ export const logout = command(async () => {
 	const sessionId = event.cookies.get('session');
 
 	if (sessionId) {
-		const db = getDb(event.platform?.env?.DB);
 		await db.delete(sesiones).where(eq(sesiones.id, sessionId));
 	}
 
@@ -87,10 +82,6 @@ export const enviarFeedback = form(
 		mensaje: v.pipe(v.string(), v.nonEmpty('El mensaje es requerido'))
 	}),
 	async (data) => {
-		const event = getRequestEvent();
-		const db = getDb(event.platform?.env?.DB);
-		console.log('MENSAJE', data.mensaje);
-
 		await db.insert(feedback).values({
 			mensaje: data.mensaje
 		});

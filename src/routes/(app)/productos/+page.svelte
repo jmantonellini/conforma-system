@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { goto } from '$app/navigation';
 	import { resolve } from '$app/paths';
-	import { Table, SearchBar, PageHeader, Pagination } from '$lib/components/ui';
+	import { Table, SearchBar, Pagination } from '$lib/components/ui';
 	import PageLayout from '$lib/components/ui/PageLayout.svelte';
 	import { Delete, Edit } from '$lib/components/ui/icons';
 	import { eliminarProducto } from '$lib/remote/productos.remote';
@@ -9,7 +9,6 @@
 	import { toast } from '$lib/stores/toast.svelte';
 	import { debounce } from '$lib/utils';
 	import { SvelteURLSearchParams } from 'svelte/reactivity';
-	import type { Producto } from '$lib/server/db/schema';
 	import { page } from '$app/state';
 
 	let { data }: PageProps = $props();
@@ -41,8 +40,6 @@
 </script>
 
 <PageLayout>
-	<PageHeader title="Productos" description="Gestiona los productos de la empresa" />
-
 	<div class="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
 		<div class="flex flex-1 flex-wrap gap-4">
 			<div class="w-full sm:w-64">

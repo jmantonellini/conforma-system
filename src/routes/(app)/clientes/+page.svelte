@@ -1,14 +1,7 @@
 <script lang="ts">
 	import { goto } from '$app/navigation';
 	import { resolve } from '$app/paths';
-	import {
-		Table,
-		Modal,
-		FormFieldWrapper,
-		SearchBar,
-		PageHeader,
-		Pagination
-	} from '$lib/components/ui';
+	import { Table, Modal, FormFieldWrapper, SearchBar, Pagination } from '$lib/components/ui';
 	import type { PageProps } from './$types';
 	import FormDireccion from '$lib/components/ui/FormDireccion.svelte';
 	import { Delete, Edit, Eye } from '$lib/components/ui/icons';
@@ -55,8 +48,6 @@
 </script>
 
 <PageLayout>
-	<PageHeader title="Clientes" description="Gestiona los clientes de la empresa" />
-
 	<div class="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
 		<div class="w-full sm:w-64">
 			<SearchBar autofocus bind:search oninput={() => debounce(handleSearchChange)} />
@@ -76,6 +67,7 @@
 		<div class="card-body p-0">
 			{#snippet header()}
 				<th>Nombre</th>
+				<th>Apellido</th>
 				<th>Razón Social</th>
 				<th>Teléfono</th>
 				<th>CUIT</th>
@@ -84,6 +76,7 @@
 
 			{#snippet row(cliente: Cliente)}
 				<td class="font-medium">{cliente.nombre}</td>
+				<td>{cliente.apellido || '-'}</td>
 				<td>{cliente.razon_social || '-'}</td>
 				<td>{cliente.telefono || '-'}</td>
 				<td>{cliente.cuit || '-'}</td>
@@ -104,7 +97,7 @@
 							<Edit />
 						</button>
 						<button
-							class="btn btn-circle text-error btn-ghost btn-sm"
+							class="btn btn-circle btn-ghost text-error btn-sm"
 							title="Eliminar"
 							onclick={async () => {
 								if (confirm('¿Eliminar este cliente?')) {
@@ -161,7 +154,7 @@
 				if (await form.submit()) {
 					toast.success(editingCliente ? 'Cliente actualizado' : 'Cliente creado');
 					onModalClose();
-					handleSearchChange(); // Recargar la lista
+					handleSearchChange(); // Recargar la lista de clientes
 				} else {
 					toast.error('Error de validación');
 				}
@@ -184,6 +177,12 @@
 						{...activeForm.fields?.nombre?.as('text', editingCliente?.nombre || '')}
 					/>
 				</FormFieldWrapper>
+				<FormFieldWrapper id="apellido" label="Apellido" required>
+					<input
+						class="input"
+						{...activeForm.fields?.apellido?.as('text', editingCliente?.apellido || '')}
+					/>
+				</FormFieldWrapper>
 				<FormFieldWrapper id="razon_social" label="Razón Social">
 					<input
 						class="input"
@@ -197,7 +196,10 @@
 					/>
 				</FormFieldWrapper>
 				<FormFieldWrapper id="email" label="Email">
-					<input class="input" {...activeForm.fields?.email?.as('text', editingCliente?.email || '')} />
+					<input
+						class="input"
+						{...activeForm.fields?.email?.as('text', editingCliente?.email || '')}
+					/>
 				</FormFieldWrapper>
 				<FormFieldWrapper id="telefono" label="Teléfono">
 					<input

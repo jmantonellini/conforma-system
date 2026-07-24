@@ -5,12 +5,14 @@
 		data,
 		header,
 		row,
+		footer,
 		loading = false,
 		emptyMessage = 'No hay datos disponibles'
 	}: {
 		data: T[];
 		header: Snippet;
 		row: Snippet<[T]>;
+		footer?: Snippet;
 		loading?: boolean;
 		emptyMessage?: string;
 	} = $props();
@@ -44,5 +46,12 @@
 				{/each}
 			{/if}
 		</tbody>
+		{#if footer}
+			<tfoot>
+				<tr>
+					{@render footer()}
+				</tr>
+			</tfoot>
+		{/if}
 	</table>
 </div>

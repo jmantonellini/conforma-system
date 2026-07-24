@@ -3,7 +3,7 @@
 </script>
 
 <div class="bg-base-100 p-6">
-	<div class="mx-auto max-w-4xl">
+	<div class="mx-auto max-w-5xl">
 		{@render children()}
 	</div>
 </div>

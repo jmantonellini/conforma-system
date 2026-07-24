@@ -1,7 +1,7 @@
 import * as v from 'valibot';
-import { query, form, command, getRequestEvent } from '$app/server';
-import { getDb } from '$lib/server/db';
-import { empleados, roles, usuarios } from '$lib/server/db/schema';
+import { query, form, command } from '$app/server';
+import { db } from '$lib/server/db';
+import { empleados, usuarios } from '$lib/server/db/schema';
 import { eq, isNull } from 'drizzle-orm';
 import { EmpleadoSchema } from './empleados.schema';
 
@@ -9,7 +9,6 @@ import { EmpleadoSchema } from './empleados.schema';
 
 // Query: obtener todos los empleados (con datos completos para listado)
 export const getEmpleados = query(async () => {
-	const db = getDb(getRequestEvent().platform?.env?.DB);
 	return await db
 		.select({
 			id: empleados.id,
@@ -31,7 +30,6 @@ export const getEmpleados = query(async () => {
 export const getEmpleadoById = query(
 	v.pipe(v.string(), v.transform(Number), v.number()),
 	async (id) => {
-		const db = getDb(getRequestEvent().platform?.env?.DB);
 		const empleado = await db.select().from(empleados).where(eq(empleados.id, id)).get();
 
 		if (!empleado) throw new Error('Empleado no encontrado');
@@ -41,7 +39,6 @@ export const getEmpleadoById = query(
 
 // Query: obtener empleados sin usuario (para el select en usuarios)
 export const getEmpleadosSinUsuario = query(async () => {
-	const db = getDb(getRequestEvent().platform?.env?.DB);
 	return await db
 		.select({
 			id: empleados.id,
@@ -55,8 +52,6 @@ export const getEmpleadosSinUsuario = query(async () => {
 
 // Form: crear empleado
 export const crearEmpleado = form(EmpleadoSchema, async (data) => {
-	const db = getDb(getRequestEvent().platform?.env?.DB);
-
 	const [empleado] = await db
 		.insert(empleados)
 		.values({
@@ -81,7 +76,6 @@ export const actualizarEmpleado = form(
 		...EmpleadoSchema.entries
 	}),
 	async (data) => {
-		const db = getDb(getRequestEvent().platform?.env?.DB);
 		const { id, ...updateData } = data;
 
 		const [empleado] = await db
@@ -107,7 +101,6 @@ export const actualizarEmpleado = form(
 export const eliminarEmpleado = command(
 	v.pipe(v.string(), v.transform(Number), v.number()),
 	async (id) => {
-		const db = getDb(getRequestEvent().platform?.env?.DB);
 		await db.update(empleados).set({ activo: false }).where(eq(empleados.id, id));
 
 		getEmpleados().refresh();

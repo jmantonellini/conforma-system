@@ -5,7 +5,7 @@
 		actualizarProducto,
 		eliminarProducto
 	} from '$lib/remote/productos.remote';
-	import { PageLayout, PageHeader, FormFieldWrapper, FormActions } from '$lib/components/ui';
+	import { PageLayout, FormFieldWrapper, FormActions } from '$lib/components/ui';
 	import { toast } from '$lib/stores/toast.svelte';
 	import { goto } from '$app/navigation';
 	import { page } from '$app/state';
@@ -18,6 +18,7 @@
 	let categorias = page.data.categorias;
 	let tiposVehiculo = page.data.tiposVehiculo;
 	let marcas = page.data.marcas;
+
 	let tiposUso = page.data.tiposDeUso;
 
 	let form = actualizarProducto;
@@ -37,7 +38,6 @@
 </script>
 
 <PageLayout>
-	<PageHeader title="Editar Producto" description="Modifica los datos del producto" />
 	<div class="flex items-center justify-between">
 		<a href={resolve('/productos')} class="btn btn-ghost btn-sm">← Volver</a>
 		<button class="btn btn-outline btn-sm btn-error" onclick={() => (showDeleteModal = true)}
@@ -65,16 +65,14 @@
 		<!-- Datos básicos -->
 		<fieldset class="fieldset rounded-box border border-base-300 bg-base-200 p-4">
 			<legend class="fieldset-legend">Datos básicos</legend>
-			<div class="grid grid-cols-1 gap-4 md:grid-cols-2">
+			<div class="grid grid-cols-1 gap-4 md:grid-cols-4">
 				<FormFieldWrapper label="Código" id="codigo">
 					<input class="input" {...form.fields.codigo.as('text', data.producto.codigo)} />
 				</FormFieldWrapper>
 				<FormFieldWrapper label="Nombre" id="nombre">
 					<input class="input" {...form.fields.nombre.as('text', data.producto.nombre)} />
 				</FormFieldWrapper>
-			</div>
 
-			<div class="grid grid-cols-1 gap-4 md:grid-cols-2">
 				<FormFieldWrapper label="Categoría de producto" id="categoria_id">
 					<select
 						{...form.fields.categoria_id.as('select', String(data.producto.categoria_id))}
@@ -121,7 +119,15 @@
 						>
 							<option value="">Seleccionar...</option>
 							{#each marcas as m (m.id)}
-								<option value={String(m.id)}>{m.nombre}</option>
+								<option value={String(m.id)}>
+									{#if m.logo_url}<img
+											src={m.logo_url}
+											alt={m.nombre}
+											class="h-5 w-5 object-contain"
+										/>
+									{/if}
+									{m.nombre}</option
+								>
 							{/each}
 						</select>
 					</FormFieldWrapper>
@@ -172,83 +178,87 @@
 				</div>
 			</fieldset>
 
-			<!-- Medidas (solo si es Escape) -->
-			<fieldset class="fieldset rounded-box border border-base-300 bg-base-200 p-4">
-				<legend class="fieldset-legend">📐 Medidas Primario</legend>
-				<div class="grid grid-cols-2 gap-4">
-					<FormFieldWrapper label="Diámetro" id="medidas_primario_diametro">
-						<input
-							class="remove-arrow input"
-							{...form.fields.medidas_primario_diametro.as(
-								'number',
-								data.producto.medidas_primario_diametro ?? 0
-							)}
-						/>
-					</FormFieldWrapper>
-					<FormFieldWrapper label="Largo" id="medidas_primario_largo">
-						<input
-							class="remove-arrow input"
-							{...form.fields.medidas_primario_largo.as(
-								'number',
-								data.producto.medidas_primario_largo ?? 0
-							)}
-						/>
-					</FormFieldWrapper>
-				</div>
-			</fieldset>
+			<div class="flex flex-col gap-4 lg:flex-row">
+				<!-- Medidas (solo si es Escape) -->
+				<fieldset class="fieldset rounded-box border border-base-300 bg-base-200 p-4 lg:w-1/3">
+					<legend class="fieldset-legend">Medidas Primario</legend>
+					<div class="grid grid-cols-2 gap-4">
+						<FormFieldWrapper label="Diámetro" id="medidas_primario_diametro">
+							<input
+								class="remove-arrow input"
+								{...form.fields.medidas_primario_diametro.as(
+									'number',
+									data.producto.medidas_primario_diametro ?? 0
+								)}
+							/>
+						</FormFieldWrapper>
+						<FormFieldWrapper label="Largo" id="medidas_primario_largo">
+							<input
+								class="remove-arrow input"
+								{...form.fields.medidas_primario_largo.as(
+									'number',
+									data.producto.medidas_primario_largo ?? 0
+								)}
+							/>
+						</FormFieldWrapper>
+					</div>
+				</fieldset>
 
-			<fieldset class="fieldset rounded-box border border-base-300 bg-base-200 p-4">
-				<legend class="fieldset-legend">📐 Medidas Secundario</legend>
-				<div class="grid grid-cols-2 gap-4">
-					<FormFieldWrapper label="Diámetro" id="medidas_secundario_diametro">
-						<input
-							class="remove-arrow input"
-							{...form.fields.medidas_secundario_diametro.as(
-								'number',
-								data.producto.medidas_secundario_diametro ?? 0
-							)}
-						/>
-					</FormFieldWrapper>
-					<FormFieldWrapper label="Largo" id="medidas_secundario_largo">
-						<input
-							class="remove-arrow input"
-							{...form.fields.medidas_secundario_largo.as(
-								'number',
-								data.producto.medidas_secundario_largo ?? 0
-							)}
-						/>
-					</FormFieldWrapper>
-				</div>
-			</fieldset>
-
-			<fieldset class="fieldset rounded-box border border-base-300 bg-base-200 p-4">
-				<legend class="fieldset-legend">🎺 Trombon</legend>
-				<div class="grid grid-cols-2 gap-4">
-					<FormFieldWrapper label="Diámetro Inicial" id="trombon_diametro_inicial">
-						<input
-							class="remove-arrow input"
-							{...form.fields.trombon_diametro_inicial.as(
-								'number',
-								data.producto.trombon_diametro_inicial ?? 0
-							)}
-						/>
-					</FormFieldWrapper>
-					<FormFieldWrapper label="Largo" id="trombon_largo">
-						<input class="remove-arrow input" {...form.fields.trombon_largo.as('number')} />
-					</FormFieldWrapper>
-				</div>
-				<FormFieldWrapper label="Observaciones" id="trombon_observaciones">
-					<textarea
-						class="textarea resize-none"
-						rows={3}
-						{...form.fields.trombon_observaciones.as(
-							'text',
-							data.producto.trombon_observaciones ?? ''
-						)}
-					></textarea>
-				</FormFieldWrapper>
-			</fieldset>
+				<fieldset class="fieldset rounded-box border border-base-300 bg-base-200 p-4 lg:w-1/3">
+					<legend class="fieldset-legend">Medidas Secundario</legend>
+					<div class="grid grid-cols-2 gap-4">
+						<FormFieldWrapper label="Diámetro" id="medidas_secundario_diametro">
+							<input
+								class="remove-arrow input"
+								{...form.fields.medidas_secundario_diametro.as(
+									'number',
+									data.producto.medidas_secundario_diametro ?? 0
+								)}
+							/>
+						</FormFieldWrapper>
+						<FormFieldWrapper label="Largo" id="medidas_secundario_largo">
+							<input
+								class="remove-arrow input"
+								{...form.fields.medidas_secundario_largo.as(
+									'number',
+									data.producto.medidas_secundario_largo ?? 0
+								)}
+							/>
+						</FormFieldWrapper>
+					</div>
+				</fieldset>
+				<fieldset class="fieldset rounded-box border border-base-300 bg-base-200 p-4 lg:w-1/3">
+					<legend class="fieldset-legend">Trombon</legend>
+					<div class="grid grid-cols-2 gap-4">
+						<FormFieldWrapper label="Diámetro Inicial" id="trombon_diametro_inicial">
+							<input
+								class="remove-arrow input"
+								{...form.fields.trombon_diametro_inicial.as(
+									'number',
+									data.producto.trombon_diametro_inicial ?? 0
+								)}
+							/>
+						</FormFieldWrapper>
+						<FormFieldWrapper label="Largo" id="trombon_largo">
+							<input class="remove-arrow input" {...form.fields.trombon_largo.as('number')} />
+						</FormFieldWrapper>
+					</div>
+				</fieldset>
+			</div>
 		{/if}
+		<fieldset class="fieldset rounded-box border border-base-300 bg-base-200 p-4 lg:w-1/2">
+			<legend class="fieldset-legend">Observaciones</legend>
+			<FormFieldWrapper id="trombon_observaciones">
+				<textarea
+					class="textarea resize-none w-full"
+					rows={3}
+					{...form.fields.trombon_observaciones.as(
+						'text',
+						data.producto.trombon_observaciones ?? ''
+					)}
+				></textarea>
+			</FormFieldWrapper>
+		</fieldset>
 
 		<FormActions
 			cancelHref="/productos"

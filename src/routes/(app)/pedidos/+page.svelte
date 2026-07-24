@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { goto } from '$app/navigation';
 	import { resolve } from '$app/paths';
-	import { Table, SearchBar, PageHeader, Pagination } from '$lib/components/ui';
+	import { Table, SearchBar, Pagination } from '$lib/components/ui';
 	import PageLayout from '$lib/components/ui/PageLayout.svelte';
 	import { Eye } from '$lib/components/ui/icons';
 	import type { PageProps } from './$types';
@@ -24,8 +24,6 @@
 </script>
 
 <PageLayout>
-	<PageHeader title="Pedidos" description="Gestiona los pedidos de la empresa" />
-
 	<div class="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
 		<div class="flex flex-1 flex-wrap gap-4">
 			<div class="w-full sm:w-80">

@@ -1,12 +1,12 @@
-import { getDb } from '$lib/server/db';
+import { db } from '$lib/server/db';
 import type { HandleValidationError } from '@sveltejs/kit';
 
 export const handle = async ({ event, resolve }) => {
 	const start = Date.now();
 
 	// Inyectar DB en locals para otros usos
-	if (event.platform?.env?.DB) {
-		event.locals.db = getDb(event.platform.env.DB);
+	if (db) {
+		event.locals.db = db;
 	}
 
 	console.log('📨', event.request.method, event.url.pathname);

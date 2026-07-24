@@ -2,12 +2,13 @@
 	import type { LayoutProps } from './$types';
 	import Header from '$lib/components/ui/Header.svelte';
 	import { SideBar } from '$lib/components/ui';
-	import { Fabricacion, Producto, Settings, Users } from '$lib/components/ui/icons';
+	import { Fabricacion, Producto, Rocket, Settings, Users } from '$lib/components/ui/icons';
 	import Pedido from '$lib/components/ui/icons/Pedido.svelte';
 	import { browser } from '$app/environment';
 	import { authState } from '$lib/stores/auth.svelte';
 
 	const tabs = [
+		{ href: '/', label: 'Tareas', icon: Rocket },
 		{ href: '/pedidos', label: 'Pedidos', icon: Pedido },
 		{ href: '/fabricacion', label: 'Fabricación', icon: Fabricacion },
 		{ href: '/clientes', label: 'Clientes', icon: Users },

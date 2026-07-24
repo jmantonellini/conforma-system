@@ -1,5 +1,5 @@
-import { query, command, getRequestEvent, form } from '$app/server';
-import { getDb } from '$lib/server/db';
+import { query, command, form, requested } from '$app/server';
+import { db } from '$lib/server/db';
 import { clientes } from '$lib/server/db/schema';
 import { eq, count, or, like } from 'drizzle-orm';
 import * as v from 'valibot';
@@ -13,8 +13,6 @@ export const getClientes = query(
 		limit: v.optional(v.pipe(v.number(), v.toMinValue(1), v.toMaxValue(100)), 10)
 	}),
 	async ({ search, page, limit }) => {
-		const db = getDb(getRequestEvent().platform?.env?.DB);
-
 		const offset = (page - 1) * limit;
 
 		let whereCondition = undefined;
@@ -24,6 +22,7 @@ export const getClientes = query(
 			const searchTerm = `%${search}%`;
 			whereCondition = or(
 				like(clientes.nombre, searchTerm),
+				like(clientes.apellido, searchTerm),
 				like(clientes.razon_social, searchTerm),
 				like(clientes.cuit, searchTerm)
 			);
@@ -56,8 +55,6 @@ export const getClientes = query(
 export const getClienteById = query(v.object({ id: v.optional(v.number()) }), async ({ id }) => {
 	if (id == null) throw new Error('ID de cliente requerido');
 
-	const db = getDb(getRequestEvent().platform?.env?.DB);
-
 	const result = await db.select().from(clientes).where(eq(clientes.id, id)).get();
 
 	if (!result) throw new Error('Cliente no encontrado');
@@ -66,8 +63,6 @@ export const getClienteById = query(v.object({ id: v.optional(v.number()) }), as
 
 // Command: Crear cliente
 export const createCliente = form(ClienteSchemaBase, async (data) => {
-	const db = getDb(getRequestEvent().platform?.env?.DB);
-
 	const [cliente] = await db
 		.insert(clientes)
 		.values({
@@ -77,7 +72,10 @@ export const createCliente = form(ClienteSchemaBase, async (data) => {
 		})
 		.returning();
 
-	getClientes({ search: '', page: 1 }).refresh();
+	for (const { query } of requested(getClientes, 1)) {
+		void query.refresh();
+	}
+
 	return { success: true, cliente };
 });
 
@@ -88,8 +86,6 @@ const ClienteSchemaUpdate = v.object({
 
 // Command: Actualizar cliente
 export const updateCliente = form(ClienteSchemaUpdate, async (data) => {
-	const db = getDb(getRequestEvent().platform?.env?.DB);
-
 	const { id, ...updateData } = data;
 	const clienteId = parseInt(id);
 
@@ -107,7 +103,6 @@ export const updateCliente = form(ClienteSchemaUpdate, async (data) => {
 
 // Command: Eliminar cliente
 export const deleteCliente = command(v.number(), async (id) => {
-	const db = getDb(getRequestEvent().platform?.env?.DB);
 	await db.delete(clientes).where(eq(clientes.id, id));
 	getClientes({ search: '', page: 1 }).refresh();
 	return { success: true };

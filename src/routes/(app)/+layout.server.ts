@@ -8,6 +8,7 @@ import {
 } from '$lib/remote/productos.remote';
 import { getCurrentUser } from '$lib/remote/usuarios.remote';
 import { getPermisos, getPermisosByRol, getRoles } from '$lib/remote/roles.remote';
+import { getEmpleados } from '$lib/remote/empleados.remote';
 
 let categoriasCache: unknown = null;
 let marcasCache: unknown = null;
@@ -15,6 +16,7 @@ let tiposDeUsoCache: unknown = null;
 let tiposVehiculoCache: unknown = null;
 let rolesCache: unknown = null;
 let permisosCache: unknown = null;
+let empleadosCache: unknown = null;
 
 export const load = (async ({ cookies }) => {
 	const session = cookies.get('session');
@@ -52,10 +54,15 @@ export const load = (async ({ cookies }) => {
 		rolesCache = await getRoles();
 	}
 
+	if (!empleadosCache) {
+		empleadosCache = await getEmpleados();
+	}
+
 	return {
 		user,
 		permisos,
 		session,
+		empleados: empleadosCache,
 		categorias: categoriasCache,
 		marcas: marcasCache,
 		tiposDeUso: tiposDeUsoCache,

@@ -1,9 +1,6 @@
 <script lang="ts">
-	import {
-		getPermisosByRol,
-		asignarPermisos
-	} from '$lib/remote/roles.remote';
-	import { PageLayout, PageHeader } from '$lib/components/ui';
+	import { getPermisosByRol, asignarPermisos } from '$lib/remote/roles.remote';
+	import { PageLayout } from '$lib/components/ui';
 	import Can from '$lib/components/ui/Can.svelte';
 	import { toast } from '$lib/stores/toast.svelte';
 	import { SvelteSet } from 'svelte/reactivity';
@@ -59,8 +56,6 @@
 
 <Can modulo="configuracion">
 	<PageLayout>
-		<PageHeader title="Roles y Permisos" description="Selecciona un rol y asigna sus permisos" />
-
 		<div class="flex flex-col gap-6 lg:flex-row">
 			<!-- Lista de roles -->
 			<div class="w-full lg:w-64">
