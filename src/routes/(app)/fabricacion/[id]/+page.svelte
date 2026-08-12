@@ -3,15 +3,18 @@
 		getOrdenFabricacion,
 		cambiarEstadoUnidad,
 		reanudarUnidad,
-		eliminarOrdenFabricacion
+		eliminarOrdenFabricacion,
+		getHistorialUnidades
 	} from '$lib/remote/fabricacion.remote';
-	import { PageLayout, Modal } from '$lib/components/ui';
+	import { PageLayout, Modal, Table } from '$lib/components/ui';
 	import { toast } from '$lib/stores/toast.svelte';
 	import { goto } from '$app/navigation';
 	import { resolve } from '$app/paths';
+	import { formatearFecha } from '$lib/utils/fechas.js';
 
 	let { params } = $props();
 	const orden = $derived(await getOrdenFabricacion(Number(params.id)));
+	const historial = $derived(await getHistorialUnidades(Number(params.id)));
 
 	let isLoading = $state(false);
 
@@ -104,7 +107,7 @@
 			Pedido: {orden.pedido_numero} · Producto: {orden.producto_nombre || 'Personalizado'}
 		</p>
 		<div class="flex items-center justify-between">
-			<a href={resolve('/fabricacion')} class="btn btn-ghost btn-sm">← Volver</a>
+			<button onclick={() => history.back()} class="btn btn-ghost btn-sm">← Volver</button>
 			<button class="btn btn-outline btn-error btn-sm" onclick={manejarEliminar}> Eliminar </button>
 		</div>
 
@@ -126,7 +129,9 @@
 			<div class="stat bg-base-200">
 				<div class="stat-title">Estado</div>
 				<div class="stat-value">
-					<span class="badge" style="background-color: {orden.estado?.color}">
+					<span
+						class={`badge badge-soft whitespace-nowrap capitalize badge-${orden.estado?.color}`}
+					>
 						{orden.estado?.nombre}
 					</span>
 				</div>
@@ -153,66 +158,87 @@
 		<div class="card bg-base-100 shadow">
 			<div class="card-body">
 				<h3 class="card-title">Unidades de fabricación</h3>
-				<div class="overflow-x-auto">
-					<table class="table table-sm">
-						<thead>
-							<tr>
-								<th>N° Serie</th>
-								<th>Estado</th>
-								<th>Comentario</th>
-								<th class="text-center">Acciones</th>
-							</tr>
-						</thead>
-						<tbody>
-							{#each orden.unidades as unidad (unidad.id)}
-								<tr class={unidad.es_defectuoso ? 'bg-error/10' : ''}>
-									<td class="font-mono">{unidad.numero_serie}</td>
-									<td>
-										<span class="badge badge-sm" style="background-color: {unidad.estado?.color}">
-											{unidad.estado?.nombre}
-										</span>
-									</td>
-									<td>{unidad.comentario_estado ?? ''}</td>
-									<td class="text-right">
-										<div class="flex flex-wrap justify-center gap-1">
-											{#if unidad.esta_pausada}
-												<button
-													class="btn btn-success btn-xs"
-													onclick={() => reanudar(unidad.id)}
-													disabled={isLoading}
-												>
-													Reanudar
-												</button>
-											{:else}
-												{#each unidad.transiciones_disponibles as transicion (transicion.id)}
-													{#if transicion.slug === 'pausado'}
-														<button
-															class="btn btn-warning btn-xs"
-															onclick={() => manejarPausa(unidad.id)}
-															disabled={isLoading}
-														>
-															Pausar
-														</button>
-													{:else}
-														<button
-															class="btn btn-primary btn-xs"
-															onclick={() => cambiarEstado(unidad.id, transicion.id)}
-															disabled={isLoading}
-														>
-															{transicion.nombre}
-														</button>
-													{/if}
-												{:else}
-													<span class="text-xs text-base-content/50">Sin acciones</span>
-												{/each}
-											{/if}
-										</div>
-									</td>
-								</tr>
-							{/each}
-						</tbody>
-					</table>
-				</div>
+				{#snippet headerUnidades()}
+					<th>N° Serie</th>
+					<th>Estado</th>
+					<th>Comentario</th>
+					<th class="text-center">Acciones</th>
+				{/snippet}
+				{#snippet rowUnidad(unidad)}
+					<td class="font-mono">{unidad.numero_serie}</td>
+					<td>
+						<span class="badge badge-sm" style="background-color: {unidad.estado?.color}">
+							{unidad.estado?.nombre}
+						</span>
+					</td>
+					<td>{unidad.comentario_estado ?? ''}</td>
+					<td>
+						<div class="flex flex-wrap justify-center gap-1">
+							{#if unidad.esta_pausada}
+								<button
+									class="btn btn-outline btn-success btn-xs"
+									onclick={() => reanudar(unidad.id)}
+									disabled={isLoading}
+								>
+									Reanudar
+								</button>
+							{:else}
+								{#each unidad.transiciones_disponibles as transicion (transicion.id)}
+									<button
+										class="btn btn-{transicion.color} btn-outline btn-xs"
+										onclick={() =>
+											transicion.slug === 'pausado'
+												? manejarPausa(unidad.id)
+												: cambiarEstado(unidad.id, transicion.id)}
+										disabled={isLoading}
+									>
+										{transicion.nombre}
+									</button>
+								{:else}
+									<span class="text-xs text-base-content/50">Sin acciones</span>
+								{/each}
+							{/if}
+						</div>
+					</td>
+				{/snippet}
+				<Table data={orden.unidades} header={headerUnidades} row={rowUnidad} />
+			</div>
+		</div>
+
+		<!-- Historial de cambios -->
+		<div class="card bg-base-100 shadow">
+			<div class="card-body">
+				<h3 class="card-title">Historial de cambios</h3>
+				{#snippet headerHistorial()}
+					<th>Unidad</th>
+					<th>Fecha</th>
+					<th>Estado anterior</th>
+					<th>Estado nuevo</th>
+					<th>Empleado</th>
+					<th>Comentario</th>
+				{/snippet}
+				{#snippet rowHistorial(log)}
+					<td class="font-mono">{log.unidad || '-'}</td>
+					<td>{log.fecha ? formatearFecha(new Date(log.fecha)) : '-'}</td>
+					<td>
+						<span class="badge badge-soft badge-sm badge-{log.estado_anterior?.color || 'ghost'}">
+							{log.estado_anterior?.nombre || '-'}
+						</span>
+					</td>
+					<td>
+						<span class="badge badge-soft badge-sm badge-{log.estado_nuevo?.color || 'ghost'}">
+							{log.estado_nuevo?.nombre || '-'}
+						</span>
+					</td>
+					<td class="text-right">{log.empleado || '-'}</td>
+					<td class="text-right">{log.comentario || '-'}</td>
+				{/snippet}
+				<Table
+					data={historial}
+					header={headerHistorial}
+					row={rowHistorial}
+					emptyMessage="Sin movimientos registrados"
+				/>
 			</div>
 		</div>
 	</div>

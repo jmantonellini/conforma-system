@@ -177,6 +177,7 @@ export const pedidos = pgTable('pedidos', {
 		.references(() => estados_pedido.id, { onDelete: 'restrict' })
 		.notNull(),
 	precio_total: real('precio_total'),
+	presupuesto: text('presupuesto'),
 	anticipo: real('anticipo'),
 	saldo_pendiente: real('saldo_pendiente'),
 	observaciones: text('observaciones'),
@@ -211,6 +212,22 @@ export const lineas_pedido = pgTable(
 	},
 	(table) => [index('idx_lineas_pedido').on(table.pedido_id)]
 );
+
+// ============================================================
+// FACTURACION
+// ============================================================
+
+export const pagos = pgTable('pagos', {
+	id: serial('id').primaryKey(),
+	pedido_id: integer('pedido_id')
+		.references(() => pedidos.id, { onDelete: 'cascade' })
+		.notNull(),
+	monto: real('monto').notNull(),
+	fecha_pago: timestamp('fecha_pago').defaultNow(),
+	metodo_pago: text('metodo_pago'), // 'efectivo', 'transferencia', 'cheque'
+	observaciones: text('observaciones'),
+	created_at: timestamp('created_at').defaultNow()
+});
 
 // ============================================================
 // PRODUCTOS
@@ -291,7 +308,7 @@ export const productos = pgTable('productos', {
 });
 
 // ============================================================
-// FABRICACIÓN — Solo unidades tienen estado real
+// FABRICACIÓN
 // ============================================================
 
 export const ordenes_fabricacion = pgTable(
@@ -319,7 +336,7 @@ export const ordenes_fabricacion = pgTable(
 	]
 );
 
-// UNIDAD: ÚNICA tabla con estado real. Ground truth.
+// UNIDAD
 export const unidades_fabricacion = pgTable(
 	'unidades_fabricacion',
 	{
@@ -430,6 +447,36 @@ export const tareas = pgTable('tareas', {
 	asignado_a: integer('asignado_a').references(() => empleados.id, { onDelete: 'set null' }),
 	created_at: timestamp('created_at').defaultNow(),
 	updated_at: timestamp('updated_at').$onUpdate(() => new Date())
+});
+
+// ============================================================
+// ENVIOS
+// ============================================================
+
+export const envios = pgTable('envios', {
+	id: serial('id').primaryKey(),
+	pedido_id: integer('pedido_id')
+		.references(() => pedidos.id, { onDelete: 'cascade' })
+		.notNull(),
+	transportista_id: integer('transportista_id')
+		.references(() => transportistas.id, { onDelete: 'restrict' })
+		.notNull(),
+	numero_guia: text('numero_guia'),
+	cantidad_bultos: integer('cantidad_bultos').default(1),
+	estado: text('estado', { enum: ['preparado', 'despachado', 'entregado'] })
+		.notNull()
+		.default('preparado'),
+	fecha_envio: timestamp('fecha_envio'),
+	fecha_entrega: timestamp('fecha_entrega'),
+	observaciones: text('observaciones'),
+	created_at: timestamp('created_at').defaultNow()
+});
+
+export const transportistas = pgTable('transportistas', {
+	id: serial('id').primaryKey(),
+	nombre: text('nombre').notNull(),
+	activo: boolean('activo').default(true),
+	created_at: timestamp('created_at').defaultNow()
 });
 
 // ============================================================

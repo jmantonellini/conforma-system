@@ -87,7 +87,7 @@ export const getProductos = query(
 export const getProductoById = query(
 	v.pipe(v.string(), v.transform(Number), v.number()),
 	async (id) => {
-		const producto = await db.select().from(productos).where(eq(productos.id, id)).get();
+		const [producto] = await db.select().from(productos).where(eq(productos.id, id)).limit(1);
 
 		if (!producto) {
 			throw new Error('Producto no encontrado');

@@ -7,6 +7,7 @@
 	import { FormActions, PageLayout } from '$lib/components/ui';
 	import { toast } from '$lib/stores/toast.svelte';
 	import type { Producto } from '$lib/server/db/schema';
+	import { Paths } from '$lib/types';
 
 	let form = crearPedido;
 	let clientes = await getClientes({});
@@ -96,7 +97,7 @@
 		<fieldset class="fieldset rounded-box border border-base-300 bg-base-200 p-4">
 			<legend class="fieldset-legend text-lg">Información del Cliente</legend>
 
-			<div class="grid gap-4 md:grid-cols-3">
+			<div class="grid gap-4 md:grid-cols-4">
 				<!-- Cliente -->
 				<SearchSelect
 					id="cliente_id"
@@ -108,7 +109,11 @@
 
 				<!-- Fecha de entrega -->
 				<FormFieldWrapper label="Fecha de entrega prometida" id="fecha_entrega_prometida">
-					<input class="input" {...form.fields?.fecha_entrega_prometida?.as('date')} />
+					<input
+						class="input"
+						{...form.fields?.fecha_entrega_prometida?.as('date')}
+						min={new Date().toISOString().split('T')[0]}
+					/>
 				</FormFieldWrapper>
 
 				<!-- Anticipo -->
@@ -116,8 +121,14 @@
 					<input
 						class="remove-arrow input"
 						placeholder="0"
+						min="0"
 						{...form.fields?.anticipo?.as('number')}
 					/>
+				</FormFieldWrapper>
+
+				<!-- Presupuesto-->
+				<FormFieldWrapper label="Presupuesto (opcional)" id="presupuesto">
+					<input class="input" {...form.fields?.presupuesto?.as('text')} />
 				</FormFieldWrapper>
 			</div>
 		</fieldset>
@@ -241,7 +252,7 @@
 
 		<!-- Actions -->
 		<FormActions
-			cancelHref="/pedidos"
+			cancelHref={Paths.PEDIDOS}
 			pending={!!form.pending}
 			pendingText="Creando pedido..."
 			submitText="Crear Pedido"

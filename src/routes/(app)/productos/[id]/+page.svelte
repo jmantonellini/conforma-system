@@ -39,8 +39,8 @@
 
 <PageLayout>
 	<div class="flex items-center justify-between">
-		<a href={resolve('/productos')} class="btn btn-ghost btn-sm">← Volver</a>
-		<button class="btn btn-outline btn-sm btn-error" onclick={() => (showDeleteModal = true)}
+		<button onclick={() => history.back()} class="btn btn-ghost btn-sm">← Volver</button>
+		<button class="btn btn-outline btn-error btn-sm" onclick={() => (showDeleteModal = true)}
 			>Eliminar</button
 		>
 	</div>
@@ -250,7 +250,7 @@
 			<legend class="fieldset-legend">Observaciones</legend>
 			<FormFieldWrapper id="trombon_observaciones">
 				<textarea
-					class="textarea resize-none w-full"
+					class="textarea w-full resize-none"
 					rows={3}
 					{...form.fields.trombon_observaciones.as(
 						'text',

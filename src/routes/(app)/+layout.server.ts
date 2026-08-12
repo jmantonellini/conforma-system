@@ -9,54 +9,35 @@ import {
 import { getCurrentUser } from '$lib/remote/usuarios.remote';
 import { getPermisos, getPermisosByRol, getRoles } from '$lib/remote/roles.remote';
 import { getEmpleados } from '$lib/remote/empleados.remote';
-
-let categoriasCache: unknown = null;
-let marcasCache: unknown = null;
-let tiposDeUsoCache: unknown = null;
-let tiposVehiculoCache: unknown = null;
-let rolesCache: unknown = null;
-let permisosCache: unknown = null;
-let empleadosCache: unknown = null;
+import { Paths } from '$lib/types';
 
 export const load = (async ({ cookies }) => {
 	const session = cookies.get('session');
+
+	if (!session) {
+		throw redirect(303, Paths.LOGIN);
+	}
+
 	const user = await getCurrentUser();
+
 	let permisos: { modulo: string | null; accion: string | null; id: number | null }[] = [];
 	if (user?.rol?.id) {
 		permisos = await getPermisosByRol(user.rol.id);
 	}
 
-	if (!session) {
-		throw redirect(303, '/login');
-	}
+	const categoriasCache = await getCategorias();
 
-	if (!categoriasCache) {
-		categoriasCache = await getCategorias();
-	}
+	const marcasCache = await getMarcas();
 
-	if (!marcasCache) {
-		marcasCache = await getMarcas();
-	}
+	const tiposDeUsoCache = await getTiposUso();
 
-	if (!tiposDeUsoCache) {
-		tiposDeUsoCache = await getTiposUso();
-	}
+	const tiposVehiculoCache = await getTiposVehiculo();
 
-	if (!tiposVehiculoCache) {
-		tiposVehiculoCache = await getTiposVehiculo();
-	}
+	const permisosCache = await getPermisos();
 
-	if (!permisosCache) {
-		permisosCache = await getPermisos();
-	}
+	const rolesCache = await getRoles();
 
-	if (!rolesCache) {
-		rolesCache = await getRoles();
-	}
-
-	if (!empleadosCache) {
-		empleadosCache = await getEmpleados();
-	}
+	const empleadosCache = await getEmpleados();
 
 	return {
 		user,

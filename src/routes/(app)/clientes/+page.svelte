@@ -9,7 +9,7 @@
 	import { createCliente, deleteCliente, updateCliente } from '$lib/remote/clientes.remote';
 	import type { Cliente } from '$lib/server/db/schema';
 	import { toast } from '$lib/stores/toast.svelte';
-	import { debounce } from '$lib/utils';
+	import { debounce } from '$lib/utils/debounce';
 	import { SvelteURLSearchParams } from 'svelte/reactivity';
 
 	let { data }: PageProps = $props();

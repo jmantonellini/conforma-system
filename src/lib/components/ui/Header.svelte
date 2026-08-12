@@ -4,6 +4,7 @@
 	import Logo from '$lib/assets/Logo.png';
 	import { enviarFeedback, logout } from '$lib/remote/auth.remote';
 	import { toast } from '$lib/stores/toast.svelte';
+	import { Paths } from '$lib/types';
 	import FormFieldWrapper from './FormFieldWrapper.svelte';
 	import Modal from './Modal.svelte';
 	let { session } = $props();
@@ -21,12 +22,12 @@
 		const result = await logout();
 		if (result.success) {
 			logout();
-			goto(resolve('/login'));
+			goto(resolve(Paths.LOGIN));
 		}
 	}
 </script>
 
-<header class="navbar bg-base-100 px-10 py-4 shadow-sm">
+<header class="navbar bg-base-200 px-10 py-4 shadow-sm">
 	<div class="navbar-start h-auto">
 		<img src={Logo} alt="Conforma Logo" class="h-10 w-auto" />
 	</div>

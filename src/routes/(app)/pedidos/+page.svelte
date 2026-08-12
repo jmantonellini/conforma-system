@@ -5,8 +5,9 @@
 	import PageLayout from '$lib/components/ui/PageLayout.svelte';
 	import { Eye } from '$lib/components/ui/icons';
 	import type { PageProps } from './$types';
-	import { debounce } from '$lib/utils';
+	import { debounce } from '$lib/utils/debounce';
 	import { SvelteURLSearchParams } from 'svelte/reactivity';
+	import { formatearFecha } from '$lib/utils/fechas';
 
 	let { data }: PageProps = $props();
 
@@ -32,7 +33,7 @@
 			<select bind:value={estadoFilter} class="select w-48" onchange={handleSearchChange}>
 				<option value="">Todos los estados</option>
 				{#each data.estados as est (est.id)}
-					<option value={est.id}>{est.nombre}</option>
+					<option value={String(est.id)}>{est.nombre}</option>
 				{/each}
 			</select>
 		</div>
@@ -45,6 +46,7 @@
 				<th>N° Pedido</th>
 				<th>Cliente</th>
 				<th>Fecha</th>
+				<th>Entrega</th>
 				<th class="text-right">Total</th>
 				<th>Estado</th>
 				<th class="text-center">Acciones</th>
@@ -53,12 +55,15 @@
 			{#snippet row(pedido)}
 				<td class="font-mono text-sm">{pedido.numero_pedido}</td>
 				<td class="font-medium">{pedido.cliente_nombre || '-'}</td>
-				<td>{new Date(pedido.fecha).toLocaleDateString()}</td>
+				<td>{formatearFecha(new Date(pedido.fecha_pedido))}</td>
+				<td class:text-error={pedido.fecha_entrega < new Date().toISOString()}>
+					{formatearFecha(new Date(pedido.fecha_entrega))}
+				</td>
 				<td class="text-right font-medium">
 					${pedido.total?.toLocaleString() || 0}
 				</td>
 				<td>
-					<span class="badge badge-sm badge-{pedido.estado_color}">
+					<span class="badge badge-dash capitalize badge-{pedido.estado_color}">
 						{pedido.estado_nombre}
 					</span>
 				</td>

@@ -11,12 +11,15 @@ import {
 	empleados,
 	clientes,
 	transiciones_estado,
-	logs_cambios_estado
+	logs_cambios_estado,
+	estados_pedido,
+	usuarios
 } from '$lib/server/db/schema';
-import { eq, desc, count, sql, and } from 'drizzle-orm';
+import { eq, desc, count, sql, and, aliasedTable } from 'drizzle-orm';
 import { getCurrentUser } from './usuarios.remote';
 import { CrearOrdenSchema } from './fabricacion.schema';
 import { getPedidos } from './pedidos.remote';
+import { PEDIDO_SLUG } from '$lib/types';
 
 // ============================================================
 // QUERIES
@@ -59,10 +62,11 @@ function estadoOrdenFromUnidades(
 export const getOrdenesFabricacion = query(
 	v.object({
 		estado: v.optional(v.number()),
+		soloActivas: v.optional(v.boolean(), false),
 		page: v.optional(v.pipe(v.number(), v.minValue(1)), 1),
 		limit: v.optional(v.pipe(v.number(), v.minValue(1), v.maxValue(100)), 20)
 	}),
-	async ({ estado, page, limit }) => {
+	async ({ estado, soloActivas, page, limit }) => {
 		const offset = (page - 1) * limit;
 
 		const [ordenesBase, estados] = await Promise.all([
@@ -126,7 +130,7 @@ export const getOrdenesFabricacion = query(
 
 		const relMap = new Map(relacionados.map((r) => [r.orden_id, r]));
 
-		const ordenes = ordenesBase.map((o) => {
+		let ordenes = ordenesBase.map((o) => {
 			const unidades = unidadesPorOrden.get(o.id) ?? [];
 			const estadoCalculado = estadoOrdenFromUnidades(unidades, estados);
 			const cantidadProducida = unidades.filter(
@@ -146,8 +150,7 @@ export const getOrdenesFabricacion = query(
 					color: estadoCalculado.color,
 					es_final: estadoCalculado.es_final
 				},
-				porcentaje_avance:
-					o.cantidad_total > 0 ? Math.round((cantidadProducida / o.cantidad_total) * 100) : 0,
+				cantidad_producida: cantidadProducida,
 				fecha_inicio: o.fecha_inicio,
 				fecha_fin_estimada: o.fecha_fin_estimada,
 				asignado_a: o.asignado_a,
@@ -158,6 +161,7 @@ export const getOrdenesFabricacion = query(
 							apellido: rel.empleado_apellido
 						}
 					: null,
+				cliente_nombre: rel?.cliente_nombre || null,
 				pedido: rel?.pedido_id
 					? {
 							id: rel.pedido_id,
@@ -168,6 +172,10 @@ export const getOrdenesFabricacion = query(
 				observaciones: o.observaciones
 			};
 		});
+
+		if (soloActivas) {
+			ordenes = ordenes.filter((o) => !o.estado.es_final);
+		}
 
 		const ordenesFiltradas = estado ? ordenes.filter((o) => o.estado.id === estado) : ordenes;
 
@@ -270,8 +278,6 @@ export const getOrdenFabricacion = query(v.number(), async (id) => {
 			color: estadoCalculado.color,
 			es_final: estadoCalculado.es_final
 		},
-		porcentaje_avance:
-			orden.cantidad_total > 0 ? Math.round((cantidadProducida / orden.cantidad_total) * 100) : 0,
 		cantidad_producida: cantidadProducida,
 		pedido_numero: relacionados?.pedido_numero,
 		cliente_nombre: relacionados?.cliente_nombre,
@@ -284,6 +290,50 @@ export const getOrdenFabricacion = query(v.number(), async (id) => {
 			: null,
 		unidades: unidadesConTransiciones
 	};
+});
+
+export const getHistorialUnidades = query(v.number(), async (ordenId) => {
+	const unidades = await db
+		.select({ id: unidades_fabricacion.id })
+		.from(unidades_fabricacion)
+		.where(eq(unidades_fabricacion.orden_fabricacion_id, ordenId));
+
+	if (unidades.length === 0) return [];
+
+	const ids = unidades.map((u) => u.id);
+
+	const estadoAnterior = aliasedTable(estados_fabricacion, 'estado_anterior');
+	const estadoNuevo = aliasedTable(estados_fabricacion, 'estado_nuevo');
+
+	return db
+		.select({
+			id: logs_cambios_estado.id,
+			unidad: unidades_fabricacion.numero_serie,
+			estado_anterior: {
+				nombre: estadoAnterior.nombre,
+				color: estadoAnterior.color
+			},
+			estado_nuevo: {
+				nombre: estadoNuevo.nombre,
+				color: estadoNuevo.color
+			},
+			comentario: logs_cambios_estado.comentario,
+			fecha: logs_cambios_estado.created_at,
+			empleado: empleados.nombre
+		})
+		.from(logs_cambios_estado)
+		.leftJoin(unidades_fabricacion, eq(logs_cambios_estado.entidad_id, unidades_fabricacion.id))
+		.leftJoin(usuarios, eq(logs_cambios_estado.usuario_id, usuarios.id))
+		.leftJoin(empleados, eq(usuarios.empleado_id, empleados.id))
+		.leftJoin(estadoAnterior, eq(logs_cambios_estado.estado_anterior_id, estadoAnterior.id))
+		.leftJoin(estadoNuevo, eq(logs_cambios_estado.estado_nuevo_id, estadoNuevo.id))
+		.where(
+			and(
+				eq(logs_cambios_estado.entidad_tipo, 'unidad'),
+				sql`${logs_cambios_estado.entidad_id} IN ${ids}`
+			)
+		)
+		.orderBy(desc(logs_cambios_estado.created_at));
 });
 
 // ============================================================
@@ -329,6 +379,32 @@ export const crearOrdenFabricacion = form(CrearOrdenSchema, async (data) => {
 			})
 			.returning();
 		unidades.push(unidad);
+	}
+
+	const pedido = await db
+		.select({ id: lineas_pedido.pedido_id, estado_id: pedidos.estado_id })
+		.from(lineas_pedido)
+		.innerJoin(pedidos, eq(lineas_pedido.pedido_id, pedidos.id))
+		.where(eq(lineas_pedido.id, data.linea_pedido_id))
+		.then((r) => r[0]);
+
+	if (pedido) {
+		const [pendiente, enProd] = await Promise.all([
+			db
+				.select({ id: estados_pedido.id })
+				.from(estados_pedido)
+				.where(eq(estados_pedido.slug, 'pendiente'))
+				.then((r) => r[0]),
+			db
+				.select({ id: estados_pedido.id })
+				.from(estados_pedido)
+				.where(eq(estados_pedido.slug, 'en_produccion'))
+				.then((r) => r[0])
+		]);
+
+		if (pedido.estado_id === pendiente?.id && enProd) {
+			await db.update(pedidos).set({ estado_id: enProd.id }).where(eq(pedidos.id, pedido.id));
+		}
 	}
 
 	return { success: true, orden, unidades };
@@ -398,6 +474,12 @@ export const cambiarEstadoUnidad = command(
 			comentario: comentario ?? undefined
 		});
 
+		const estadoDestino = await db
+			.select()
+			.from(estados_fabricacion)
+			.where(eq(estados_fabricacion.id, estado_destino_id))
+			.then((rows) => rows[0]);
+
 		await db.transaction(async (tx) => {
 			await tx
 				.update(unidades_fabricacion)
@@ -418,12 +500,61 @@ export const cambiarEstadoUnidad = command(
 				comentario: comentario ?? null,
 				created_at: now
 			});
+
+			if (estadoDestino?.es_final) {
+				const pedido = await tx
+					.select({ id: lineas_pedido.pedido_id })
+					.from(ordenes_fabricacion)
+					.innerJoin(lineas_pedido, eq(ordenes_fabricacion.linea_pedido_id, lineas_pedido.id))
+					.where(eq(ordenes_fabricacion.id, unidad.orden_fabricacion_id))
+					.then((r) => r[0]);
+
+				if (pedido?.id) {
+					const res = await tx.execute(sql`
+				SELECT 
+					COUNT(*)::int as total,
+					COUNT(*) FILTER (WHERE ef.es_final = true)::int as terminadas
+				FROM unidades_fabricacion uf
+				JOIN ordenes_fabricacion of ON uf.orden_fabricacion_id = of.id
+				JOIN lineas_pedido lp ON of.linea_pedido_id = lp.id
+				JOIN estados_fabricacion ef ON uf.estado_id = ef.id
+				WHERE lp.pedido_id = ${pedido.id}
+			`);
+
+					const { total, terminadas } = res.rows[0] as { total: number; terminadas: number };
+
+					if (total && total === terminadas) {
+						const comp = await tx
+							.select({ id: estados_pedido.id })
+							.from(estados_pedido)
+							.where(eq(estados_pedido.slug, PEDIDO_SLUG.COMPLETADO))
+							.then((r) => r[0]);
+
+						if (comp) {
+							await tx
+								.update(pedidos)
+								.set({ estado_id: comp.id, updated_at: now })
+								.where(eq(pedidos.id, pedido.id));
+
+							await tx.insert(logs_cambios_estado).values({
+								entidad_tipo: 'pedido',
+								entidad_id: pedido.id,
+								usuario_id: user.id,
+								estado_nuevo_id: comp.id,
+								comentario: 'Fabricación finalizada',
+								created_at: now
+							});
+						}
+					}
+				}
+			}
 		});
 
 		// Refrescar
 		Promise.all([
 			getPedidos({ search: '', page: 1 }).refresh(),
-			getOrdenFabricacion(unidad.orden_fabricacion_id).refresh()
+			getOrdenFabricacion(unidad.orden_fabricacion_id).refresh(),
+			getHistorialUnidades(unidad.orden_fabricacion_id).refresh()
 		]).catch(() => {});
 
 		return { success: true };
@@ -454,28 +585,32 @@ export const reanudarUnidad = command(
 			.then((rows) => rows[0]);
 
 		if (estadoActual?.slug !== 'pausado') {
-			throw new Error(`La unidad no está pausada`);
+			throw new Error('La unidad no está pausada');
 		}
 
-		// Buscar último estado no-pausado en el historial
 		const historial = unidad.historial_estados ?? [];
+		if (historial.length === 0) throw new Error('No hay historial');
+
+		// Traer todos los estados del historial de una vez
+		const estadosIds = [...new Set(historial.map((h) => h.estado_id))];
+		const estadosMap = new Map(
+			(
+				await db
+					.select()
+					.from(estados_fabricacion)
+					.where(sql`${estados_fabricacion.id} IN ${estadosIds}`)
+			).map((e) => [e.id, e])
+		);
+
 		const estadoReanudar = historial
 			.slice()
 			.reverse()
-			.find(async (h) => {
-				const e = await db
-					.select()
-					.from(estados_fabricacion)
-					.where(eq(estados_fabricacion.id, h.estado_id))
-					.then((r) => r[0]);
-				return e?.slug !== 'pausado';
-			});
+			.find((h) => estadosMap.get(h.estado_id)?.slug !== 'pausado');
 
 		if (!estadoReanudar) {
 			throw new Error('No hay estado anterior para reanudar');
 		}
 
-		// Reusar el command de cambiar estado
 		return cambiarEstadoUnidad({
 			unidad_id: String(unidad_id),
 			estado_destino_id: String(estadoReanudar.estado_id),

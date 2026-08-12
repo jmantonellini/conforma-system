@@ -26,6 +26,9 @@ export const getTareas = query(async () => {
 			prioridad: tareas.prioridad,
 			fecha_entrega: tareas.fecha_entrega,
 			asignado_a: tareas.asignado_a,
+			orden: tareas.orden,
+			created_at: tareas.created_at,
+			updated_at: tareas.updated_at,
 			empleado: {
 				id: empleados.id,
 				nombre: empleados.nombre

@@ -21,18 +21,17 @@
 		{ estado: EstadosTarea.COMPLETADA, titulo: 'Completadas', color: 'success' }
 	];
 
-
-  
 	function getTareasPorColumna(estado: EstadosTarea) {
 		return tareas
 			.filter((t) => t.estado === estado)
 			.sort((a, b) => (a.orden ?? 0) - (b.orden ?? 0));
 	}
 
-	function handleReorder(items: Tarea[]) {
+	function handleReorder(estado: EstadosTarea, items: Tarea[]) {
 		const updates = items.map((item, index) => ({
 			id: item.id,
-			orden: index
+			orden: index,
+			estado
 		}));
 		onReorder(updates);
 	}
@@ -47,7 +46,7 @@
 			tareas={getTareasPorColumna(columna.estado)}
 			{onEstadoChange}
 			{onEliminar}
-			onReorder={handleReorder}
+			onReorder={(items) => handleReorder(columna.estado, items)}
 		/>
 	{/each}
 </div>

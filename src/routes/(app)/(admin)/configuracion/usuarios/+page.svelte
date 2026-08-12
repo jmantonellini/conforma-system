@@ -1,5 +1,4 @@
 <script lang="ts">
-	import { resolve } from '$app/paths';
 	import { FormFieldWrapper, Modal, PageLayout, Table } from '$lib/components/ui';
 	import { Delete, Edit } from '$lib/components/ui/icons';
 	import { getEmpleadosSinUsuario } from '$lib/remote/empleados.remote';
@@ -22,7 +21,7 @@
 
 <PageLayout>
 	<div class="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-		<a href={resolve('/pedidos')} class="btn btn-ghost btn-sm">← Volver</a>
+		<button onclick={() => history.back()} class="btn btn-ghost btn-sm">← Volver</button>
 
 		<button
 			class="btn btn-primary"
@@ -59,7 +58,7 @@
 						<Edit />
 					</button>
 					<button
-						class="btn btn-circle text-error btn-ghost btn-sm"
+						class="btn btn-circle btn-ghost text-error btn-sm"
 						title="Eliminar"
 						onclick={async () => {
 							if (confirm('¿Eliminar este usuario?')) {
@@ -103,7 +102,7 @@
 		id="cliente-form"
 	>
 		{#if editingUsuario}
-			<input type="hidden" name="id" value={editingUsuario.id} />
+			<input type="hidden" name="id" value={editingUsuario?.id} />
 		{/if}
 		<fieldset class="fieldset rounded-lg border p-4">
 			<legend class="text-md fieldset-legend px-2 font-semibold">Datos</legend>
@@ -124,7 +123,7 @@
 				</FormFieldWrapper>
 				<FormFieldWrapper id="rol" label="Rol" required>
 					<select
-						{...activeForm.fields?.rol_id?.as('select', String(editingUsuario?.rol.id))}
+						{...activeForm.fields?.rol_id?.as('select', String(editingUsuario?.rol?.id))}
 						class="select"
 					>
 						<option value={null}>Seleccionar...</option>
@@ -139,9 +138,9 @@
 						class="select"
 					>
 						<option value={null}>Sin asignar</option>
-						{#if editingUsuario?.empleado.id}
-							<option value={String(editingUsuario.empleado.id)}
-								>{editingUsuario?.empleado.nombre} {editingUsuario.empleado?.apellido}</option
+						{#if editingUsuario?.empleado}
+							<option value={String(editingUsuario.empleado?.id)}
+								>{editingUsuario?.empleado?.nombre} {editingUsuario.empleado?.apellido}</option
 							>
 						{/if}
 						{#each empleados as emp (emp.id)}

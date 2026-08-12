@@ -6,13 +6,18 @@ import bcrypt from 'bcryptjs';
 import { redirect } from '@sveltejs/kit';
 import { LoginSchema } from './auth.schema';
 import * as v from 'valibot';
+import { Paths } from '$lib/types';
 
 export const login = form(LoginSchema, async (data) => {
 	const event = getRequestEvent();
 
-	const user = await db.select().from(usuarios).where(eq(usuarios.username, data.username)).get();
+	const [user] = await db
+		.select()
+		.from(usuarios)
+		.where(eq(usuarios.username, data.username))
+		.limit(1);
 
-	if (!user || !bcrypt.compareSync(data.password, user.password_hash)) {
+	if (!user || !user.activo || !(await bcrypt.compare(data.password, user.password_hash))) {
 		throw new Error('Credenciales inválidas');
 	}
 
@@ -49,19 +54,19 @@ export const register = form(LoginSchema, async (data) => {
 	}
 
 	// Generar hash de la contraseña
-	const hash = bcrypt.hashSync(data.password, 10);
+	const hash = await bcrypt.hash(data.password, 10);
 
 	try {
 		await db.insert(usuarios).values({
 			username: data.username,
 			password_hash: hash
 		});
-
-		redirect(303, '/login');
 	} catch (error) {
 		console.error('Error al crear usuario:', error);
 		return { success: false, message: 'Error al crear usuario' };
 	}
+
+	redirect(303, Paths.LOGIN);
 });
 
 export const logout = command(async () => {

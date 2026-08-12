@@ -11,13 +11,31 @@ import {
 	unidades_fabricacion,
 	estados_fabricacion,
 	logs_cambios_estado,
-	transiciones_estado
+	transiciones_estado,
+	empleados,
+	usuarios
 } from '$lib/server/db/schema';
 import { redirect } from '@sveltejs/kit';
 import { generarNumeroPedido } from '../server/utils/pedidos';
 import { resolve } from '$app/paths';
-import { and, count, desc, eq, isNull, like } from 'drizzle-orm';
+import {
+	aliasedTable,
+	and,
+	count,
+	desc,
+	eq,
+	exists,
+	gte,
+	inArray,
+	like,
+	lte,
+	not,
+	or,
+	sql,
+	SQL
+} from 'drizzle-orm';
 import { getCurrentUser } from './usuarios.remote';
+import { PEDIDO_SLUG } from '$lib/types';
 
 const LineaSchema = v.object({
 	producto_id: v.string(),
@@ -31,6 +49,7 @@ const PedidoSchema = v.object({
 	lineas: v.pipe(v.array(LineaSchema), v.minLength(1)),
 	fecha_entrega_prometida: v.optional(v.string()),
 	anticipo: v.optional(v.pipe(v.number(), v.toMinValue(0)), 0),
+	presupuesto: v.optional(v.string()),
 	observaciones: v.optional(v.string())
 });
 
@@ -72,7 +91,8 @@ export const getPedidos = query(
 				id: pedidos.id,
 				numero_pedido: pedidos.numero_pedido,
 				cliente_nombre: clientes.nombre,
-				fecha: pedidos.fecha_pedido,
+				fecha_pedido: pedidos.fecha_pedido,
+				fecha_entrega: pedidos.fecha_entrega_prometida,
 				total: pedidos.precio_total,
 				estado_id: pedidos.estado_id,
 				estado_nombre: estados_pedido.nombre,
@@ -101,6 +121,7 @@ export const getPedidoById = query(v.number(), async (id) => {
 	const [pedido] = await db
 		.select({
 			id: pedidos.id,
+			presupuesto: pedidos.presupuesto,
 			numero_pedido: pedidos.numero_pedido,
 			cliente: {
 				id: clientes.id,
@@ -125,6 +146,24 @@ export const getPedidoById = query(v.number(), async (id) => {
 		.limit(1);
 
 	if (!pedido) throw new Error('Pedido no encontrado');
+
+	const transiciones = await db
+		.select({
+			id: transiciones_estado.id,
+			estado_destino_id: transiciones_estado.estado_destino_id,
+			requiere_rol: transiciones_estado.requiere_rol,
+			destino_nombre: estados_pedido.nombre,
+			destino_slug: estados_pedido.slug,
+			destino_color: estados_pedido.color
+		})
+		.from(transiciones_estado)
+		.innerJoin(estados_pedido, eq(transiciones_estado.estado_destino_id, estados_pedido.id))
+		.where(
+			and(
+				eq(transiciones_estado.tipo, 'pedido'),
+				eq(transiciones_estado.estado_origen_id, pedido.estado.id)
+			)
+		);
 
 	const lineas = await db
 		.select({
@@ -166,72 +205,150 @@ export const getPedidoById = query(v.number(), async (id) => {
 				...linea,
 				produccion: {
 					orden_id: linea.orden_id,
-					estado: total === 0 ? 'Sin unidades' : terminadas === total ? 'Terminado' : 'En progreso',
-					porcentaje: total > 0 ? Math.round((terminadas / total) * 100) : 0,
 					terminadas,
-					total
+					total,
+					es_final: terminadas === total && total > 0
 				}
 			};
 		})
 	);
 
-	return { pedido, lineas: lineasConProduccion };
+	return { pedido: { ...pedido, transiciones }, lineas: lineasConProduccion };
 });
 
-// ============================================================
-// RESUMEN DE PRODUCCIÓN (para que el vendedor decida)
-// ============================================================
+export const getEstadosPedido = query(async () => {
+	return await db.select().from(estados_pedido).orderBy(estados_pedido.nombre);
+});
 
-export const getResumenProduccionPedido = query(v.number(), async (pedido_id) => {
-	const ordenes = await db
-		.select({
-			orden_id: ordenes_fabricacion.id,
-			cantidad_total: ordenes_fabricacion.cantidad_total
-		})
-		.from(ordenes_fabricacion)
-		.innerJoin(lineas_pedido, eq(lineas_pedido.id, ordenes_fabricacion.linea_pedido_id))
-		.where(eq(lineas_pedido.pedido_id, pedido_id));
+// Función simplificada para líneas sin orden (para el formulario de nueva orden)
+export const getLineasPedidoSinOrden = query(
+	v.object({
+		pedido_id: v.optional(v.pipe(v.string(), v.transform(Number), v.number())),
+		limit: v.optional(v.pipe(v.number(), v.minValue(1), v.maxValue(100)), 50)
+	}),
+	async ({ pedido_id, limit }) => {
+		const conditions = [];
 
-	const ordenesConEstado = await Promise.all(
-		ordenes.map(async (o) => {
-			const unidades = await db
-				.select({ estado_id: unidades_fabricacion.estado_id })
-				.from(unidades_fabricacion)
-				.where(eq(unidades_fabricacion.orden_fabricacion_id, o.orden_id));
+		if (pedido_id) {
+			conditions.push(eq(lineas_pedido.pedido_id, pedido_id));
+		}
 
-			const estadosFab = await db.select().from(estados_fabricacion);
-			const terminadas = unidades.filter(
-				(u) => estadosFab.find((e) => e.id === u.estado_id)?.es_final
-			).length;
-
-			return {
-				...o,
-				terminadas,
-				completada: terminadas === o.cantidad_total && o.cantidad_total > 0
-			};
-		})
-	);
-
-	const todasTerminadas = ordenesConEstado.every((o) => o.completada);
-	const porcentajeTotal =
-		ordenesConEstado.length > 0
-			? Math.round(
-					ordenesConEstado.reduce((sum, o) => sum + (o.terminadas / o.cantidad_total) * 100, 0) /
-						ordenesConEstado.length
+		return await db
+			.select({
+				id: lineas_pedido.id,
+				pedido_numero: pedidos.numero_pedido,
+				producto_nombre: productos.nombre,
+				cantidad: lineas_pedido.cantidad,
+				descripcion: lineas_pedido.descripcion_personalizada,
+				es_personalizado: lineas_pedido.es_personalizado
+			})
+			.from(lineas_pedido)
+			.leftJoin(pedidos, eq(lineas_pedido.pedido_id, pedidos.id))
+			.leftJoin(productos, eq(lineas_pedido.producto_id, productos.id))
+			.where(
+				and(
+					not(
+						exists(
+							db
+								.select()
+								.from(ordenes_fabricacion)
+								.where(eq(ordenes_fabricacion.linea_pedido_id, lineas_pedido.id))
+						)
+					),
+					...conditions
 				)
-			: 0;
+			)
+			.limit(limit);
+	}
+);
 
-	return {
-		ordenes: ordenesConEstado,
-		todasTerminadas,
-		porcentaje_avance_total: porcentajeTotal,
-		cantidad_ordenes: ordenesConEstado.length,
-		ordenes_terminadas: ordenesConEstado.filter((o) => o.completada).length
-	};
+export const getHistorialPedido = query(v.number(), async (pedidoId) => {
+	const estadoAnterior = aliasedTable(estados_pedido, 'estado_anterior');
+	const estadoNuevo = aliasedTable(estados_pedido, 'estado_nuevo');
+
+	return await db
+		.select({
+			id: logs_cambios_estado.id,
+			estado_anterior: {
+				nombre: estadoAnterior.nombre,
+				color: estadoAnterior.color
+			},
+			estado_nuevo: {
+				nombre: estadoNuevo.nombre,
+				color: estadoNuevo.color
+			},
+			comentario: logs_cambios_estado.comentario,
+			fecha: logs_cambios_estado.created_at,
+			empleado: empleados.nombre
+		})
+		.from(logs_cambios_estado)
+		.leftJoin(usuarios, eq(logs_cambios_estado.usuario_id, usuarios.id))
+		.leftJoin(empleados, eq(usuarios.empleado_id, empleados.id))
+		.leftJoin(estadoAnterior, eq(logs_cambios_estado.estado_anterior_id, estadoAnterior.id))
+		.leftJoin(estadoNuevo, eq(logs_cambios_estado.estado_nuevo_id, estadoNuevo.id))
+		.where(
+			and(
+				eq(logs_cambios_estado.entidad_tipo, 'pedido'),
+				eq(logs_cambios_estado.entidad_id, pedidoId)
+			)
+		)
+		.orderBy(desc(logs_cambios_estado.created_at));
 });
 
+export const getPedidosActivos = query(
+	v.object({
+		semana: v.optional(v.boolean()) // true = solo los de esta semana
+	}),
+	async ({ semana }) => {
+		const estadosFinales = await db
+			.select({ id: estados_pedido.id })
+			.from(estados_pedido)
+			.where(or(eq(estados_pedido.grupo, 'final'), eq(estados_pedido.grupo, 'excepcion')));
+
+		const idsFinales = estadosFinales.map((e) => e.id);
+
+		let where: SQL<unknown> | undefined = sql`true;`;
+
+		if (idsFinales.length > 0) {
+			where = not(inArray(pedidos.estado_id, idsFinales));
+		}
+
+		if (semana) {
+			const hoy = new Date();
+			const inicioSemana = new Date(hoy);
+			inicioSemana.setDate(hoy.getDate() - hoy.getDay()); // domingo
+			inicioSemana.setHours(0, 0, 0, 0);
+			const finSemana = new Date(inicioSemana);
+			finSemana.setDate(inicioSemana.getDate() + 6);
+			finSemana.setHours(23, 59, 59, 999);
+
+			where = and(
+				where,
+				gte(pedidos.fecha_entrega_prometida, inicioSemana),
+				lte(pedidos.fecha_entrega_prometida, finSemana)
+			);
+		}
+
+		return db
+			.select({
+				id: pedidos.id,
+				numero_pedido: pedidos.numero_pedido,
+				cliente_nombre: clientes.nombre,
+				estado_nombre: estados_pedido.nombre,
+				estado_color: estados_pedido.color,
+				fecha_entrega_prometida: pedidos.fecha_entrega_prometida,
+				total: pedidos.precio_total,
+				saldo_pendiente: pedidos.saldo_pendiente
+			})
+			.from(pedidos)
+			.leftJoin(clientes, eq(pedidos.cliente_id, clientes.id))
+			.leftJoin(estados_pedido, eq(pedidos.estado_id, estados_pedido.id))
+			.where(where);
+	}
+);
+
 // ============================================================
-// CAMBIO DE ESTADO DE PEDIDO (vendedor)
+// COMMANDS
 // ============================================================
 
 export const cambiarEstadoPedido = command(
@@ -246,16 +363,15 @@ export const cambiarEstadoPedido = command(
 
 		const now = new Date();
 
-		// Obtener estado actual
 		const pedido = await db
-			.select({ estado_id: pedidos.estado_id })
+			.select()
 			.from(pedidos)
 			.where(eq(pedidos.id, pedido_id))
 			.then((rows) => rows[0]);
 
 		if (!pedido) throw new Error('Pedido no encontrado');
 
-		// Validar transición
+		// Validar que la transición existe
 		const transicion = await db
 			.select()
 			.from(transiciones_estado)
@@ -269,24 +385,9 @@ export const cambiarEstadoPedido = command(
 			.then((rows) => rows[0]);
 
 		if (!transicion) {
-			const [actual, destino] = await Promise.all([
-				db
-					.select()
-					.from(estados_pedido)
-					.where(eq(estados_pedido.id, pedido.estado_id))
-					.then((r) => r[0]),
-				db
-					.select()
-					.from(estados_pedido)
-					.where(eq(estados_pedido.id, estado_destino_id))
-					.then((r) => r[0])
-			]);
-			throw new Error(
-				`Transición no permitida: ${actual?.nombre ?? '?'} → ${destino?.nombre ?? '?'}`
-			);
+			throw new Error('Transición no permitida');
 		}
 
-		// Ejecutar en transacción
 		await db.transaction(async (tx) => {
 			await tx
 				.update(pedidos)
@@ -302,13 +403,50 @@ export const cambiarEstadoPedido = command(
 				comentario: comentario ?? null,
 				created_at: now
 			});
+
+			const estadoDestino = await tx
+				.select({ slug: estados_pedido.slug })
+				.from(estados_pedido)
+				.where(eq(estados_pedido.id, estado_destino_id))
+				.then((r) => r[0]);
+
+			const updates: Partial<typeof pedidos.$inferSelect> = {
+				estado_id: estado_destino_id,
+				updated_at: now
+			};
+
+			if (estadoDestino?.slug === PEDIDO_SLUG.ENTREGADO) {
+				updates.fecha_entrega_real = now;
+			}
+
+			await tx.update(pedidos).set(updates).where(eq(pedidos.id, pedido_id));
 		});
 
 		getPedidos({ search: '', page: 1 }).refresh();
+		getPedidoById(pedido_id).refresh();
+		getHistorialPedido(pedido_id).refresh();
 
 		return { success: true };
 	}
 );
+
+export const eliminarPedido = command(v.number(), async (pedidoId) => {
+	await db.delete(pedidos).where(eq(pedidos.id, pedidoId));
+	await db.delete(lineas_pedido).where(eq(lineas_pedido.pedido_id, pedidoId));
+
+	getPedidos({ search: '', page: 1 }).refresh();
+	return { success: true };
+});
+
+export const eliminarEstadoPedido = command(v.number(), async (id) => {
+	await db.delete(estados_pedido).where(eq(estados_pedido.id, id));
+	getEstadosPedido().refresh();
+	return { success: true };
+});
+
+// ============================================================
+// FORMS
+// ============================================================
 
 export const crearPedido = form(PedidoSchema, async (data) => {
 	const user = await getCurrentUser();
@@ -352,50 +490,6 @@ export const crearPedido = form(PedidoSchema, async (data) => {
 	redirect(303, resolve(`/pedidos/${pedido.id}`));
 });
 
-export const eliminarPedido = command(v.number(), async (pedidoId) => {
-	await db.delete(pedidos).where(eq(pedidos.id, pedidoId));
-	await db.delete(lineas_pedido).where(eq(lineas_pedido.pedido_id, pedidoId));
-
-	getPedidos({ search: '', page: 1 }).refresh();
-	return { success: true };
-});
-
-// Función simplificada para líneas sin orden (para el formulario de nueva orden)
-export const getLineasPedidoSinOrden = query(
-	v.object({
-		pedido_id: v.optional(v.pipe(v.string(), v.transform(Number), v.number())),
-		limit: v.optional(v.pipe(v.number(), v.minValue(1), v.maxValue(100)), 50)
-	}),
-	async ({ pedido_id, limit }) => {
-		// const conditions = [isNull(lineas_pedido.orden_fabricacion_id)];  // TODO: manejar bien la relación
-		const conditions = [isNull(ordenes_fabricacion.linea_pedido_id)];
-		if (pedido_id) {
-			conditions.push(eq(lineas_pedido.pedido_id, pedido_id));
-		}
-
-		return await db
-			.select({
-				id: lineas_pedido.id,
-				pedido_numero: pedidos.numero_pedido,
-				producto_nombre: productos.nombre,
-				cantidad: lineas_pedido.cantidad,
-				descripcion: lineas_pedido.descripcion_personalizada,
-				es_personalizado: lineas_pedido.es_personalizado
-			})
-			.from(lineas_pedido)
-			.leftJoin(pedidos, eq(lineas_pedido.pedido_id, pedidos.id))
-			.leftJoin(productos, eq(lineas_pedido.producto_id, productos.id))
-			.where(and(...conditions))
-			.limit(limit);
-	}
-);
-
-// ESTADOS DE PEDIDO
-
-export const getEstadosPedido = query(async () => {
-	return await db.select().from(estados_pedido).orderBy(estados_pedido.nombre);
-});
-
 export const crearEstadoPedido = form(
 	v.object({
 		nombre: v.string(),
@@ -412,9 +506,3 @@ export const crearEstadoPedido = form(
 		return { success: true };
 	}
 );
-
-export const eliminarEstadoPedido = command(v.number(), async (id) => {
-	await db.delete(estados_pedido).where(eq(estados_pedido.id, id));
-	getEstadosPedido().refresh();
-	return { success: true };
-});

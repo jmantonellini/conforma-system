@@ -7,7 +7,7 @@
 	import { eliminarProducto } from '$lib/remote/productos.remote';
 	import type { PageProps } from './$types';
 	import { toast } from '$lib/stores/toast.svelte';
-	import { debounce } from '$lib/utils';
+	import { debounce } from '$lib/utils/debounce';
 	import { SvelteURLSearchParams } from 'svelte/reactivity';
 	import { page } from '$app/state';
 

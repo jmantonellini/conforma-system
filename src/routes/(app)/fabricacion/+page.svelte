@@ -66,7 +66,9 @@
 			{#snippet row(orden)}
 				<td class="font-mono text-sm">OF-{orden.id}</td>
 				<td>
-					<span class={`whitespace-nowrap badge badge-sm badge-${orden.estado?.color}`}>
+					<span
+						class={`badge badge-soft whitespace-nowrap capitalize badge-${orden.estado?.color}`}
+					>
 						{orden.estado?.nombre}
 					</span>
 					{#if orden.estado_comentario}
@@ -96,7 +98,7 @@
 						<span class="badge badge-ghost">Normal</span>
 					{/if}
 				</td>
-				<td class="flex items-center gap-1 flex-nowrap">
+				<td class="flex flex-nowrap items-center gap-1">
 					<a
 						class="btn btn-circle btn-ghost btn-sm"
 						title="Ver cliente"
@@ -105,7 +107,7 @@
 						<Eye />
 					</a>
 					<button
-						class="btn btn-circle text-error btn-ghost btn-sm"
+						class="btn btn-circle btn-ghost text-error btn-sm"
 						title="Eliminar"
 						onclick={() => {
 							deleteOrdenId = String(orden.id);

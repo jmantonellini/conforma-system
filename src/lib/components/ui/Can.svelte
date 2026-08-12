@@ -1,5 +1,6 @@
 <script lang="ts">
-	import { can } from '$lib/stores/auth.svelte';
+	import { page } from '$app/state';
+	import { can } from '$lib/utils/permissions';
 	import type { Snippet } from 'svelte';
 
 	let {
@@ -13,6 +14,6 @@
 	}>();
 </script>
 
-{#if can(modulo, accion)}
+{#if can(page.data.user, page.data.permisos, modulo, accion)}
 	{@render children()}
 {/if}
