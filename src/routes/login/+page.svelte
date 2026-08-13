@@ -32,7 +32,7 @@
 		<fieldset class="fieldset w-xs rounded-box border border-base-300 bg-base-200 p-4">
 			<legend class="fieldset-legend">Iniciar Sesión</legend>
 
-			<FormFieldWrapper id="email" label="Email">
+			<FormFieldWrapper id="usuario" label="Usuario">
 				<input
 					type="text"
 					{...form.fields.username.as('text')}

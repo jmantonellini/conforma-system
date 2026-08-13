@@ -35,6 +35,7 @@ export const login = form(LoginSchema, async (data) => {
 		path: '/',
 		httpOnly: true,
 		sameSite: 'lax',
+		secure: false,
 		maxAge: 60 * 60 * 24 * 30
 	});
 
