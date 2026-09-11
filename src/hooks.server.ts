@@ -55,6 +55,13 @@ export const handle: Handle = async ({ event, resolve }) => {
 		return await resolve(event);
 	} catch (error) {
 		const err = error as any;
+		console.error('Error no controlado:', {
+			code: err?.code,
+			message: err?.message,
+			detail: err?.detail,
+			constraint: err?.constraint,
+			databaseColumn: err?.column
+		});
 
 		// Si es un error de PostgreSQL (tiene code que empieza con 23 o 22)
 		if (err?.code && PG_ERROR_CODES[err.code]) {

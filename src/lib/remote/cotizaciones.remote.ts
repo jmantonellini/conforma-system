@@ -56,18 +56,17 @@ async function eliminarArchivoAdjunto(archivoUrl: string) {
 }
 
 async function generarNumeroCotizacion() {
-	const [ultima] = await db
+	const existentes = await db
 		.select({ numero: cotizaciones.numero_cotizacion })
 		.from(cotizaciones)
-		.orderBy(desc(cotizaciones.id))
-		.limit(1);
+		.orderBy(desc(cotizaciones.id));
 
-	if (!ultima) return 'C-00001';
+	const mayorNumero = existentes.reduce((maximo, cotizacion) => {
+		const match = cotizacion.numero.match(/^C-(\d+)$/);
+		return match ? Math.max(maximo, Number(match[1])) : maximo;
+	}, 0);
 
-	const match = ultima.numero.match(/C-(\d+)/);
-	if (!match) return 'C-00001';
-
-	return `C-${(parseInt(match[1]) + 1).toString().padStart(5, '0')}`;
+	return `C-${(mayorNumero + 1).toString().padStart(5, '0')}`;
 }
 
 async function getEstadoPorSlug(slug: string) {
@@ -374,6 +373,7 @@ export const crearCotizacion = form(CotizacionSchema, async (data) => {
 	if (!user) throw new Error('Usuario no autenticado');
 
 	const estadoInicial = await getEstadoPorSlug('ingresada');
+	if (!estadoInicial) throw new Error('No existe el estado inicial "ingresada"');
 
 	const [cotizacion] = await db
 		.insert(cotizaciones)
@@ -386,7 +386,7 @@ export const crearCotizacion = form(CotizacionSchema, async (data) => {
 			canal: data.canal,
 			descripcion: data.descripcion,
 			observaciones: data.observaciones || null,
-			estado_id: estadoInicial?.id ?? 1,
+			estado_id: estadoInicial.id,
 			creada_por: user.id
 		})
 		.returning();
