@@ -40,6 +40,17 @@ export const estados_pedido = pgTable('estados_pedido', {
 	created_at: timestamp('created_at').defaultNow()
 });
 
+export const estados_cotizacion = pgTable('estados_cotizacion', {
+	id: serial('id').primaryKey(),
+	nombre: text('nombre').notNull().unique(),
+	slug: text('slug').notNull().unique(),
+	grupo: text('grupo').notNull(), // "entrada" | "revision" | "respuesta" | "final"
+	orden: integer('orden').notNull(),
+	color: text('color'),
+	es_final: boolean('es_final').default(false),
+	created_at: timestamp('created_at').defaultNow()
+});
+
 // ============================================================
 // STATE MACHINE — Transiciones permitidas
 // ============================================================
@@ -131,6 +142,73 @@ export const feedback = pgTable('feedback', {
 	mensaje: text('mensaje').notNull(),
 	created_at: timestamp('created_at').defaultNow()
 });
+
+// ============================================================
+// COTIZACIONES
+// ============================================================
+
+export const cotizaciones = pgTable('cotizaciones', {
+	id: serial('id').primaryKey(),
+	numero_cotizacion: text('numero_cotizacion').notNull().unique(),
+	cliente_id: integer('cliente_id').references(() => clientes.id, { onDelete: 'set null' }),
+	// Contacto espontáneo (todavía no es cliente cargado)
+	cliente_nombre: text('cliente_nombre').notNull(),
+	cliente_telefono: text('cliente_telefono'),
+	cliente_email: text('cliente_email'),
+	canal: text('canal').notNull().default('whatsapp'), // whatsapp | llamada | email | presencial | otro
+	descripcion: text('descripcion').notNull(),
+	estado_id: integer('estado_id')
+		.references(() => estados_cotizacion.id, { onDelete: 'restrict' })
+		.notNull(),
+	asignada_a: integer('asignada_a').references(() => empleados.id, { onDelete: 'set null' }),
+	creada_por: integer('creada_por').references(() => usuarios.id, { onDelete: 'set null' }),
+	precio_total: real('precio_total'),
+	validez_dias: integer('validez_dias').default(15),
+	fecha_envio: timestamp('fecha_envio'),
+	pedido_id: integer('pedido_id').references(() => pedidos.id, { onDelete: 'set null' }),
+	observaciones: text('observaciones'),
+	created_at: timestamp('created_at').defaultNow(),
+	updated_at: timestamp('updated_at').$onUpdate(() => new Date())
+});
+
+export const lineas_cotizacion = pgTable(
+	'lineas_cotizacion',
+	{
+		id: serial('id').primaryKey(),
+		cotizacion_id: integer('cotizacion_id')
+			.references(() => cotizaciones.id, { onDelete: 'cascade' })
+			.notNull(),
+		producto_id: integer('producto_id').references(() => productos.id, { onDelete: 'set null' }),
+		es_personalizado: boolean('es_personalizado').default(false),
+		descripcion: text('descripcion').notNull(),
+		cantidad: integer('cantidad').notNull().default(1),
+		precio_unitario: real('precio_unitario').notNull(),
+		subtotal: real('subtotal').generatedAlwaysAs(sql`cantidad * precio_unitario`),
+		// Base para las futuras fórmulas de costos
+		costo_mano_obra: real('costo_mano_obra'),
+		costo_materiales: real('costo_materiales'),
+		orden_linea: integer('orden_linea'),
+		created_at: timestamp('created_at').defaultNow(),
+		updated_at: timestamp('updated_at').$onUpdate(() => new Date())
+	},
+	(table) => [index('idx_lineas_cotizacion').on(table.cotizacion_id)]
+);
+
+export const adjuntos_cotizacion = pgTable(
+	'adjuntos_cotizacion',
+	{
+		id: serial('id').primaryKey(),
+		cotizacion_id: integer('cotizacion_id')
+			.references(() => cotizaciones.id, { onDelete: 'cascade' })
+			.notNull(),
+		nombre_original: text('nombre_original').notNull(),
+		archivo_url: text('archivo_url').notNull(),
+		mime_type: text('mime_type'),
+		tamano_bytes: integer('tamano_bytes'),
+		created_at: timestamp('created_at').defaultNow()
+	},
+	(table) => [index('idx_adjuntos_cotizacion').on(table.cotizacion_id)]
+);
 
 // ============================================================
 // CLIENTES Y PEDIDOS
@@ -480,6 +558,22 @@ export const transportistas = pgTable('transportistas', {
 });
 
 // ============================================================
+// NOTIFICACIONES INTERNAS
+// ============================================================
+
+export const notificaciones = pgTable('notificaciones', {
+	id: serial('id').primaryKey(),
+	usuario_id: integer('usuario_id')
+		.references(() => usuarios.id, { onDelete: 'cascade' })
+		.notNull(),
+	titulo: text('titulo').notNull(),
+	mensaje: text('mensaje'),
+	link: text('link'),
+	leida: boolean('leida').default(false),
+	created_at: timestamp('created_at').defaultNow()
+});
+
+// ============================================================
 // TIPOS
 // ============================================================
 
@@ -495,6 +589,11 @@ export type OrdenFabricacion = typeof ordenes_fabricacion.$inferSelect;
 export type UnidadFabricacion = typeof unidades_fabricacion.$inferSelect;
 export type EstadoFabricacion = typeof estados_fabricacion.$inferSelect;
 export type EstadoPedido = typeof estados_pedido.$inferSelect;
+export type EstadoCotizacion = typeof estados_cotizacion.$inferSelect;
+export type Cotizacion = typeof cotizaciones.$inferSelect;
+export type LineaCotizacion = typeof lineas_cotizacion.$inferSelect;
+export type AdjuntoCotizacion = typeof adjuntos_cotizacion.$inferSelect;
+export type Notificacion = typeof notificaciones.$inferSelect;
 export type TransicionEstado = typeof transiciones_estado.$inferSelect;
 export type LogCambioEstado = typeof logs_cambios_estado.$inferSelect;
 export type LogSistema = typeof logs_sistema.$inferSelect;

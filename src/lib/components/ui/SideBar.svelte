@@ -14,8 +14,6 @@
 	function handleTabClick(tab: { subtabs?: unknown[] }, e: MouseEvent) {
 		if (!drawerOpen && tab.subtabs && tab.subtabs.length > 0) {
 			drawerOpen = true;
-			// No hacemos preventDefault, dejamos que navegue a /configuracion
-			// y al abrirse el drawer se ven las subtabs
 		}
 	}
 </script>
@@ -24,6 +22,11 @@
 	<input id="my-drawer-4" type="checkbox" class="drawer-toggle" bind:checked={drawerOpen} />
 
 	<div class="drawer-content">
+		<div class="p-2 lg:hidden">
+			<label for="my-drawer-4" aria-label="open sidebar" class="btn btn-square btn-ghost">
+				<SideBarToggle />
+			</label>
+		</div>
 		{@render children()}
 	</div>
 

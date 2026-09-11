@@ -15,18 +15,15 @@
 	const ids = $derived(result.map((p) => p.id).filter((id): id is number => id != null));
 	let permisosActivos = $derived(new SvelteSet(ids));
 
-	// 👇 Toggle de permiso
 	function togglePermiso(permisoId: number) {
 		if (permisosActivos.has(permisoId)) {
 			permisosActivos.delete(permisoId);
 		} else {
 			permisosActivos.add(permisoId);
 		}
-		// 👇 Forzar actualización del Set
 		permisosActivos = new SvelteSet(permisosActivos);
 	}
 
-	// 👇 Guardar cambios
 	async function guardar() {
 		try {
 			await asignarPermisos({
@@ -41,7 +38,6 @@
 		}
 	}
 
-	// 👇 Agrupar permisos por módulo
 	function agruparPorModulo(permisos: any[]) {
 		const grouped: Record<string, any[]> = {};
 		for (const p of permisos) {

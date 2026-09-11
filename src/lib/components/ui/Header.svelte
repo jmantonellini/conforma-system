@@ -3,13 +3,16 @@
 	import { resolve } from '$app/paths';
 	import Logo from '$lib/assets/Logo.png';
 	import { enviarFeedback, logout } from '$lib/remote/auth.remote';
+	import { getNotificaciones } from '$lib/remote/cotizaciones.remote';
 	import { toast } from '$lib/stores/toast.svelte';
 	import { Paths } from '$lib/types';
+	import CampanaNotificaciones from './CampanaNotificaciones.svelte';
 	import FormFieldWrapper from './FormFieldWrapper.svelte';
 	import Modal from './Modal.svelte';
 	let { session } = $props();
 	let modalOpen = $state(false);
 	let form = enviarFeedback;
+	let notificaciones = await getNotificaciones();
 
 	function openModal() {
 		modalOpen = true;
@@ -33,6 +36,7 @@
 	</div>
 	<div class="navbar-end gap-4">
 		<button class="btn btn-outline btn-secondary" onclick={() => openModal()}>Feedback!</button>
+		<CampanaNotificaciones />
 		{#if session}
 			<!-- <span>Bienvenido, {data.session?.username} ({data.session.rol})</span> -->
 			<button onclick={handleLogout} class="btn btn-ghost" type="submit">Cerrar sesión</button>

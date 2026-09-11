@@ -90,7 +90,7 @@
 							<p>{formatearFecha(new Date(pedido.fecha))}</p>
 						</FormFieldWrapper>
 						<FormFieldWrapper label="Estado" id="estado">
-							<div class="flex items-center gap-2">
+							<div class="flex flex-wrap items-center gap-2">
 								<span class="badge badge-{pedido.estado.color}">{pedido.estado.nombre}</span>
 								{#if pedido.transiciones?.length > 0}
 									<button

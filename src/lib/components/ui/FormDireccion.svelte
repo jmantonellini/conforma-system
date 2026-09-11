@@ -26,7 +26,7 @@
 		<div class="flex w-full flex-col gap-2">
 			<label class="label" for="pais"> País </label>
 			<select
-				class="select-bordered select w-full"
+				class="select w-full"
 				id="pais"
 				{...form.fields?.pais?.as('select', initialData?.pais || 'Argentina')}
 				onchange={onPaisChange}

@@ -11,3 +11,5 @@ export { default as User } from './User.svelte';
 export { default as Calendar } from './Calendar.svelte';
 export { default as Truck } from './Truck.svelte';
 export { default as Stock } from './Stock.svelte';
+export { default as Price } from './Price.svelte';
+export { default as Document } from './Document.svelte';

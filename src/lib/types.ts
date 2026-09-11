@@ -35,6 +35,7 @@ export enum Roles {
 export enum Modulos {
 	PRODUCTOS = 'productos',
 	CLIENTES = 'clientes',
+	COTIZACIONES = 'cotizaciones',
 	PEDIDOS = 'pedidos',
 	FABRICACION = 'fabricacion',
 	CONFIGURACION = 'configuracion',
@@ -47,6 +48,7 @@ export enum Paths {
 	LOGIN = '/login',
 	PRODUCTOS = '/' + Modulos.PRODUCTOS,
 	CLIENTES = '/' + Modulos.CLIENTES,
+	COTIZACIONES = '/' + Modulos.COTIZACIONES,
 	PEDIDOS = '/' + Modulos.PEDIDOS,
 	FABRICACION = '/' + Modulos.FABRICACION,
 	INVENTARIO = '/' + Modulos.INVENTARIO,

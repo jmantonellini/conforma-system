@@ -10,7 +10,7 @@
 </script>
 
 {#if toast.toasts.length > 0}
-	<div class="toast z-20 toast-end toast-bottom">
+	<div class="toast z-20 toast-center toast-top">
 		{#each toast.toasts as t (t.id)}
 			<button
 				class="alert alert-{t.type} cursor-pointer shadow-lg"

@@ -1,10 +1,10 @@
 <script lang="ts">
-	import { browser } from '$app/environment';
 	import type { LayoutProps } from './$types';
 	import Header from '$lib/components/ui/Header.svelte';
 	import { SideBar } from '$lib/components/ui';
 	import {
 		Fabricacion,
+		Price,
 		Producto,
 		Rocket,
 		Settings,
@@ -21,6 +21,7 @@
 	// === Tabs calculados desde data (única fuente de verdad) ===
 	const tabs = $derived([
 		{ href: Paths.TAREAS, label: 'Tareas', icon: Rocket },
+		{ href: Paths.COTIZACIONES, label: 'Cotizaciones', icon: Price },
 		{ href: Paths.PEDIDOS, label: 'Pedidos', icon: Pedido },
 		{ href: Paths.FABRICACION, label: 'Fabricación', icon: Fabricacion },
 		{ href: Paths.CLIENTES, label: 'Clientes', icon: Users },
@@ -39,7 +40,7 @@
 							{ href: Paths.CONFIGURACION_ROLES, label: 'Roles' },
 							{ href: Paths.CONFIGURACION_CATEGORIAS_PRODUCTOS, label: 'Categorías de Productos' },
 							{ href: Paths.CONFIGURACION_ESTADOS_FABRICACION, label: 'Estados de Fabricación' },
-							{ href: Paths.CONFIGURACION_ESTADOS_PEDIDOS, label: 'Estados de Pedidos' },
+							{ href: Paths.CONFIGURACION_ESTADOS_PEDIDOS, label: 'Estados de Pedidos' }
 							// { href: Paths.CONFIGURACION_TIPOS_MATERIA_PRIMA, label: 'Tipos de Materiales' }
 						]
 					}
