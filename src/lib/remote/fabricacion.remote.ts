@@ -15,7 +15,7 @@ import {
 	estados_pedido,
 	usuarios
 } from '$lib/server/db/schema';
-import { eq, desc, count, sql, and, aliasedTable } from 'drizzle-orm';
+import { eq, desc, count, sql, and, aliasedTable, ilike, or } from 'drizzle-orm';
 import { getCurrentUser } from './usuarios.remote';
 import { CrearOrdenSchema } from './fabricacion.schema';
 import { getPedidos } from './pedidos.remote';
@@ -61,13 +61,23 @@ function estadoOrdenFromUnidades(
 
 export const getOrdenesFabricacion = query(
 	v.object({
+		search: v.optional(v.string()),
 		estado: v.optional(v.number()),
 		soloActivas: v.optional(v.boolean(), false),
 		page: v.optional(v.pipe(v.number(), v.minValue(1)), 1),
 		limit: v.optional(v.pipe(v.number(), v.minValue(1), v.maxValue(100)), 20)
 	}),
-	async ({ estado, soloActivas, page, limit }) => {
+	async ({ search, estado, soloActivas, page, limit }) => {
 		const offset = (page - 1) * limit;
+		const searchTerm = search?.trim() ? `%${search.trim()}%` : undefined;
+		const searchCondition = searchTerm
+			? or(
+					ilike(ordenes_fabricacion.nombre_trabajo, searchTerm),
+					ilike(pedidos.numero_pedido, searchTerm),
+					ilike(clientes.nombre, searchTerm),
+					ilike(productos.nombre, searchTerm)
+				)
+			: undefined;
 
 		const [ordenesBase, estados] = await Promise.all([
 			db
@@ -83,6 +93,11 @@ export const getOrdenesFabricacion = query(
 					linea_pedido_id: ordenes_fabricacion.linea_pedido_id
 				})
 				.from(ordenes_fabricacion)
+				.leftJoin(lineas_pedido, eq(ordenes_fabricacion.linea_pedido_id, lineas_pedido.id))
+				.leftJoin(pedidos, eq(lineas_pedido.pedido_id, pedidos.id))
+				.leftJoin(clientes, eq(pedidos.cliente_id, clientes.id))
+				.leftJoin(productos, eq(lineas_pedido.producto_id, productos.id))
+				.where(searchCondition)
 				.orderBy(desc(ordenes_fabricacion.prioridad), desc(ordenes_fabricacion.id))
 				.limit(limit)
 				.offset(offset),

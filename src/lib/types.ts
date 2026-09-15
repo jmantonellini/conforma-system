@@ -40,6 +40,7 @@ export enum Modulos {
 	FABRICACION = 'fabricacion',
 	CONFIGURACION = 'configuracion',
 	INVENTARIO = 'inventario',
+	INSUMOS = 'insumos',
 	ENVIOS = 'envios'
 }
 
@@ -52,6 +53,7 @@ export enum Paths {
 	PEDIDOS = '/' + Modulos.PEDIDOS,
 	FABRICACION = '/' + Modulos.FABRICACION,
 	INVENTARIO = '/' + Modulos.INVENTARIO,
+	INSUMOS = '/' + Modulos.INSUMOS,
 	ENVIOS = '/' + Modulos.ENVIOS,
 	CONFIGURACION = '/' + Modulos.CONFIGURACION,
 	CONFIGURACION_USUARIOS = '/' + Modulos.CONFIGURACION + '/usuarios',

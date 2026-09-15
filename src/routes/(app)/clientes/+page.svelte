@@ -1,7 +1,14 @@
 <script lang="ts">
 	import { goto } from '$app/navigation';
 	import { resolve } from '$app/paths';
-	import { Table, Modal, FormFieldWrapper, SearchBar, Pagination } from '$lib/components/ui';
+	import {
+		Highlight,
+		Table,
+		Modal,
+		FormFieldWrapper,
+		SearchBar,
+		Pagination
+	} from '$lib/components/ui';
 	import type { PageProps } from './$types';
 	import FormDireccion from '$lib/components/ui/FormDireccion.svelte';
 	import { Delete, Edit, Eye } from '$lib/components/ui/icons';
@@ -75,11 +82,11 @@
 			{/snippet}
 
 			{#snippet row(cliente: Cliente)}
-				<td class="font-medium">{cliente.nombre}</td>
-				<td>{cliente.apellido || '-'}</td>
-				<td>{cliente.razon_social || '-'}</td>
-				<td>{cliente.telefono || '-'}</td>
-				<td>{cliente.cuit || '-'}</td>
+				<td class="font-medium"><Highlight text={cliente.nombre} query={search} /></td>
+				<td><Highlight text={cliente.apellido || '-'} query={search} /></td>
+				<td><Highlight text={cliente.razon_social || '-'} query={search} /></td>
+				<td><Highlight text={cliente.telefono || '-'} query={search} /></td>
+				<td><Highlight text={cliente.cuit || '-'} query={search} /></td>
 				<td class="text-center">
 					<div class="flex justify-center gap-2">
 						<a

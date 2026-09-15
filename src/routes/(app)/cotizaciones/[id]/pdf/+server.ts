@@ -6,7 +6,7 @@ export async function GET({ params }) {
 		const pdf = await generarPDFCotizacion(Number(params.id));
 
 		// pdf es Uint8Array, y Response acepta directamente ArrayBufferView
-		return new Response(pdf, {
+		return new Response(pdf.buffer as ArrayBuffer, {
 			headers: {
 				'Content-Type': 'application/pdf',
 				'Content-Disposition': `attachment; filename="cotizacion-${params.id}.pdf"`

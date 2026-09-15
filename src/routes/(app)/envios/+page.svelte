@@ -23,7 +23,7 @@
 				<th class="text-center">Acciones</th>
 			{/snippet}
 
-			{#snippet row(e)}
+			{#snippet row(e: (typeof envios.data)[number])}
 				<td class="font-mono">{e.numero_guia || '-'}</td>
 				<td>{e.transportista}</td>
 				<td>

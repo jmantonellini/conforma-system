@@ -6,6 +6,7 @@
 		Fabricacion,
 		Price,
 		Producto,
+		Puzzle,
 		Rocket,
 		Settings,
 		Stock,
@@ -26,6 +27,7 @@
 		{ href: Paths.FABRICACION, label: 'Fabricación', icon: Fabricacion },
 		{ href: Paths.CLIENTES, label: 'Clientes', icon: Users },
 		{ href: Paths.PRODUCTOS, label: 'Productos', icon: Producto },
+		{ href: Paths.INSUMOS, label: 'Insumos', icon: Puzzle },
 		{ href: Paths.INVENTARIO, label: 'Inventario', icon: Stock },
 		{ href: Paths.ENVIOS, label: 'Envíos', icon: Truck },
 		...(can(data.user, data.permisos, Modulos.CONFIGURACION)

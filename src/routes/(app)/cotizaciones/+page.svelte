@@ -2,7 +2,7 @@
 <script lang="ts">
 	import { goto } from '$app/navigation';
 	import { resolve } from '$app/paths';
-	import { Table, SearchBar, Pagination, Can, Modal } from '$lib/components/ui';
+	import { Highlight, Table, SearchBar, Pagination, Can, Modal } from '$lib/components/ui';
 	import PageLayout from '$lib/components/ui/PageLayout.svelte';
 	import { Delete, Eye } from '$lib/components/ui/icons';
 	import type { PageProps } from './$types';
@@ -42,7 +42,7 @@
 </script>
 
 <PageLayout>
-	<div class="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+	<div class="mb-6 flex items-center justify-between gap-4">
 		<div class="flex flex-1 flex-wrap gap-4">
 			<div class="w-full sm:w-80">
 				<SearchBar autofocus bind:search oninput={() => debounce(handleSearchChange)} />
@@ -72,13 +72,13 @@
 				<th class="text-center">Acciones</th>
 			{/snippet}
 
-			{#snippet row(cot)}
-				<td class="font-mono text-sm">{cot.numero_cotizacion}</td>
-				<td class="font-medium">{cot.cliente_nombre || '-'}</td>
+			{#snippet row(cot: (typeof data.cotizaciones)[number])}
+				<td class="font-mono text-sm"><Highlight text={cot.numero_cotizacion} query={search} /></td>
+				<td class="font-medium"><Highlight text={cot.cliente_nombre || '-'} query={search} /></td>
 				<td>
 					<span class="badge badge-ghost badge-sm">{CANALES[cot.canal] || cot.canal}</span>
 				</td>
-				<td>{formatearFecha(new Date(cot.created_at))}</td>
+				<td>{cot.created_at ? formatearFecha(new Date(cot.created_at)) : '-'}</td>
 				<td class="text-right font-medium">
 					{cot.precio_total != null ? '$' + cot.precio_total.toLocaleString('es-AR') : '-'}
 				</td>

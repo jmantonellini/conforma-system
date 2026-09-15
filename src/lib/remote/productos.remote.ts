@@ -7,9 +7,11 @@ import {
 	categorias_competencia,
 	marcas,
 	tipos_vehiculo,
-	modelos
+	modelos,
+	insumos,
+	producto_insumos
 } from '$lib/server/db/schema';
-import { eq, count, and, like, or } from 'drizzle-orm';
+import { eq, count, and, ilike, or } from 'drizzle-orm';
 import * as v from 'valibot';
 import { ProductoSchema, ProductoSchemaUpdate } from './productos.schema';
 
@@ -30,10 +32,10 @@ export const getProductos = query(
 			const searchTerm = `%${search}%`;
 			conditions.push(
 				or(
-					like(productos.nombre, searchTerm),
-					like(productos.codigo, searchTerm),
-					like(marcas.nombre, searchTerm),
-					like(modelos.nombre, searchTerm)
+					ilike(productos.nombre, searchTerm),
+					ilike(productos.codigo, searchTerm),
+					ilike(marcas.nombre, searchTerm),
+					ilike(modelos.nombre, searchTerm)
 				)
 			);
 		}
@@ -94,6 +96,57 @@ export const getProductoById = query(
 		}
 
 		return producto;
+	}
+);
+
+export const getProductoInsumos = query(v.number(), async (productoId) => {
+	return await db
+		.select({
+			id: producto_insumos.id,
+			insumo_id: producto_insumos.insumo_id,
+			cantidad: producto_insumos.cantidad,
+			orden: producto_insumos.orden,
+			opcional: producto_insumos.opcional,
+			codigo: insumos.codigo,
+			nombre: insumos.nombre,
+			unidad: insumos.unidad,
+			costo_unitario: insumos.costo_unitario,
+			tipo: insumos.tipo
+		})
+		.from(producto_insumos)
+		.innerJoin(insumos, eq(producto_insumos.insumo_id, insumos.id))
+		.where(eq(producto_insumos.producto_id, productoId))
+		.orderBy(producto_insumos.orden);
+});
+
+export const guardarProductoInsumos = command(
+	v.object({
+		producto_id: v.number(),
+		insumos: v.array(
+			v.object({
+				insumo_id: v.number(),
+				cantidad: v.pipe(v.number(), v.toMinValue(0.0001)),
+				opcional: v.optional(v.boolean(), false)
+			})
+		)
+	}),
+	async ({ producto_id, insumos: receta }) => {
+		await db.transaction(async (tx) => {
+			await tx.delete(producto_insumos).where(eq(producto_insumos.producto_id, producto_id));
+			if (receta.length) {
+				await tx.insert(producto_insumos).values(
+					receta.map((linea, orden) => ({
+						producto_id,
+						insumo_id: linea.insumo_id,
+						cantidad: linea.cantidad,
+						orden,
+						opcional: linea.opcional
+					}))
+				);
+			}
+		});
+		getProductoInsumos(producto_id).refresh();
+		return { success: true };
 	}
 );
 

@@ -164,10 +164,10 @@
 					<th>Comentario</th>
 					<th class="text-center">Acciones</th>
 				{/snippet}
-				{#snippet rowUnidad(unidad)}
+				{#snippet rowUnidad(unidad: (typeof orden.unidades)[number])}
 					<td class="font-mono">{unidad.numero_serie}</td>
 					<td>
-						<span class="badge badge-sm" style="background-color: {unidad.estado?.color}">
+						<span class="badge badge-sm badge-{unidad.estado?.color}">
 							{unidad.estado?.nombre}
 						</span>
 					</td>
@@ -217,7 +217,7 @@
 					<th>Empleado</th>
 					<th>Comentario</th>
 				{/snippet}
-				{#snippet rowHistorial(log)}
+				{#snippet rowHistorial(log: (typeof historial)[number])}
 					<td class="font-mono">{log.unidad || '-'}</td>
 					<td>{log.fecha ? formatearFecha(new Date(log.fecha)) : '-'}</td>
 					<td>

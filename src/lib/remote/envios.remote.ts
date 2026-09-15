@@ -10,7 +10,7 @@ export const getTransportistas = query(async () => {
 
 export const getEnvios = query(
 	v.object({
-		estado: v.optional(v.string()),
+		estado: v.optional(v.picklist(['entregado', 'preparado', 'despachado'])),
 		page: v.optional(v.pipe(v.number(), v.minValue(1)), 1),
 		limit: v.optional(v.pipe(v.number(), v.minValue(1), v.maxValue(100)), 20)
 	}),
@@ -21,6 +21,7 @@ export const getEnvios = query(
 		const data = await db
 			.select({
 				id: envios.id,
+				pedido_id: envios.pedido_id,
 				numero_guia: envios.numero_guia,
 				estado: envios.estado,
 				fecha_envio: envios.fecha_envio,

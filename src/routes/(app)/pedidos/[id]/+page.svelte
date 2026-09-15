@@ -147,7 +147,7 @@
 							<th class="text-center">Acciones</th>
 						{/snippet}
 
-						{#snippet row(linea)}
+						{#snippet row(linea: (typeof lineas)[number])}
 							{#if linea.es_personalizado}
 								<td>
 									<span class="ml-2 badge badge-outline badge-sm">Personalizado</span>
@@ -224,7 +224,7 @@
 						<th>Empleado</th>
 						<th>Comentario</th>
 					{/snippet}
-					{#snippet rowHistorial(log)}
+					{#snippet rowHistorial(log: Awaited<ReturnType<typeof getHistorialPedido>>[number])}
 						<td>
 							{log.fecha ? formatearFecha(new Date(log.fecha)) : '-'}
 						</td>

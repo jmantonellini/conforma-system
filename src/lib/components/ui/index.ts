@@ -2,6 +2,7 @@ export { default as Alert } from './Alert.svelte';
 export { default as Breadcrumb } from './Breadcrumb.svelte';
 export { default as Card } from './Card.svelte';
 export { default as FormFieldWrapper } from './FormFieldWrapper.svelte';
+export { default as Highlight } from './Highlight.svelte';
 export { default as Modal } from './Modal.svelte';
 export { default as Pagination } from './Pagination.svelte';
 export { default as SearchBar } from './SearchBar.svelte';

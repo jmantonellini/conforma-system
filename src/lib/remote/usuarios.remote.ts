@@ -51,8 +51,10 @@ export const getUsuarios = query(async () => {
 			},
 			empleado: {
 				id: usuarios.empleado_id,
-				nombre: empleados.nombre
-			}
+				nombre: empleados.nombre,
+				apellido: empleados.apellido
+			},
+			empleado_id: usuarios.empleado_id
 		})
 		.from(usuarios)
 		.leftJoin(roles, eq(roles.id, usuarios.rol_id))

@@ -3,7 +3,8 @@
 		getModelos,
 		getCategoriasComp,
 		actualizarProducto,
-		eliminarProducto
+		eliminarProducto,
+		guardarProductoInsumos
 	} from '$lib/remote/productos.remote';
 	import { PageLayout, FormFieldWrapper, FormActions } from '$lib/components/ui';
 	import { toast } from '$lib/stores/toast.svelte';
@@ -35,6 +36,42 @@
 	);
 
 	let showDeleteModal = $state(false);
+	let receta = $state<{ insumo_id: string; cantidad: number; opcional: boolean }[]>([]);
+	$effect(() => {
+		receta = data.receta.map((linea) => ({
+			insumo_id: String(linea.insumo_id),
+			cantidad: linea.cantidad,
+			opcional: linea.opcional ?? false
+		}));
+	});
+	let costoReceta = $derived(
+		receta.reduce((total, linea) => {
+			const insumo = data.insumos.find((item) => item.id === Number(linea.insumo_id));
+			return total + (insumo?.costo_unitario ?? 0) * Number(linea.cantidad || 0);
+		}, 0)
+	);
+
+	function agregarInsumo() {
+		receta = [...receta, { insumo_id: '', cantidad: 1, opcional: false }];
+	}
+
+	async function guardarReceta() {
+		try {
+			await guardarProductoInsumos({
+				producto_id: data.producto.id,
+				insumos: receta
+					.filter((linea) => linea.insumo_id)
+					.map((linea) => ({
+						insumo_id: Number(linea.insumo_id),
+						cantidad: Number(linea.cantidad),
+						opcional: linea.opcional
+					}))
+			});
+			toast.success('Receta actualizada');
+		} catch {
+			toast.error('No se pudo guardar la receta');
+		}
+	}
 </script>
 
 <PageLayout>
@@ -246,6 +283,42 @@
 				</fieldset>
 			</div>
 		{/if}
+		<fieldset class="fieldset rounded-box border border-base-300 bg-base-200 p-4">
+			<legend class="fieldset-legend">Receta de insumos</legend>
+			<p class="mb-3 text-sm text-base-content/70">
+				Desglose interno para calcular el costo. Los cambios de precios se reflejan automáticamente.
+			</p>
+			{#each receta as linea, indice (indice)}
+				<div class="mb-2 grid gap-2 md:grid-cols-[1fr_8rem_auto_auto]">
+					<select class="select" bind:value={linea.insumo_id}>
+						<option value="">Seleccionar insumo...</option>
+						{#each data.insumos as insumo (insumo.id)}
+							<option value={String(insumo.id)}>{insumo.codigo} - {insumo.nombre}</option>
+						{/each}
+					</select>
+					<input class="input" type="number" min="0.0001" step="0.01" bind:value={linea.cantidad} />
+					<label class="label gap-2"
+						><input type="checkbox" class="checkbox" bind:checked={linea.opcional} /> Opcional</label
+					>
+					<button
+						class="btn btn-ghost text-error btn-sm"
+						type="button"
+						onclick={() => (receta = receta.filter((_, i) => i !== indice))}>Quitar</button
+					>
+				</div>
+			{/each}
+			<div class="flex items-center justify-between">
+				<button class="btn btn-outline btn-sm" type="button" onclick={agregarInsumo}
+					>+ Agregar insumo</button
+				>
+				<span class="font-semibold"
+					>Costo receta: ${costoReceta.toLocaleString('es-AR', { minimumFractionDigits: 2 })}</span
+				>
+			</div>
+			<button class="btn mt-3 self-end btn-primary" type="button" onclick={guardarReceta}
+				>Guardar receta</button
+			>
+		</fieldset>
 		<fieldset class="fieldset rounded-box border border-base-300 bg-base-200 p-4 lg:w-1/2">
 			<legend class="fieldset-legend">Observaciones</legend>
 			<FormFieldWrapper id="trombon_observaciones">
@@ -273,10 +346,10 @@
 	<dialog class="modal-open modal">
 		<div class="modal-box">
 			<h3 class="text-lg font-bold">Eliminar Pedido</h3>
-			<p class="py-4">¿Eliminar el pedido {producto?.id}?</p>
+			<p class="py-4">¿Eliminar el producto {data.producto?.id}?</p>
 			<div class="modal-action">
 				<button class="btn" onclick={() => (showDeleteModal = false)}>Cancelar</button>
-				<button class="btn btn-error" onclick={async () => eliminarProducto(producto?.id)}
+				<button class="btn btn-error" onclick={async () => eliminarProducto(data.producto?.id)}
 					>Eliminar</button
 				>
 			</div>

@@ -22,7 +22,7 @@ import {
 } from '$lib/server/db/schema';
 import { redirect } from '@sveltejs/kit';
 import { resolve } from '$app/paths';
-import { and, count, desc, eq, like, or, sql, aliasedTable } from 'drizzle-orm';
+import { and, count, desc, eq, ilike, or, sql, aliasedTable } from 'drizzle-orm';
 import { unlink } from 'fs/promises';
 import path from 'path';
 import { env } from '$env/dynamic/private';
@@ -153,11 +153,11 @@ export const getCotizaciones = query(
 			const term = `%${search}%`;
 			conditions.push(
 				or(
-					like(cotizaciones.numero_cotizacion, term),
-					like(cotizaciones.cliente_nombre, term),
-					like(clientes.nombre, term),
-					like(clientes.apellido, term),
-					like(clientes.razon_social, term)
+					ilike(cotizaciones.numero_cotizacion, term),
+					ilike(cotizaciones.cliente_nombre, term),
+					ilike(clientes.nombre, term),
+					ilike(clientes.apellido, term),
+					ilike(clientes.razon_social, term)
 				)
 			);
 		}

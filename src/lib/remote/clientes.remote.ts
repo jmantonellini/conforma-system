@@ -1,7 +1,7 @@
 import { query, command, form, requested } from '$app/server';
 import { db } from '$lib/server/db';
 import { clientes } from '$lib/server/db/schema';
-import { eq, count, or, like } from 'drizzle-orm';
+import { eq, count, or, ilike } from 'drizzle-orm';
 import * as v from 'valibot';
 import { ClienteSchemaBase } from './clientes.schema';
 
@@ -21,10 +21,10 @@ export const getClientes = query(
 		if (search && search.trim() !== '') {
 			const searchTerm = `%${search}%`;
 			whereCondition = or(
-				like(clientes.nombre, searchTerm),
-				like(clientes.apellido, searchTerm),
-				like(clientes.razon_social, searchTerm),
-				like(clientes.cuit, searchTerm)
+				ilike(clientes.nombre, searchTerm),
+				ilike(clientes.apellido, searchTerm),
+				ilike(clientes.razon_social, searchTerm),
+				ilike(clientes.cuit, searchTerm)
 			);
 		}
 
@@ -55,7 +55,7 @@ export const getClientes = query(
 export const getClienteById = query(v.object({ id: v.optional(v.number()) }), async ({ id }) => {
 	if (id == null) throw new Error('ID de cliente requerido');
 
-	const result = await db.select().from(clientes).where(eq(clientes.id, id)).get();
+	const [result] = await db.select().from(clientes).where(eq(clientes.id, id)).limit(1);
 
 	if (!result) throw new Error('Cliente no encontrado');
 	return result;

@@ -30,7 +30,7 @@ export const getEmpleados = query(async () => {
 export const getEmpleadoById = query(
 	v.pipe(v.string(), v.transform(Number), v.number()),
 	async (id) => {
-		const empleado = await db.select().from(empleados).where(eq(empleados.id, id)).get();
+		const [empleado] = await db.select().from(empleados).where(eq(empleados.id, id)).limit(1);
 
 		if (!empleado) throw new Error('Empleado no encontrado');
 		return empleado;

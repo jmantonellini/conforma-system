@@ -27,7 +27,7 @@ import {
 	exists,
 	gte,
 	inArray,
-	like,
+	ilike,
 	lte,
 	not,
 	or,
@@ -79,9 +79,9 @@ export const getPedidos = query(
 
 		let where = undefined;
 		if (search && estadoId) {
-			where = and(like(pedidos.numero_pedido, `%${search}%`), eq(pedidos.estado_id, estadoId));
+			where = and(ilike(pedidos.numero_pedido, `%${search}%`), eq(pedidos.estado_id, estadoId));
 		} else if (search) {
-			where = like(pedidos.numero_pedido, `%${search}%`);
+			where = ilike(pedidos.numero_pedido, `%${search}%`);
 		} else if (estadoId) {
 			where = eq(pedidos.estado_id, estadoId);
 		}

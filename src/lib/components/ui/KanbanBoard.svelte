@@ -3,13 +3,17 @@
 	import type { Tarea } from '$lib/server/db/schema';
 	import { EstadosTarea } from '$lib/types';
 
+	type TareaConEmpleado = Tarea & {
+		empleado?: { id: number | null; nombre: string | null; apellido?: string | null } | null;
+	};
+
 	let {
 		tareas = [],
 		onEstadoChange = () => {},
 		onReorder = () => {},
 		onEliminar = () => {}
 	}: {
-		tareas: Tarea[];
+		tareas: TareaConEmpleado[];
 		onEstadoChange?: (id: number, nuevoEstado: EstadosTarea) => void;
 		onReorder?: (tareas: { id: number; orden: number }[]) => void;
 		onEliminar?: (id: number) => void;
@@ -27,7 +31,7 @@
 			.sort((a, b) => (a.orden ?? 0) - (b.orden ?? 0));
 	}
 
-	function handleReorder(estado: EstadosTarea, items: Tarea[]) {
+	function handleReorder(estado: EstadosTarea, items: TareaConEmpleado[]) {
 		const updates = items.map((item, index) => ({
 			id: item.id,
 			orden: index,

@@ -74,7 +74,7 @@
 				<th>Progreso</th>
 			{/snippet}
 
-			{#snippet rowOrden(o)}
+			{#snippet rowOrden(o: (typeof ordenesActivas)[number])}
 				<td>
 					{#if o.prioridad === 2}
 						<span class="badge badge-error">Crítica</span>

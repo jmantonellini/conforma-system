@@ -7,6 +7,10 @@
 	import { Calendar, User } from './icons';
 	import { formatearFecha } from '$lib/utils/fechas';
 
+	type TareaConEmpleado = Tarea & {
+		empleado?: { id: number | null; nombre: string | null; apellido?: string | null } | null;
+	};
+
 	let {
 		estado,
 		titulo,
@@ -19,16 +23,16 @@
 		estado: EstadosTarea;
 		titulo: string;
 		color?: string;
-		tareas: Tarea[];
+		tareas: TareaConEmpleado[];
 		onEstadoChange?: (id: number, nuevoEstado: EstadosTarea) => void;
 		onEliminar?: (id: number) => void;
-		onReorder?: (items: Tarea[]) => void;
+		onReorder?: (items: TareaConEmpleado[]) => void;
 	} = $props();
 
 	let isDragOver = $state(false);
 	let dragOverId = $state<number | null>(null);
 
-	function onDragStart(event: DragEvent, tarea: Tarea) {
+	function onDragStart(event: DragEvent, tarea: TareaConEmpleado) {
 		event.dataTransfer!.effectAllowed = 'move';
 		event.dataTransfer!.setData(
 			'application/json',
@@ -65,7 +69,7 @@
 		onEstadoChange(id, estado);
 	}
 
-	function onDropReordenar(event: DragEvent, targetTarea: Tarea) {
+	function onDropReordenar(event: DragEvent, targetTarea: TareaConEmpleado) {
 		event.preventDefault();
 		event.stopPropagation();
 		isDragOver = false;

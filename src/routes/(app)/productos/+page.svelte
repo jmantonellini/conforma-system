@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { goto } from '$app/navigation';
 	import { resolve } from '$app/paths';
-	import { Table, SearchBar, Pagination } from '$lib/components/ui';
+	import { Highlight, Table, SearchBar, Pagination } from '$lib/components/ui';
 	import PageLayout from '$lib/components/ui/PageLayout.svelte';
 	import { Delete, Edit } from '$lib/components/ui/icons';
 	import { eliminarProducto } from '$lib/remote/productos.remote';
@@ -74,12 +74,15 @@
 				<th class="text-center">Acciones</th>
 			{/snippet}
 
-			{#snippet row(producto)}
-				<td class="font-mono text-sm">{producto.codigo}</td>
-				<td class="font-medium">{producto.nombre}</td>
-				<td>{categorias.find((c) => c.id === producto.categoria_id)?.nombre || '-'}</td>
-				<td>{producto.marca?.nombre}</td>
-				<td>{producto.modelo?.nombre}</td>
+			{#snippet row(producto: (typeof data.productos)[number])}
+				<td class="font-mono text-sm"><Highlight text={producto.codigo} query={search} /></td>
+				<td class="font-medium"><Highlight text={producto.nombre} query={search} /></td>
+				<td
+					>{categorias.find((c: (typeof categorias)[number]) => c.id === producto.categoria_id)
+						?.nombre || '-'}</td
+				>
+				<td><Highlight text={producto.marca?.nombre} query={search} /></td>
+				<td><Highlight text={producto.modelo?.nombre} query={search} /></td>
 				<td class="text-right">
 					{producto.precio_base ? `$${producto.precio_base.toLocaleString()}` : '-'}
 				</td>
@@ -89,7 +92,7 @@
 							<Edit />
 						</a>
 						<button
-							class="btn btn-circle text-error btn-ghost btn-sm"
+							class="btn btn-circle btn-ghost text-error btn-sm"
 							onclick={() => deleteProducto(producto.id)}
 						>
 							<Delete />

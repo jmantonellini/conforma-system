@@ -1,6 +1,5 @@
 <script lang="ts">
 	import { goto, invalidateAll } from '$app/navigation';
-	import { resolve } from '$app/paths';
 	import { getNotificaciones, marcarNotificacionesLeidas } from '$lib/remote/cotizaciones.remote';
 	import { formatearFecha } from '$lib/utils/fechas';
 
@@ -20,7 +19,7 @@
 	async function ir(n: { link: string | null }) {
 		abierto = false;
 		if (n.link) {
-			await goto(resolve(n.link));
+			await goto(n.link);
 			await invalidateAll();
 		}
 	}

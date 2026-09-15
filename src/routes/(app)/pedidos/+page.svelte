@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { goto } from '$app/navigation';
 	import { resolve } from '$app/paths';
-	import { Table, SearchBar, Pagination } from '$lib/components/ui';
+	import { Highlight, Table, SearchBar, Pagination } from '$lib/components/ui';
 	import PageLayout from '$lib/components/ui/PageLayout.svelte';
 	import { Eye } from '$lib/components/ui/icons';
 	import type { PageProps } from './$types';
@@ -52,12 +52,13 @@
 				<th class="text-center">Acciones</th>
 			{/snippet}
 
-			{#snippet row(pedido)}
-				<td class="font-mono text-sm">{pedido.numero_pedido}</td>
-				<td class="font-medium">{pedido.cliente_nombre || '-'}</td>
+			{#snippet row(pedido: (typeof data.pedidos)[number])}
+				<td class="font-mono text-sm"><Highlight text={pedido.numero_pedido} query={search} /></td>
+				<td class="font-medium"><Highlight text={pedido.cliente_nombre || '-'} query={search} /></td
+				>
 				<td>{formatearFecha(new Date(pedido.fecha_pedido))}</td>
-				<td class:text-error={pedido.fecha_entrega < new Date().toISOString()}>
-					{formatearFecha(new Date(pedido.fecha_entrega))}
+				<td class:text-error={pedido.fecha_entrega && pedido.fecha_entrega < new Date()}>
+					{pedido.fecha_entrega ? formatearFecha(new Date(pedido.fecha_entrega)) : '-'}
 				</td>
 				<td class="text-right font-medium">
 					${pedido.total?.toLocaleString() || 0}

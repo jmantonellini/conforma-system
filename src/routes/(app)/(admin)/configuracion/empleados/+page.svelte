@@ -65,7 +65,7 @@
 			<th class="text-center">Acciones</th>
 		{/snippet}
 
-		{#snippet row(empleado)}
+		{#snippet row(empleado: Awaited<typeof empleados>[number])}
 			<td class="font-medium">{empleado.nombre}</td>
 			<td>{empleado.apellido}</td>
 			<td>{empleado.telefono || '-'}</td>
@@ -158,10 +158,11 @@
 							class="input"
 							{...activeForm.fields?.fecha_ingreso?.as(
 								'date',
-								new Date(modal.empleado.fecha_ingreso).toISOString().split('T')[0] || ''
+								modal.empleado?.fecha_ingreso
+									? new Date(modal.empleado?.fecha_ingreso)?.toISOString().split('T')[0]
+									: new Date().toISOString().split('T')[0]
 							)}
 						/>
-						<!-- {modal.empleado?.fecha_ingreso} -->
 					</FormFieldWrapper>
 				</div>
 			</fieldset>

@@ -1,0 +1,1 @@
+ALTER TABLE "categorias_insumos" ADD CONSTRAINT "categorias_insumos_padre_id_categorias_insumos_id_fk" FOREIGN KEY ("padre_id") REFERENCES "public"."categorias_insumos"("id") ON DELETE set null ON UPDATE no action;

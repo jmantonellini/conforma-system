@@ -21,7 +21,7 @@
 <fieldset class="fieldset rounded-lg border p-4">
 	<legend class="text-md fieldset-legend px-2 font-semibold">Dirección</legend>
 
-	<div class="grid grid-cols-1 gap-4 md:grid-cols-2">
+	<div class="grid gap-4 md:grid-cols-2">
 		<!-- País (select) -->
 		<div class="flex w-full flex-col gap-2">
 			<label class="label" for="pais"> País </label>
@@ -82,7 +82,7 @@
 		</FormFieldWrapper>
 
 		<!-- Calle -->
-		<FormFieldWrapper id="calle" label="Calle">
+		<FormFieldWrapper class="col-span-2" id="calle" label="Calle">
 			<input
 				class="input"
 				{...form.fields?.calle?.as('text', initialData?.calle || '')}

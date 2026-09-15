@@ -4,7 +4,7 @@
 		getEstadosFabricacion,
 		eliminarOrdenFabricacion
 	} from '$lib/remote/fabricacion.remote';
-	import { Table, PageLayout, Pagination, Modal } from '$lib/components/ui';
+	import { Highlight, Table, PageLayout, Pagination, Modal } from '$lib/components/ui';
 	import { goto } from '$app/navigation';
 	import { SvelteURLSearchParams } from 'svelte/reactivity';
 	import { resolve } from '$app/paths';
@@ -17,6 +17,7 @@
 	let deleteOrdenId = $state('');
 	let estadoFilter = $derived(Number(page.url.searchParams.get('estado')) || 0);
 	let currentPage = $derived(Number(page.url.searchParams.get('page')) || 1);
+	let search = $state(page.url.searchParams.get('search') ?? '');
 
 	function closeModal() {
 		showModal = false;
@@ -24,6 +25,7 @@
 
 	let ordenesData = $derived(
 		await getOrdenesFabricacion({
+			search: search || undefined,
 			estado: estadoFilter || undefined,
 			page: currentPage
 		})
@@ -31,6 +33,7 @@
 
 	function handleSearch() {
 		const params = new SvelteURLSearchParams();
+		if (search) params.set('search', search);
 		if (estadoFilter) params.set('estado', String(estadoFilter));
 		if (currentPage > 1) params.set('page', String(currentPage));
 
@@ -41,6 +44,12 @@
 <PageLayout>
 	<div class="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
 		<div class="flex flex-1 flex-wrap gap-4">
+			<input
+				class="input w-72"
+				placeholder="Buscar orden, trabajo, cliente o producto"
+				bind:value={search}
+				oninput={handleSearch}
+			/>
 			<select bind:value={estadoFilter} class="select w-48" onchange={handleSearch}>
 				<option value={0}>Todos los estados</option>
 				{#each estados as e (e.id)}
@@ -63,22 +72,17 @@
 				<th class="text-center">Acciones</th>
 			{/snippet}
 
-			{#snippet row(orden)}
-				<td class="font-mono text-sm">OF-{orden.id}</td>
+			{#snippet row(orden: (typeof ordenesData.ordenes)[number])}
+				<td class="font-mono text-sm"><Highlight text={`OF-${orden.id}`} query={search} /></td>
 				<td>
 					<span
 						class={`badge badge-soft whitespace-nowrap capitalize badge-${orden.estado?.color}`}
 					>
 						{orden.estado?.nombre}
 					</span>
-					{#if orden.estado_comentario}
-						<span class="tooltip" data-tip={orden.estado_comentario}>
-							<span class="text-xs text-base-content/50">💬</span>
-						</span>
-					{/if}
 				</td>
-				<td class="font-medium">{orden.nombre_trabajo}</td>
-				<td>{orden.producto_nombre || '-'}</td>
+				<td class="font-medium"><Highlight text={orden.nombre_trabajo} query={search} /></td>
+				<td><Highlight text={orden.producto_nombre || '-'} query={search} /></td>
 				<td class="text-center">
 					<div class="flex items-center gap-2">
 						<progress

@@ -11,6 +11,7 @@ import {
 	jsonb,
 	uniqueIndex
 } from 'drizzle-orm/pg-core';
+import type { AnyPgColumn } from 'drizzle-orm/pg-core';
 import { sql } from 'drizzle-orm';
 import { EstadosTarea, Prioridades } from '$lib/types';
 
@@ -242,6 +243,52 @@ export const categorias_productos = pgTable('categorias_productos', {
 	created_at: timestamp('created_at').defaultNow()
 });
 
+export const tipos_insumo = pgTable('tipos_insumo', {
+	id: serial('id').primaryKey(),
+	codigo: text('codigo').notNull().unique(),
+	nombre: text('nombre').notNull().unique(),
+	activo: boolean('activo').default(true),
+	created_at: timestamp('created_at').defaultNow()
+});
+
+export const unidades_medida = pgTable('unidades_medida', {
+	id: serial('id').primaryKey(),
+	codigo: text('codigo').notNull().unique(),
+	nombre: text('nombre').notNull().unique(),
+	dimension: text('dimension').notNull(),
+	activo: boolean('activo').default(true),
+	created_at: timestamp('created_at').defaultNow()
+});
+
+export const categorias_insumos = pgTable('categorias_insumos', {
+	id: serial('id').primaryKey(),
+	nombre: text('nombre').notNull(),
+	descripcion: text('descripcion'),
+	padre_id: integer('padre_id').references((): AnyPgColumn => categorias_insumos.id, {
+		onDelete: 'set null'
+	}),
+	activo: boolean('activo').default(true),
+	created_at: timestamp('created_at').defaultNow()
+});
+
+export const insumos = pgTable('insumos', {
+	id: serial('id').primaryKey(),
+	codigo: text('codigo').notNull().unique(),
+	nombre: text('nombre').notNull(),
+	tipo_id: integer('tipo_id').references(() => tipos_insumo.id, { onDelete: 'restrict' }),
+	categoria_id: integer('categoria_id').references(() => categorias_insumos.id, {
+		onDelete: 'set null'
+	}),
+	unidad_id: integer('unidad_id').references(() => unidades_medida.id, { onDelete: 'restrict' }),
+	tipo: text('tipo').notNull().default('material'),
+	unidad: text('unidad').notNull().default('unidad'),
+	costo_unitario: real('costo_unitario').notNull().default(0),
+	activo: boolean('activo').default(true),
+	observaciones: text('observaciones'),
+	created_at: timestamp('created_at').defaultNow(),
+	updated_at: timestamp('updated_at').$onUpdate(() => new Date())
+});
+
 export const pedidos = pgTable('pedidos', {
 	id: serial('id').primaryKey(),
 	numero_pedido: text('numero_pedido').notNull().unique(),
@@ -384,6 +431,25 @@ export const productos = pgTable('productos', {
 	created_at: timestamp('created_at').defaultNow(),
 	updated_at: timestamp('updated_at').$onUpdate(() => new Date())
 });
+
+export const producto_insumos = pgTable(
+	'producto_insumos',
+	{
+		id: serial('id').primaryKey(),
+		producto_id: integer('producto_id')
+			.references(() => productos.id, { onDelete: 'cascade' })
+			.notNull(),
+		insumo_id: integer('insumo_id')
+			.references(() => insumos.id, { onDelete: 'restrict' })
+			.notNull(),
+		cantidad: real('cantidad').notNull().default(1),
+		orden: integer('orden').notNull().default(0),
+		opcional: boolean('opcional').default(false),
+		created_at: timestamp('created_at').defaultNow(),
+		updated_at: timestamp('updated_at').$onUpdate(() => new Date())
+	},
+	(table) => [index('idx_producto_insumos_producto').on(table.producto_id)]
+);
 
 // ============================================================
 // FABRICACIÓN
@@ -600,3 +666,5 @@ export type LogSistema = typeof logs_sistema.$inferSelect;
 export type Tarea = typeof tareas.$inferSelect;
 export type TipoMaterial = typeof tipos_material.$inferSelect;
 export type MaterialEmpleado = typeof materiales_empleados.$inferSelect;
+export type Insumos = typeof insumos.$inferSelect;
+export type ProductoInsumo = typeof producto_insumos.$inferSelect;

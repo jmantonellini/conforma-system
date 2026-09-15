@@ -75,7 +75,7 @@ export async function POST({ request, params }) {
 
 			// Procesar archivo
 			const buffer = Buffer.from(await file.arrayBuffer());
-			let finalBuffer = buffer;
+			let finalBuffer: Buffer<ArrayBufferLike> = buffer;
 			let finalExt = fileType.ext;
 			let finalMimeType = file.type;
 			let comprimido = false;

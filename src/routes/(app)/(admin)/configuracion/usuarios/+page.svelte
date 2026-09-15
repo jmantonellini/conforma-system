@@ -11,11 +11,19 @@
 	} from '$lib/remote/usuarios.remote';
 	import { toast } from '$lib/stores/toast.svelte';
 
+	type Usuario = {
+		id: number;
+		username: string;
+		empleado_id: number | null;
+		rol: { id: number | null; nombre: string | null } | null;
+		empleado: { id: number | null; nombre: string | null; apellido: string | null } | null;
+	};
+
 	let usuarios = getUsuarios();
 	let roles = await getRoles();
 	let empleados = await getEmpleadosSinUsuario();
 	let showModal = $state(false);
-	let editingUsuario = $state(null);
+	let editingUsuario = $state<Usuario | null>(null);
 	let activeForm = $derived(editingUsuario ? actualizarUsuario : crearUsuario);
 </script>
 
@@ -41,7 +49,7 @@
 			<th class="text-center">Acciones</th>
 		{/snippet}
 
-		{#snippet row(usuario)}
+		{#snippet row(usuario: Awaited<typeof usuarios>[number])}
 			<td class="font-medium">{usuario.username}</td>
 			<td>{usuario.rol?.nombre}</td>
 			<td>{usuario.empleado?.nombre}</td>

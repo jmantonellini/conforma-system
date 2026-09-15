@@ -11,7 +11,7 @@
 		eliminarAdjunto,
 		eliminarCotizacion
 	} from '$lib/remote/cotizaciones.remote';
-	import { getProductos } from '$lib/remote/productos.remote';
+	import { getProductoInsumos } from '$lib/remote/productos.remote';
 	import { formatearFecha } from '$lib/utils/fechas';
 	import type { PageProps } from './$types';
 	import { Paths } from '$lib/types';
@@ -61,7 +61,7 @@
 	}
 
 	// ── Cotización (líneas y precios) ──
-	let productos = await getProductos({ limit: 100 });
+	let productos = $derived(data.productos);
 	let validezDias = $derived(cotizacion.validez_dias ?? 15);
 	let lineas = $derived(
 		data.lineas.map((l: any) => ({
@@ -96,10 +96,15 @@
 	function eliminarLinea(idx: number) {
 		if (lineas.length > 1) lineas = lineas.filter((l: any) => l.idx !== idx);
 	}
-	function onProductoChange(l: any) {
+	async function onProductoChange(l: any) {
 		if (l.producto_id) {
-			const p = productos.data.find((p: any) => p.id.toString() === l.producto_id);
+			const p = productos.find((p: any) => p.id.toString() === l.producto_id);
 			if (p?.precio_base != null) l.precio_unitario = p.precio_base;
+			const receta = await getProductoInsumos(Number(l.producto_id));
+			l.costo_materiales = receta.reduce(
+				(total, insumo) => total + insumo.cantidad * insumo.costo_unitario,
+				0
+			);
 		}
 	}
 
@@ -327,7 +332,7 @@
 										onchange={() => onProductoChange(linea)}
 									>
 										<option value="">📝 Personalizado</option>
-										{#each productos.data as p (p.id)}
+										{#each productos as p (p.id)}
 											<option value={p.id.toString()}>{p.nombre}</option>
 										{/each}
 									</select>
@@ -383,23 +388,20 @@
 						</div>
 					{/each}
 
-					<div class="flex items-center justify-between">
-						<div class="flex items-center gap-4">
-							<label class="flex items-center gap-2 text-sm">
-								Validez (días)
-								<input
-									class="remove-arrow input w-20"
-									type="number"
-									min="1"
-									bind:value={validezDias}
-								/>
-							</label>
-							<p class="text-2xl font-bold">
-								${total.toLocaleString('es-AR', { minimumFractionDigits: 2 })}
-							</p>
-							<button class="btn btn-primary" onclick={guardarCotizacion}>Guardar cotización</button
-							>
-						</div>
+					<div class="flex items-center justify-end gap-4">
+						<label class="flex items-center gap-2 text-sm">
+							Validez (días)
+							<input
+								class="remove-arrow input w-20"
+								type="number"
+								min="1"
+								bind:value={validezDias}
+							/>
+						</label>
+						<p class="grow-0 text-2xl font-bold">
+							${total.toLocaleString('es-AR', { minimumFractionDigits: 2 })}
+						</p>
+						<button class="btn btn-primary" onclick={guardarCotizacion}>Guardar cotización</button>
 					</div>
 				</div>
 			</div>
@@ -460,7 +462,7 @@
 					<th>Empleado</th>
 					<th>Comentario</th>
 				{/snippet}
-				{#snippet rowHistorial(log)}
+				{#snippet rowHistorial(log: (typeof data.historial)[number])}
 					<td>
 						{log.fecha ? formatearFecha(new Date(log.fecha)) : '-'}
 					</td>
