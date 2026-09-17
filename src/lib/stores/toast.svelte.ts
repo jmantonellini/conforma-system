@@ -31,7 +31,7 @@ class ToastStore {
 	}
 
 	clearAll() {
-		for (const [_, timeout] of this.timeouts) clearTimeout(timeout);
+		for (const timeout of this.timeouts.values()) clearTimeout(timeout);
 		this.timeouts.clear();
 		this.toasts = [];
 	}

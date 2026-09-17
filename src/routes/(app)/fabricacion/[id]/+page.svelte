@@ -17,6 +17,14 @@
 	const historial = $derived(await getHistorialUnidades(Number(params.id)));
 
 	let isLoading = $state(false);
+	type InsumoRequerido = {
+		codigo: string;
+		nombre: string;
+		cantidad: number;
+		unidad: string;
+		costo_unitario?: number;
+	};
+	const insumosRequeridos = $derived((orden.insumos_requeridos ?? []) as InsumoRequerido[]);
 
 	let modal = $state({
 		open: false,
@@ -27,6 +35,8 @@
 	});
 
 	let comentario = $state('');
+
+	const esImagen = (mimeType: string | null) => mimeType?.startsWith('image/');
 
 	async function cambiarEstado(unidadId: number, estadoDestinoId: number, comentarioText?: string) {
 		if (isLoading) return;
@@ -151,6 +161,122 @@
 			<div class="stat bg-base-200">
 				<div class="stat-title">Asignado a</div>
 				<div class="stat-value text-lg">{orden.empleado?.nombre || 'Sin asignar'}</div>
+			</div>
+		</div>
+
+		<!-- Información técnica para fabricación -->
+		<div class="card bg-base-100 shadow">
+			<div class="card-body gap-6">
+				<div class="flex flex-wrap items-start justify-between gap-3">
+					<div>
+						<h3 class="card-title">Información para fabricar</h3>
+						<p class="text-sm text-base-content/70">
+							{orden.producto?.codigo ? `${orden.producto.codigo} · ` : ''}{orden.producto
+								?.nombre ||
+								orden.descripcion_producto ||
+								'Trabajo personalizado'}
+						</p>
+					</div>
+					{#if orden.producto}
+						<a class="btn btn-outline btn-sm" href={resolve(`/productos/${orden.producto.id}`)}>
+							Ver producto
+						</a>
+					{/if}
+				</div>
+
+				<div class="grid gap-6 lg:grid-cols-2">
+					{#if orden.producto}
+						<div>
+							<h4 class="mb-3 font-semibold">Medidas</h4>
+							<div class="grid gap-3 sm:grid-cols-2">
+								<div class="rounded-box bg-base-200 p-3">
+									<p class="text-sm text-base-content/60">Primario</p>
+									<p>
+										Diámetro: {orden.medidas?.primario_diametro ?? '-'} · Largo:
+										{orden.medidas?.primario_largo ?? '-'}
+									</p>
+								</div>
+								<div class="rounded-box bg-base-200 p-3">
+									<p class="text-sm text-base-content/60">Secundario</p>
+									<p>
+										Diámetro: {orden.medidas?.secundario_diametro ?? '-'} · Largo:
+										{orden.medidas?.secundario_largo ?? '-'}
+									</p>
+								</div>
+								<div class="rounded-box bg-base-200 p-3 sm:col-span-2">
+									<p class="text-sm text-base-content/60">Trombón</p>
+									<p>
+										Diámetro inicial: {orden.medidas?.trombon_diametro_inicial ?? '-'} · Largo:
+										{orden.medidas?.trombon_largo ?? '-'}
+									</p>
+									{#if orden.medidas?.trombon_observaciones}
+										<p class="mt-1 text-sm text-base-content/70">
+											{orden.medidas.trombon_observaciones}
+										</p>
+									{/if}
+								</div>
+							</div>
+						</div>
+					{/if}
+
+					<div>
+						<h4 class="mb-3 font-semibold">Insumos requeridos</h4>
+						{#if insumosRequeridos.length}
+							<ul class="divide-y divide-base-300 rounded-box border border-base-300">
+								{#each insumosRequeridos as insumo (insumo.codigo + insumo.nombre)}
+									<li class="flex items-center justify-between gap-3 p-3">
+										<span>
+											<span class="font-mono text-sm">{insumo.codigo}</span>
+											<span class="ml-2">{insumo.nombre}</span>
+										</span>
+										<span class="font-semibold whitespace-nowrap"
+											>{insumo.cantidad} {insumo.unidad}</span
+										>
+									</li>
+								{/each}
+							</ul>
+						{:else}
+							<p class="text-sm text-base-content/60">No hay una receta de insumos asociada.</p>
+						{/if}
+					</div>
+				</div>
+
+				<div>
+					<h4 class="mb-3 font-semibold">Planos y referencias visuales</h4>
+					{#if orden.adjuntos?.length}
+						<div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+							{#each orden.adjuntos as adjunto (adjunto.id)}
+								<a
+									href={adjunto.archivo_url}
+									target="_blank"
+									rel="noreferrer"
+									class="overflow-hidden rounded-box border border-base-300"
+								>
+									{#if esImagen(adjunto.mime_type)}
+										<img
+											src={adjunto.archivo_url}
+											alt={adjunto.nombre_original}
+											class="h-40 w-full object-cover"
+										/>
+									{:else}
+										<div
+											class="flex h-40 items-center justify-center bg-base-200 p-3 text-center text-sm"
+										>
+											{adjunto.nombre_original}
+										</div>
+									{/if}
+									<div class="truncate border-t border-base-300 p-2 text-xs">
+										{adjunto.nombre_original}
+									</div>
+								</a>
+							{/each}
+						</div>
+					{:else}
+						<p class="text-sm text-base-content/60">
+							No hay planos o referencias adjuntas a la cotización.
+						</p>
+					{/if}
+				</div>
 			</div>
 		</div>
 

@@ -3,7 +3,6 @@
 	import { resolve } from '$app/paths';
 	import Logo from '$lib/assets/Logo.png';
 	import { enviarFeedback, logout } from '$lib/remote/auth.remote';
-	import { getNotificaciones } from '$lib/remote/cotizaciones.remote';
 	import { toast } from '$lib/stores/toast.svelte';
 	import { Paths } from '$lib/types';
 	import CampanaNotificaciones from './CampanaNotificaciones.svelte';
@@ -12,7 +11,6 @@
 	let { session } = $props();
 	let modalOpen = $state(false);
 	let form = enviarFeedback;
-	let notificaciones = await getNotificaciones();
 
 	function openModal() {
 		modalOpen = true;

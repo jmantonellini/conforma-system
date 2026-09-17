@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { resolve } from '$app/paths';
-	import { Highlight, PageLayout, FormFieldWrapper, Table } from '$lib/components/ui';
+	import { Can, Highlight, PageLayout, FormFieldWrapper, Table } from '$lib/components/ui';
 	import { Delete, Edit, Excel } from '$lib/components/ui/icons';
 	import Modal from '$lib/components/ui/Modal.svelte';
 	import {
@@ -130,8 +130,12 @@
 				</select>
 			</div>
 			<div class="flex gap-3">
-				<button class="btn btn-outline" onclick={() => (modal = 'excel')}><Excel /> Excel</button>
-				<button class="btn btn-primary" onclick={() => (modal = 'crear')}>+ Nuevo insumo</button>
+				<Can modulo="insumos" accion="import">
+					<button class="btn btn-outline" onclick={() => (modal = 'excel')}><Excel /> Excel</button>
+				</Can>
+				<Can modulo="insumos" accion="create">
+					<button class="btn btn-primary" onclick={() => (modal = 'crear')}>+ Nuevo insumo</button>
+				</Can>
 			</div>
 		</div>
 
@@ -160,22 +164,26 @@
 					>
 					<td>
 						<div class="flex justify-center gap-2">
-							<a
-								class="btn btn-circle btn-ghost btn-sm"
-								title="Editar"
-								href={resolve(`/insumos/${insumo.id}`)}
-							>
-								<Edit />
-							</a>
-							<button
-								class="btn btn-circle btn-ghost text-error btn-sm"
-								title="Eliminar"
-								onclick={async () => {
-									await eliminarInsumo(insumo.id);
-									await refrescar();
-									toast.success('Insumo eliminado');
-								}}><Delete /></button
-							>
+							<Can modulo="insumos" accion="edit">
+								<a
+									class="btn btn-circle btn-ghost btn-sm"
+									title="Editar"
+									href={resolve(`/insumos/${insumo.id}`)}
+								>
+									<Edit />
+								</a>
+							</Can>
+							<Can modulo="insumos" accion="delete">
+								<button
+									class="btn btn-circle btn-ghost text-error btn-sm"
+									title="Eliminar"
+									onclick={async () => {
+										await eliminarInsumo(insumo.id);
+										await refrescar();
+										toast.success('Insumo eliminado');
+									}}><Delete /></button
+								>
+							</Can>
 						</div>
 					</td>
 				{/snippet}

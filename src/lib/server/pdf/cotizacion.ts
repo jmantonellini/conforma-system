@@ -1,8 +1,33 @@
 import { generate } from '@pdfme/generator';
-import { table, text } from '@pdfme/schemas';
+import { image, table, text } from '@pdfme/schemas';
 import { db } from '$lib/server/db';
-import { cotizaciones, lineas_cotizacion, productos, clientes } from '$lib/server/db/schema';
+import { cotizaciones, lineas_cotizacion, clientes } from '$lib/server/db/schema';
 import { eq } from 'drizzle-orm';
+import { readFile } from 'fs/promises';
+import path from 'path';
+import logoUrl from '$lib/assets/Logo.png';
+
+const BRAND_RED = '#ed1c24';
+
+async function cargarLogo() {
+	const assetPath = logoUrl.replace(/^\//, '');
+	const candidates = [
+		path.resolve('src/lib/assets/Logo.png'),
+		path.resolve('.svelte-kit/output/client', assetPath),
+		path.resolve('build/client', assetPath)
+	];
+
+	for (const candidate of candidates) {
+		try {
+			const content = await readFile(candidate);
+			return `data:image/png;base64,${content.toString('base64')}`;
+		} catch {
+			continue;
+		}
+	}
+
+	throw new Error('No se encontró el logo de Conforma');
+}
 
 // Template corregido para v6
 const template = {
@@ -14,6 +39,13 @@ const template = {
 	},
 	schemas: [
 		[
+			{
+				type: 'image',
+				position: { x: 20, y: 20 },
+				width: 75,
+				height: 20,
+				name: 'logo'
+			},
 			// Header
 			{
 				name: 'titulo',
@@ -22,7 +54,7 @@ const template = {
 				width: 70,
 				height: 10,
 				fontSize: 24,
-				fontColor: '#1e40af',
+				fontColor: BRAND_RED,
 				fontStyle: 'bold'
 			},
 			{
@@ -53,7 +85,7 @@ const template = {
 				width: 70,
 				height: 6,
 				fontSize: 10,
-				fontColor: '#1e40af',
+				fontColor: BRAND_RED,
 				fontStyle: 'bold',
 				name: 'clienteTitulo'
 			},
@@ -84,7 +116,7 @@ const template = {
 					lineHeight: 1,
 					characterSpacing: 0,
 					fontColor: '#ffffff',
-					backgroundColor: '#1e40af',
+					backgroundColor: BRAND_RED,
 					borderColor: '',
 					borderWidth: { top: 0, right: 0, bottom: 0, left: 0 },
 					padding: { top: 5, right: 5, bottom: 5, left: 5 }
@@ -124,7 +156,7 @@ const template = {
 				height: 8,
 				fontSize: 14,
 				fontStyle: 'bold',
-				fontColor: '#1e40af',
+				fontColor: BRAND_RED,
 				halign: 'right',
 				name: 'total'
 			},
@@ -175,10 +207,9 @@ export async function generarPDFCotizacion(cotizacionId: number): Promise<Uint8A
 			cantidad: lineas_cotizacion.cantidad,
 			precio: lineas_cotizacion.precio_unitario,
 			subtotal: lineas_cotizacion.subtotal,
-			producto_nombre: productos.nombre
+			descripcion_snapshot: lineas_cotizacion.descripcion
 		})
 		.from(lineas_cotizacion)
-		.leftJoin(productos, eq(lineas_cotizacion.producto_id, productos.id))
 		.where(eq(lineas_cotizacion.cotizacion_id, cotizacionId));
 
 	const total = lineas.reduce((s, l) => s + (l.subtotal ?? 0), 0);
@@ -190,8 +221,11 @@ export async function generarPDFCotizacion(cotizacionId: number): Promise<Uint8A
 	const vencimiento = new Date(cot.created_at ?? Date.now());
 	vencimiento.setDate(vencimiento.getDate() + (cot.validez_dias ?? 15));
 
+	const logo = await cargarLogo();
+
 	const inputs = [
 		{
+			logo,
 			titulo: 'COTIZACIÓN',
 			numero: cot.numero,
 			empresa:
@@ -199,7 +233,7 @@ export async function generarPDFCotizacion(cotizacionId: number): Promise<Uint8A
 			clienteTitulo: 'CLIENTE',
 			cliente: `${clienteNombre}\n${cot.cliente?.telefono ?? cot.cliente_telefono ?? ''}\n${cot.cliente?.direccion ?? ''}`,
 			table: lineas.map((l) => [
-				l.producto_nombre ?? l.descripcion,
+				l.descripcion_snapshot,
 				String(l.cantidad),
 				`$${l.precio?.toLocaleString('es-AR')}`,
 				`$${l.subtotal?.toLocaleString('es-AR')}`
@@ -214,5 +248,5 @@ export async function generarPDFCotizacion(cotizacionId: number): Promise<Uint8A
 	];
 
 	// generate devuelve Uint8Array, no Buffer
-	return await generate({ template, inputs, plugins: { text, table } });
+	return await generate({ template, inputs, plugins: { text, table, image } });
 }

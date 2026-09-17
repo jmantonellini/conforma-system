@@ -82,7 +82,9 @@
 					<div class="card-body">
 						<div class="flex items-center justify-between">
 							<h2 class="text-xl font-bold">{rolSeleccionado.nombre}</h2>
-							<button class="btn btn-sm btn-primary" onclick={guardar}> Guardar cambios </button>
+							<Can modulo="configuracion" accion="edit">
+								<button class="btn btn-primary btn-sm" onclick={guardar}> Guardar cambios </button>
+							</Can>
 						</div>
 
 						<div class="divider"></div>

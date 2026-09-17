@@ -1,69 +1,90 @@
 {
-  "version": "7",
-  "dialect": "postgresql",
-  "entries": [
-    {
-      "idx": 0,
-      "version": "7",
-      "when": 1784930068364,
-      "tag": "0000_worried_pet_avengers",
-      "breakpoints": true
-    },
-    {
-      "idx": 1,
-      "version": "7",
-      "when": 1786392151195,
-      "tag": "0001_gorgeous_clea",
-      "breakpoints": true
-    },
-    {
-      "idx": 2,
-      "version": "7",
-      "when": 1786563070371,
-      "tag": "0002_vengeful_demogoblin",
-      "breakpoints": true
-    },
-    {
-      "idx": 3,
-      "version": "7",
-      "when": 1786573993266,
-      "tag": "0003_brown_tomas",
-      "breakpoints": true
-    },
-    {
-      "idx": 4,
-      "version": "7",
-      "when": 1786574370469,
-      "tag": "0004_daily_bishop",
-      "breakpoints": true
-    },
-    {
-      "idx": 5,
-      "version": "7",
-      "when": 1789064319238,
-      "tag": "0005_bored_zarda",
-      "breakpoints": true
-    },
-    {
-      "idx": 6,
-      "version": "7",
-      "when": 1789495604122,
-      "tag": "0006_woozy_dagger",
-      "breakpoints": true
-    },
-    {
-      "idx": 7,
-      "version": "7",
-      "when": 1789501684735,
-      "tag": "0007_dizzy_donald_blake",
-      "breakpoints": true
-    },
-    {
-      "idx": 8,
-      "version": "7",
-      "when": 1789501702879,
-      "tag": "0008_polite_captain_cross",
-      "breakpoints": true
-    }
-  ]
+	"version": "7",
+	"dialect": "postgresql",
+	"entries": [
+		{
+			"idx": 0,
+			"version": "7",
+			"when": 1784930068364,
+			"tag": "0000_worried_pet_avengers",
+			"breakpoints": true
+		},
+		{
+			"idx": 1,
+			"version": "7",
+			"when": 1786392151195,
+			"tag": "0001_gorgeous_clea",
+			"breakpoints": true
+		},
+		{
+			"idx": 2,
+			"version": "7",
+			"when": 1786563070371,
+			"tag": "0002_vengeful_demogoblin",
+			"breakpoints": true
+		},
+		{
+			"idx": 3,
+			"version": "7",
+			"when": 1786573993266,
+			"tag": "0003_brown_tomas",
+			"breakpoints": true
+		},
+		{
+			"idx": 4,
+			"version": "7",
+			"when": 1786574370469,
+			"tag": "0004_daily_bishop",
+			"breakpoints": true
+		},
+		{
+			"idx": 5,
+			"version": "7",
+			"when": 1789064319238,
+			"tag": "0005_bored_zarda",
+			"breakpoints": true
+		},
+		{
+			"idx": 6,
+			"version": "7",
+			"when": 1789495604122,
+			"tag": "0006_woozy_dagger",
+			"breakpoints": true
+		},
+		{
+			"idx": 7,
+			"version": "7",
+			"when": 1789501684735,
+			"tag": "0007_dizzy_donald_blake",
+			"breakpoints": true
+		},
+		{
+			"idx": 8,
+			"version": "7",
+			"when": 1789501702879,
+			"tag": "0008_polite_captain_cross",
+			"breakpoints": true
+		},
+		{
+			"idx": 9,
+			"version": "7",
+			"when": 1789675506341,
+			"tag": "0009_nebulous_boom_boom",
+			"breakpoints": true
+		},
+		{
+			"idx": 10,
+			"version": "7",
+			"when": 1789678385398,
+			"tag": "0010_useful_unicorn",
+			"breakpoints": true
+		},
+		{
+			"idx": 11,
+			"version": "7",
+			"when": 1789679000000,
+			"tag": "0011_seed_permission_modules",
+			"breakpoints": true
+		}
+	]
 }

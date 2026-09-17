@@ -14,6 +14,7 @@ import {
 import { eq, count, and, ilike, or } from 'drizzle-orm';
 import * as v from 'valibot';
 import { ProductoSchema, ProductoSchemaUpdate } from './productos.schema';
+import { requirePermission } from '$lib/server/auth/permissions';
 
 // Query: productos con paginación
 export const getProductos = query(
@@ -119,37 +120,6 @@ export const getProductoInsumos = query(v.number(), async (productoId) => {
 		.orderBy(producto_insumos.orden);
 });
 
-export const guardarProductoInsumos = command(
-	v.object({
-		producto_id: v.number(),
-		insumos: v.array(
-			v.object({
-				insumo_id: v.number(),
-				cantidad: v.pipe(v.number(), v.toMinValue(0.0001)),
-				opcional: v.optional(v.boolean(), false)
-			})
-		)
-	}),
-	async ({ producto_id, insumos: receta }) => {
-		await db.transaction(async (tx) => {
-			await tx.delete(producto_insumos).where(eq(producto_insumos.producto_id, producto_id));
-			if (receta.length) {
-				await tx.insert(producto_insumos).values(
-					receta.map((linea, orden) => ({
-						producto_id,
-						insumo_id: linea.insumo_id,
-						cantidad: linea.cantidad,
-						orden,
-						opcional: linea.opcional
-					}))
-				);
-			}
-		});
-		getProductoInsumos(producto_id).refresh();
-		return { success: true };
-	}
-);
-
 // Query: categorías
 export const getCategorias = query(async () => {
 	return await db.select().from(categorias_productos).orderBy(categorias_productos.nombre);
@@ -157,6 +127,7 @@ export const getCategorias = query(async () => {
 
 // Form: crear producto
 export const crearProducto = form(ProductoSchema, async (data) => {
+	await requirePermission('productos', 'create');
 	const [producto] = await db
 		.insert(productos)
 		.values({
@@ -172,23 +143,53 @@ export const crearProducto = form(ProductoSchema, async (data) => {
 });
 
 export const actualizarProducto = form(ProductoSchemaUpdate, async (data) => {
-	const { id, ...updateData } = data;
+	await requirePermission('productos', 'edit');
+	const { id, receta: recetaJson, ...updateData } = data;
+	let receta: { insumo_id: number; cantidad: number; opcional: boolean }[] | undefined;
 
-	const [producto] = await db
-		.update(productos)
-		.set({
-			...updateData,
-			updated_at: new Date()
-		})
-		.where(eq(productos.id, Number(id)))
-		.returning();
+	if (recetaJson) {
+		try {
+			const parsed = JSON.parse(recetaJson);
+			if (!Array.isArray(parsed)) throw new Error();
+			receta = parsed
+				.filter((linea) => linea?.insumo_id)
+				.map((linea) => ({
+					insumo_id: Number(linea.insumo_id),
+					cantidad: Number(linea.cantidad),
+					opcional: Boolean(linea.opcional)
+				}));
+		} catch {
+			throw new Error('La receta del producto no es válida');
+		}
+	}
+
+	const producto = await db.transaction(async (tx) => {
+		const [actualizado] = await tx
+			.update(productos)
+			.set({ ...updateData, updated_at: new Date() })
+			.where(eq(productos.id, Number(id)))
+			.returning();
+
+		if (receta) {
+			await tx.delete(producto_insumos).where(eq(producto_insumos.producto_id, Number(id)));
+			if (receta.length) {
+				await tx
+					.insert(producto_insumos)
+					.values(receta.map((linea, orden) => ({ ...linea, producto_id: Number(id), orden })));
+			}
+		}
+
+		return actualizado;
+	});
 
 	getProductos({}).refresh();
+	getProductoInsumos(Number(id)).refresh();
 	return { success: true, producto };
 });
 
 // Command: eliminar producto
 export const eliminarProducto = command(v.number(), async (id) => {
+	await requirePermission('productos', 'delete');
 	await db.delete(productos).where(eq(productos.id, id));
 	await requested(getProductos, 1).refreshAll();
 	return { success: true };

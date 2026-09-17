@@ -1,5 +1,5 @@
 import * as v from 'valibot';
-import { query, form, command } from '$app/server';
+import { query, form, command, requested } from '$app/server';
 import { db } from '$lib/server/db';
 import {
 	ordenes_fabricacion,
@@ -7,6 +7,10 @@ import {
 	lineas_pedido,
 	pedidos,
 	productos,
+	insumos,
+	producto_insumos,
+	adjuntos_cotizacion,
+	cotizaciones,
 	estados_fabricacion,
 	empleados,
 	clientes,
@@ -125,23 +129,26 @@ export const getOrdenesFabricacion = query(
 		}
 
 		// Datos relacionados (cliente, producto, empleado)
-		const relacionados = await db
-			.select({
-				orden_id: ordenes_fabricacion.id,
-				pedido_id: pedidos.id,
-				pedido_numero: pedidos.numero_pedido,
-				cliente_nombre: clientes.nombre,
-				producto_nombre: productos.nombre,
-				empleado_nombre: empleados.nombre,
-				empleado_apellido: empleados.apellido
-			})
-			.from(ordenes_fabricacion)
-			.leftJoin(lineas_pedido, eq(ordenes_fabricacion.linea_pedido_id, lineas_pedido.id))
-			.leftJoin(pedidos, eq(lineas_pedido.pedido_id, pedidos.id))
-			.leftJoin(clientes, eq(pedidos.cliente_id, clientes.id))
-			.leftJoin(productos, eq(lineas_pedido.producto_id, productos.id))
-			.leftJoin(empleados, eq(ordenes_fabricacion.asignado_a, empleados.id))
-			.where(sql`${ordenes_fabricacion.id} IN ${ordenIds}`);
+		const relacionados =
+			ordenIds.length > 0
+				? await db
+						.select({
+							orden_id: ordenes_fabricacion.id,
+							pedido_id: pedidos.id,
+							pedido_numero: pedidos.numero_pedido,
+							cliente_nombre: clientes.nombre,
+							producto_nombre: productos.nombre,
+							empleado_nombre: empleados.nombre,
+							empleado_apellido: empleados.apellido
+						})
+						.from(ordenes_fabricacion)
+						.leftJoin(lineas_pedido, eq(ordenes_fabricacion.linea_pedido_id, lineas_pedido.id))
+						.leftJoin(pedidos, eq(lineas_pedido.pedido_id, pedidos.id))
+						.leftJoin(clientes, eq(pedidos.cliente_id, clientes.id))
+						.leftJoin(productos, eq(lineas_pedido.producto_id, productos.id))
+						.leftJoin(empleados, eq(ordenes_fabricacion.asignado_a, empleados.id))
+						.where(sql`${ordenes_fabricacion.id} IN ${ordenIds}`)
+				: [];
 
 		const relMap = new Map(relacionados.map((r) => [r.orden_id, r]));
 
@@ -217,6 +224,7 @@ export const getOrdenFabricacion = query(v.number(), async (id) => {
 				fecha_fin_estimada: ordenes_fabricacion.fecha_fin_estimada,
 				fecha_fin_real: ordenes_fabricacion.fecha_fin_real,
 				asignado_a: ordenes_fabricacion.asignado_a,
+				linea_pedido_id: ordenes_fabricacion.linea_pedido_id,
 				observaciones: ordenes_fabricacion.observaciones
 			})
 			.from(ordenes_fabricacion)
@@ -259,6 +267,78 @@ export const getOrdenFabricacion = query(v.number(), async (id) => {
 		.where(eq(ordenes_fabricacion.id, orden.id))
 		.then((rows) => rows[0]);
 
+	const [lineaTrabajo] = await db
+		.select({
+			pedido_id: lineas_pedido.pedido_id,
+			producto_id: lineas_pedido.producto_id,
+			descripcion: lineas_pedido.descripcion_personalizada,
+			insumos_snapshot: lineas_pedido.insumos_snapshot,
+			medidas: {
+				primario_diametro: lineas_pedido.medidas_primario_diametro,
+				primario_largo: lineas_pedido.medidas_primario_largo,
+				secundario_diametro: lineas_pedido.medidas_secundario_diametro,
+				secundario_largo: lineas_pedido.medidas_secundario_largo,
+				trombon_diametro_inicial: lineas_pedido.trombon_diametro_inicial,
+				trombon_largo: lineas_pedido.trombon_largo,
+				trombon_observaciones: lineas_pedido.trombon_observaciones
+			},
+			producto: {
+				id: productos.id,
+				nombre: productos.nombre,
+				codigo: productos.codigo,
+				medidas_primario_diametro: productos.medidas_primario_diametro,
+				medidas_primario_largo: productos.medidas_primario_largo,
+				medidas_secundario_diametro: productos.medidas_secundario_diametro,
+				medidas_secundario_largo: productos.medidas_secundario_largo,
+				trombon_diametro_inicial: productos.trombon_diametro_inicial,
+				trombon_largo: productos.trombon_largo,
+				trombon_observaciones: productos.trombon_observaciones
+			}
+		})
+		.from(lineas_pedido)
+		.leftJoin(productos, eq(lineas_pedido.producto_id, productos.id))
+		.where(eq(lineas_pedido.id, orden.linea_pedido_id))
+		.limit(1);
+
+	const recetaActual = lineaTrabajo?.producto_id
+		? await db
+				.select({
+					insumo_id: producto_insumos.insumo_id,
+					codigo: insumos.codigo,
+					nombre: insumos.nombre,
+					cantidad: producto_insumos.cantidad,
+					unidad: insumos.unidad,
+					costo_unitario: insumos.costo_unitario
+				})
+				.from(producto_insumos)
+				.innerJoin(insumos, eq(producto_insumos.insumo_id, insumos.id))
+				.where(eq(producto_insumos.producto_id, lineaTrabajo.producto_id))
+				.orderBy(producto_insumos.orden)
+		: [];
+
+	const adjuntos = lineaTrabajo?.pedido_id
+		? await db
+				.select({
+					id: adjuntos_cotizacion.id,
+					nombre_original: adjuntos_cotizacion.nombre_original,
+					archivo_url: adjuntos_cotizacion.archivo_url,
+					mime_type: adjuntos_cotizacion.mime_type
+				})
+				.from(adjuntos_cotizacion)
+				.innerJoin(cotizaciones, eq(cotizaciones.id, adjuntos_cotizacion.cotizacion_id))
+				.where(eq(cotizaciones.pedido_id, lineaTrabajo.pedido_id))
+				.orderBy(desc(adjuntos_cotizacion.id))
+		: [];
+
+	const medidasProducto = lineaTrabajo?.producto;
+	const medidas = Object.fromEntries(
+		Object.entries(lineaTrabajo?.medidas ?? {}).map(([key, value]) => [
+			key,
+			value ?? medidasProducto?.[key as keyof typeof medidasProducto] ?? null
+		])
+	);
+	const insumosRequeridos = lineaTrabajo?.insumos_snapshot ?? recetaActual;
+
 	const estadoCalculado = estadoOrdenFromUnidades(unidades, estados);
 	const cantidadProducida = unidades.filter(
 		(u) => estados.find((e) => e.id === u.estado_id)?.es_final
@@ -297,6 +377,11 @@ export const getOrdenFabricacion = query(v.number(), async (id) => {
 		pedido_numero: relacionados?.pedido_numero,
 		cliente_nombre: relacionados?.cliente_nombre,
 		producto_nombre: relacionados?.producto_nombre,
+		producto: lineaTrabajo?.producto ?? null,
+		descripcion_producto: lineaTrabajo?.descripcion ?? null,
+		medidas,
+		insumos_requeridos: insumosRequeridos,
+		adjuntos,
 		empleado: relacionados?.empleado_nombre
 			? {
 					nombre: relacionados.empleado_nombre,
@@ -663,7 +748,7 @@ export const eliminarOrdenFabricacion = command(
 			await tx.delete(ordenes_fabricacion).where(eq(ordenes_fabricacion.id, id));
 		});
 
-		getOrdenesFabricacion({}).refresh();
+		requested(getOrdenesFabricacion, 1).refreshAll();
 
 		return { success: true };
 	}

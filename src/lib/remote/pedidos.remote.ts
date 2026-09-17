@@ -1,5 +1,5 @@
 import * as v from 'valibot';
-import { command, form, query } from '$app/server';
+import { command, form, query, requested } from '$app/server';
 import { db } from '$lib/server/db';
 import {
 	pedidos,
@@ -35,6 +35,7 @@ import {
 	SQL
 } from 'drizzle-orm';
 import { getCurrentUser } from './usuarios.remote';
+import { requirePermission } from '$lib/server/auth/permissions';
 import { PEDIDO_SLUG } from '$lib/types';
 
 const LineaSchema = v.object({
@@ -358,6 +359,7 @@ export const cambiarEstadoPedido = command(
 		comentario: v.optional(v.string())
 	}),
 	async ({ pedido_id, estado_destino_id, comentario }) => {
+		await requirePermission('pedidos', 'edit');
 		const user = await getCurrentUser();
 		if (!user) throw new Error('No autorizado');
 
@@ -431,10 +433,11 @@ export const cambiarEstadoPedido = command(
 );
 
 export const eliminarPedido = command(v.number(), async (pedidoId) => {
+	await requirePermission('pedidos', 'delete');
 	await db.delete(pedidos).where(eq(pedidos.id, pedidoId));
 	await db.delete(lineas_pedido).where(eq(lineas_pedido.pedido_id, pedidoId));
 
-	getPedidos({ search: '', page: 1 }).refresh();
+	requested(getPedidos, 1).refreshAll();
 	return { success: true };
 });
 
@@ -449,6 +452,7 @@ export const eliminarEstadoPedido = command(v.number(), async (id) => {
 // ============================================================
 
 export const crearPedido = form(PedidoSchema, async (data) => {
+	await requirePermission('pedidos', 'create');
 	const user = await getCurrentUser();
 	if (!user) {
 		throw new Error('Usuario no autenticado');

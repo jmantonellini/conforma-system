@@ -98,31 +98,6 @@ export const actualizarEstadoTarea = command(
 	}
 );
 
-export const actualizarOrdenTareas = command(
-	v.object({
-		tareas: v.array(v.object({ id: v.number(), orden: v.number() }))
-	}),
-	async (data) => {
-		const user = await getCurrentUser();
-
-		if (!user) throw new Error('No autorizado');
-
-		for (const tarea of data.tareas) {
-			await db
-				.update(tareas)
-				.set({
-					orden: tarea.orden,
-					updated_at: new Date()
-				})
-				.where(eq(tareas.id, tarea.id));
-		}
-
-		getTareas().refresh();
-
-		return { success: true };
-	}
-);
-
 export const eliminarTarea = command(
 	v.pipe(v.string(), v.transform(Number), v.number()),
 	async (id) => {

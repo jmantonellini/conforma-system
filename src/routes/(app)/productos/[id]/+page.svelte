@@ -3,10 +3,9 @@
 		getModelos,
 		getCategoriasComp,
 		actualizarProducto,
-		eliminarProducto,
-		guardarProductoInsumos
+		eliminarProducto
 	} from '$lib/remote/productos.remote';
-	import { PageLayout, FormFieldWrapper, FormActions } from '$lib/components/ui';
+	import { Can, PageLayout, FormFieldWrapper, FormActions } from '$lib/components/ui';
 	import { toast } from '$lib/stores/toast.svelte';
 	import { goto } from '$app/navigation';
 	import { page } from '$app/state';
@@ -36,309 +35,315 @@
 	);
 
 	let showDeleteModal = $state(false);
-	let receta = $state<{ insumo_id: string; cantidad: number; opcional: boolean }[]>([]);
-	$effect(() => {
-		receta = data.receta.map((linea) => ({
+	let receta = $derived(
+		data.receta.map((linea) => ({
 			insumo_id: String(linea.insumo_id),
 			cantidad: linea.cantidad,
 			opcional: linea.opcional ?? false
-		}));
-	});
+		}))
+	);
 	let costoReceta = $derived(
 		receta.reduce((total, linea) => {
 			const insumo = data.insumos.find((item) => item.id === Number(linea.insumo_id));
 			return total + (insumo?.costo_unitario ?? 0) * Number(linea.cantidad || 0);
 		}, 0)
 	);
+	let precioBaseActual = $derived(
+		Number(form.fields.precio_base.value() ?? data.producto.precio_base ?? 0)
+	);
+	let precioConInsumos = $derived(precioBaseActual + costoReceta);
 
 	function agregarInsumo() {
 		receta = [...receta, { insumo_id: '', cantidad: 1, opcional: false }];
-	}
-
-	async function guardarReceta() {
-		try {
-			await guardarProductoInsumos({
-				producto_id: data.producto.id,
-				insumos: receta
-					.filter((linea) => linea.insumo_id)
-					.map((linea) => ({
-						insumo_id: Number(linea.insumo_id),
-						cantidad: Number(linea.cantidad),
-						opcional: linea.opcional
-					}))
-			});
-			toast.success('Receta actualizada');
-		} catch {
-			toast.error('No se pudo guardar la receta');
-		}
 	}
 </script>
 
 <PageLayout>
 	<div class="flex items-center justify-between">
 		<button onclick={() => history.back()} class="btn btn-ghost btn-sm">← Volver</button>
-		<button class="btn btn-outline btn-error btn-sm" onclick={() => (showDeleteModal = true)}
-			>Eliminar</button
-		>
+		<Can modulo="productos" accion="delete">
+			<button class="btn btn-outline btn-error btn-sm" onclick={() => (showDeleteModal = true)}
+				>Eliminar</button
+			>
+		</Can>
 	</div>
-	<form
-		{...form.enhance(async (formInstance) => {
-			try {
-				if (await formInstance.submit()) {
-					toast.success('Producto actualizado');
-					goto(resolve('/productos'));
-				} else {
-					toast.error('Error de validación');
+	<Can modulo="productos" accion="edit">
+		<form
+			{...form.enhance(async (formInstance) => {
+				try {
+					if (await formInstance.submit()) {
+						toast.success('Producto actualizado');
+						goto(resolve('/productos'));
+					} else {
+						toast.error('Error de validación');
+					}
+				} catch (error) {
+					console.log(error);
+					toast.error('Error del servidor');
 				}
-			} catch (error) {
-				console.log(error);
-				toast.error('Error del servidor');
-			}
-		})}
-		class="space-y-6"
-	>
-		<input type="hidden" name="id" value={page.params.id} />
+			})}
+			class="space-y-6"
+		>
+			<input type="hidden" name="id" value={page.params.id} />
+			<input type="hidden" name="receta" value={JSON.stringify(receta)} />
 
-		<!-- Datos básicos -->
-		<fieldset class="fieldset rounded-box border border-base-300 bg-base-200 p-4">
-			<legend class="fieldset-legend">Datos básicos</legend>
-			<div class="grid grid-cols-1 gap-4 md:grid-cols-4">
-				<FormFieldWrapper label="Código" id="codigo">
-					<input class="input" {...form.fields.codigo.as('text', data.producto.codigo)} />
-				</FormFieldWrapper>
-				<FormFieldWrapper label="Nombre" id="nombre">
-					<input class="input" {...form.fields.nombre.as('text', data.producto.nombre)} />
-				</FormFieldWrapper>
-
-				<FormFieldWrapper label="Categoría de producto" id="categoria_id">
-					<select
-						{...form.fields.categoria_id.as('select', String(data.producto.categoria_id))}
-						class="select w-full"
-					>
-						<option value="">Seleccionar...</option>
-						{#each categorias as cat (cat.id)}
-							<option value={String(cat.id)}>{cat.nombre}</option>
-						{/each}
-					</select>
-				</FormFieldWrapper>
-				<FormFieldWrapper label="Precio Base" id="precio_base">
-					<input
-						class="remove-arrow input"
-						step="0.01"
-						{...form.fields.precio_base.as('number', data.producto.precio_base ?? 0)}
-					/>
-				</FormFieldWrapper>
-			</div>
-		</fieldset>
-
-		<!-- Vehículo (solo si categoría es Escape) -->
-		{#if categoriaActual === '1'}
+			<!-- Datos básicos -->
 			<fieldset class="fieldset rounded-box border border-base-300 bg-base-200 p-4">
-				<legend class="fieldset-legend">Vehículo</legend>
-				<div class="grid grid-cols-1 gap-4 md:grid-cols-3">
-					<FormFieldWrapper label="Tipo" id="tipo_vehiculo_id">
-						<select
-							{...form.fields.tipo_vehiculo_id.as('select', String(data.producto.tipo_vehiculo_id))}
-							class="select w-full"
-						>
-							<option value="">Seleccionar...</option>
-							{#each tiposVehiculo as tv (tv.id)}
-								<option value={String(tv.id)}>{tv.nombre}</option>
-							{/each}
-						</select>
+				<legend class="fieldset-legend">Datos básicos</legend>
+				<div class="grid grid-cols-1 gap-4 md:grid-cols-4">
+					<FormFieldWrapper label="Código" id="codigo">
+						<input class="input" {...form.fields.codigo.as('text', data.producto.codigo)} />
+					</FormFieldWrapper>
+					<FormFieldWrapper label="Nombre" id="nombre">
+						<input class="input" {...form.fields.nombre.as('text', data.producto.nombre)} />
 					</FormFieldWrapper>
 
-					<FormFieldWrapper label="Marca" id="marca_id">
+					<FormFieldWrapper label="Categoría de producto" id="categoria_id">
 						<select
-							{...form.fields.marca_id.as('select', String(data.producto.marca_id))}
+							{...form.fields.categoria_id.as('select', String(data.producto.categoria_id))}
 							class="select w-full"
-							disabled={!tipoVehiculoActual}
 						>
 							<option value="">Seleccionar...</option>
-							{#each marcas as m (m.id)}
-								<option value={String(m.id)}>
-									{#if m.logo_url}<img
-											src={m.logo_url}
-											alt={m.nombre}
-											class="h-5 w-5 object-contain"
-										/>
-									{/if}
-									{m.nombre}</option
-								>
+							{#each categorias as cat (cat.id)}
+								<option value={String(cat.id)}>{cat.nombre}</option>
 							{/each}
 						</select>
 					</FormFieldWrapper>
-
-					<FormFieldWrapper label="Modelo" id="modelo_id">
-						<select
-							{...form.fields.modelo_id.as('select', String(data.producto.modelo_id))}
-							class="select w-full"
-							disabled={!marcaActual}
-						>
-							<option value="">Seleccionar...</option>
-							{#each await getModelos(Number(marcaActual)) as mod (mod.id)}
-								<option value={String(mod.id)}>{mod.nombre}</option>
-							{/each}
-						</select>
+					<FormFieldWrapper label="Precio base (mano de obra / margen)" id="precio_base">
+						<input
+							class="remove-arrow input"
+							step="0.01"
+							{...form.fields.precio_base.as('number', data.producto.precio_base ?? 0)}
+						/>
 					</FormFieldWrapper>
+					<div class="stat rounded-box border border-primary/30 bg-primary/5 p-3">
+						<div class="stat-title">Precio con insumos</div>
+						<div class="stat-value text-2xl text-primary">
+							${precioConInsumos.toLocaleString('es-AR', { minimumFractionDigits: 2 })}
+						</div>
+						<div class="stat-desc">Base + costo actual de la receta</div>
+					</div>
 				</div>
+			</fieldset>
 
-				<div class="grid grid-cols-1 gap-4 md:grid-cols-2">
-					<FormFieldWrapper label="Tipo de uso" id="tipo_uso_id">
-						<select
-							{...form.fields.tipo_uso_id.as('select', String(data.producto.tipo_uso_id))}
-							class="select w-full"
-						>
-							<option value="">Seleccionar...</option>
-							{#each tiposUso as tu (tu.id)}
-								<option value={String(tu.id)}>{tu.nombre}</option>
-							{/each}
-						</select>
-					</FormFieldWrapper>
-
-					{#if tipoUsoActual === '2'}
-						<FormFieldWrapper label="Categoría de competencia" id="categoria_competencia_id">
+			<!-- Vehículo (solo si categoría es Escape) -->
+			{#if categoriaActual === '1'}
+				<fieldset class="fieldset rounded-box border border-base-300 bg-base-200 p-4">
+					<legend class="fieldset-legend">Vehículo</legend>
+					<div class="grid grid-cols-1 gap-4 md:grid-cols-3">
+						<FormFieldWrapper label="Tipo" id="tipo_vehiculo_id">
 							<select
-								{...form.fields.categoria_competencia_id.as(
+								{...form.fields.tipo_vehiculo_id.as(
 									'select',
-									String(data.producto.categoria_competencia_id)
+									String(data.producto.tipo_vehiculo_id)
 								)}
 								class="select w-full"
 							>
 								<option value="">Seleccionar...</option>
-								{#each await getCategoriasComp(Number(tipoVehiculoActual)) as cat (cat.id)}
-									<option value={String(cat.id)}>{cat.nombre}</option>
+								{#each tiposVehiculo as tv (tv.id)}
+									<option value={String(tv.id)}>{tv.nombre}</option>
 								{/each}
 							</select>
 						</FormFieldWrapper>
-					{/if}
+
+						<FormFieldWrapper label="Marca" id="marca_id">
+							<select
+								{...form.fields.marca_id.as('select', String(data.producto.marca_id))}
+								class="select w-full"
+								disabled={!tipoVehiculoActual}
+							>
+								<option value="">Seleccionar...</option>
+								{#each marcas as m (m.id)}
+									<option value={String(m.id)}>
+										{#if m.logo_url}<img
+												src={m.logo_url}
+												alt={m.nombre}
+												class="h-5 w-5 object-contain"
+											/>
+										{/if}
+										{m.nombre}</option
+									>
+								{/each}
+							</select>
+						</FormFieldWrapper>
+
+						<FormFieldWrapper label="Modelo" id="modelo_id">
+							<select
+								{...form.fields.modelo_id.as('select', String(data.producto.modelo_id))}
+								class="select w-full"
+								disabled={!marcaActual}
+							>
+								<option value="">Seleccionar...</option>
+								{#each await getModelos(Number(marcaActual)) as mod (mod.id)}
+									<option value={String(mod.id)}>{mod.nombre}</option>
+								{/each}
+							</select>
+						</FormFieldWrapper>
+					</div>
+
+					<div class="grid grid-cols-1 gap-4 md:grid-cols-2">
+						<FormFieldWrapper label="Tipo de uso" id="tipo_uso_id">
+							<select
+								{...form.fields.tipo_uso_id.as('select', String(data.producto.tipo_uso_id))}
+								class="select w-full"
+							>
+								<option value="">Seleccionar...</option>
+								{#each tiposUso as tu (tu.id)}
+									<option value={String(tu.id)}>{tu.nombre}</option>
+								{/each}
+							</select>
+						</FormFieldWrapper>
+
+						{#if tipoUsoActual === '2'}
+							<FormFieldWrapper label="Categoría de competencia" id="categoria_competencia_id">
+								<select
+									{...form.fields.categoria_competencia_id.as(
+										'select',
+										String(data.producto.categoria_competencia_id)
+									)}
+									class="select w-full"
+								>
+									<option value="">Seleccionar...</option>
+									{#each await getCategoriasComp(Number(tipoVehiculoActual)) as cat (cat.id)}
+										<option value={String(cat.id)}>{cat.nombre}</option>
+									{/each}
+								</select>
+							</FormFieldWrapper>
+						{/if}
+					</div>
+				</fieldset>
+
+				<div class="flex flex-col gap-4 lg:flex-row">
+					<!-- Medidas (solo si es Escape) -->
+					<fieldset class="fieldset rounded-box border border-base-300 bg-base-200 p-4 lg:w-1/3">
+						<legend class="fieldset-legend">Medidas Primario</legend>
+						<div class="grid grid-cols-2 gap-4">
+							<FormFieldWrapper label="Diámetro" id="medidas_primario_diametro">
+								<input
+									class="remove-arrow input"
+									{...form.fields.medidas_primario_diametro.as(
+										'number',
+										data.producto.medidas_primario_diametro ?? 0
+									)}
+								/>
+							</FormFieldWrapper>
+							<FormFieldWrapper label="Largo" id="medidas_primario_largo">
+								<input
+									class="remove-arrow input"
+									{...form.fields.medidas_primario_largo.as(
+										'number',
+										data.producto.medidas_primario_largo ?? 0
+									)}
+								/>
+							</FormFieldWrapper>
+						</div>
+					</fieldset>
+
+					<fieldset class="fieldset rounded-box border border-base-300 bg-base-200 p-4 lg:w-1/3">
+						<legend class="fieldset-legend">Medidas Secundario</legend>
+						<div class="grid grid-cols-2 gap-4">
+							<FormFieldWrapper label="Diámetro" id="medidas_secundario_diametro">
+								<input
+									class="remove-arrow input"
+									{...form.fields.medidas_secundario_diametro.as(
+										'number',
+										data.producto.medidas_secundario_diametro ?? 0
+									)}
+								/>
+							</FormFieldWrapper>
+							<FormFieldWrapper label="Largo" id="medidas_secundario_largo">
+								<input
+									class="remove-arrow input"
+									{...form.fields.medidas_secundario_largo.as(
+										'number',
+										data.producto.medidas_secundario_largo ?? 0
+									)}
+								/>
+							</FormFieldWrapper>
+						</div>
+					</fieldset>
+					<fieldset class="fieldset rounded-box border border-base-300 bg-base-200 p-4 lg:w-1/3">
+						<legend class="fieldset-legend">Trombon</legend>
+						<div class="grid grid-cols-2 gap-4">
+							<FormFieldWrapper label="Diámetro Inicial" id="trombon_diametro_inicial">
+								<input
+									class="remove-arrow input"
+									{...form.fields.trombon_diametro_inicial.as(
+										'number',
+										data.producto.trombon_diametro_inicial ?? 0
+									)}
+								/>
+							</FormFieldWrapper>
+							<FormFieldWrapper label="Largo" id="trombon_largo">
+								<input class="remove-arrow input" {...form.fields.trombon_largo.as('number')} />
+							</FormFieldWrapper>
+						</div>
+					</fieldset>
+				</div>
+			{/if}
+			<fieldset class="fieldset rounded-box border border-base-300 bg-base-200 p-4">
+				<legend class="fieldset-legend">Receta de insumos</legend>
+				<p class="mb-3 text-sm text-base-content/70">
+					Desglose interno para calcular el costo. Las cotizaciones guardadas conservan los valores
+					usados en ese momento.
+				</p>
+				{#each receta as linea, indice (indice)}
+					<div class="mb-2 grid gap-2 md:grid-cols-[1fr_8rem_auto_auto]">
+						<select class="select" bind:value={linea.insumo_id}>
+							<option value="">Seleccionar insumo...</option>
+							{#each data.insumos as insumo (insumo.id)}
+								<option value={String(insumo.id)}>{insumo.codigo} - {insumo.nombre}</option>
+							{/each}
+						</select>
+						<input
+							class="input"
+							type="number"
+							min="0.0001"
+							step="0.01"
+							bind:value={linea.cantidad}
+						/>
+						<label class="label gap-2"
+							><input type="checkbox" class="checkbox" bind:checked={linea.opcional} /> Opcional</label
+						>
+						<button
+							class="btn btn-ghost text-error btn-sm"
+							type="button"
+							onclick={() => (receta = receta.filter((_, i) => i !== indice))}>Quitar</button
+						>
+					</div>
+				{/each}
+				<div class="flex items-center justify-between">
+					<button class="btn btn-outline btn-sm" type="button" onclick={agregarInsumo}
+						>+ Agregar insumo</button
+					>
+					<span class="font-semibold"
+						>Costo insumos: ${costoReceta.toLocaleString('es-AR', {
+							minimumFractionDigits: 2
+						})}</span
+					>
 				</div>
 			</fieldset>
+			<fieldset class="fieldset rounded-box border border-base-300 bg-base-200 p-4 lg:w-1/2">
+				<legend class="fieldset-legend">Observaciones</legend>
+				<FormFieldWrapper id="trombon_observaciones">
+					<textarea
+						class="textarea w-full resize-none"
+						rows={3}
+						{...form.fields.trombon_observaciones.as(
+							'text',
+							data.producto.trombon_observaciones ?? ''
+						)}
+					></textarea>
+				</FormFieldWrapper>
+			</fieldset>
 
-			<div class="flex flex-col gap-4 lg:flex-row">
-				<!-- Medidas (solo si es Escape) -->
-				<fieldset class="fieldset rounded-box border border-base-300 bg-base-200 p-4 lg:w-1/3">
-					<legend class="fieldset-legend">Medidas Primario</legend>
-					<div class="grid grid-cols-2 gap-4">
-						<FormFieldWrapper label="Diámetro" id="medidas_primario_diametro">
-							<input
-								class="remove-arrow input"
-								{...form.fields.medidas_primario_diametro.as(
-									'number',
-									data.producto.medidas_primario_diametro ?? 0
-								)}
-							/>
-						</FormFieldWrapper>
-						<FormFieldWrapper label="Largo" id="medidas_primario_largo">
-							<input
-								class="remove-arrow input"
-								{...form.fields.medidas_primario_largo.as(
-									'number',
-									data.producto.medidas_primario_largo ?? 0
-								)}
-							/>
-						</FormFieldWrapper>
-					</div>
-				</fieldset>
-
-				<fieldset class="fieldset rounded-box border border-base-300 bg-base-200 p-4 lg:w-1/3">
-					<legend class="fieldset-legend">Medidas Secundario</legend>
-					<div class="grid grid-cols-2 gap-4">
-						<FormFieldWrapper label="Diámetro" id="medidas_secundario_diametro">
-							<input
-								class="remove-arrow input"
-								{...form.fields.medidas_secundario_diametro.as(
-									'number',
-									data.producto.medidas_secundario_diametro ?? 0
-								)}
-							/>
-						</FormFieldWrapper>
-						<FormFieldWrapper label="Largo" id="medidas_secundario_largo">
-							<input
-								class="remove-arrow input"
-								{...form.fields.medidas_secundario_largo.as(
-									'number',
-									data.producto.medidas_secundario_largo ?? 0
-								)}
-							/>
-						</FormFieldWrapper>
-					</div>
-				</fieldset>
-				<fieldset class="fieldset rounded-box border border-base-300 bg-base-200 p-4 lg:w-1/3">
-					<legend class="fieldset-legend">Trombon</legend>
-					<div class="grid grid-cols-2 gap-4">
-						<FormFieldWrapper label="Diámetro Inicial" id="trombon_diametro_inicial">
-							<input
-								class="remove-arrow input"
-								{...form.fields.trombon_diametro_inicial.as(
-									'number',
-									data.producto.trombon_diametro_inicial ?? 0
-								)}
-							/>
-						</FormFieldWrapper>
-						<FormFieldWrapper label="Largo" id="trombon_largo">
-							<input class="remove-arrow input" {...form.fields.trombon_largo.as('number')} />
-						</FormFieldWrapper>
-					</div>
-				</fieldset>
-			</div>
-		{/if}
-		<fieldset class="fieldset rounded-box border border-base-300 bg-base-200 p-4">
-			<legend class="fieldset-legend">Receta de insumos</legend>
-			<p class="mb-3 text-sm text-base-content/70">
-				Desglose interno para calcular el costo. Los cambios de precios se reflejan automáticamente.
-			</p>
-			{#each receta as linea, indice (indice)}
-				<div class="mb-2 grid gap-2 md:grid-cols-[1fr_8rem_auto_auto]">
-					<select class="select" bind:value={linea.insumo_id}>
-						<option value="">Seleccionar insumo...</option>
-						{#each data.insumos as insumo (insumo.id)}
-							<option value={String(insumo.id)}>{insumo.codigo} - {insumo.nombre}</option>
-						{/each}
-					</select>
-					<input class="input" type="number" min="0.0001" step="0.01" bind:value={linea.cantidad} />
-					<label class="label gap-2"
-						><input type="checkbox" class="checkbox" bind:checked={linea.opcional} /> Opcional</label
-					>
-					<button
-						class="btn btn-ghost text-error btn-sm"
-						type="button"
-						onclick={() => (receta = receta.filter((_, i) => i !== indice))}>Quitar</button
-					>
-				</div>
-			{/each}
-			<div class="flex items-center justify-between">
-				<button class="btn btn-outline btn-sm" type="button" onclick={agregarInsumo}
-					>+ Agregar insumo</button
-				>
-				<span class="font-semibold"
-					>Costo receta: ${costoReceta.toLocaleString('es-AR', { minimumFractionDigits: 2 })}</span
-				>
-			</div>
-			<button class="btn mt-3 self-end btn-primary" type="button" onclick={guardarReceta}
-				>Guardar receta</button
-			>
-		</fieldset>
-		<fieldset class="fieldset rounded-box border border-base-300 bg-base-200 p-4 lg:w-1/2">
-			<legend class="fieldset-legend">Observaciones</legend>
-			<FormFieldWrapper id="trombon_observaciones">
-				<textarea
-					class="textarea w-full resize-none"
-					rows={3}
-					{...form.fields.trombon_observaciones.as(
-						'text',
-						data.producto.trombon_observaciones ?? ''
-					)}
-				></textarea>
-			</FormFieldWrapper>
-		</fieldset>
-
-		<FormActions
-			cancelHref="/productos"
-			pending={!!form.pending}
-			submitText="Actualizar Producto"
-		/>
-	</form>
+			<FormActions
+				cancelHref="/productos"
+				pending={!!form.pending}
+				submitText="Actualizar Producto"
+			/>
+		</form>
+	</Can>
 </PageLayout>
 
 <!-- Modal eliminar -->

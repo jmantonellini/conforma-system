@@ -11,7 +11,7 @@
 		return href && page.url.pathname.startsWith(href);
 	}
 
-	function handleTabClick(tab: { subtabs?: unknown[] }, e: MouseEvent) {
+	function handleTabClick(tab: { subtabs?: unknown[] }) {
 		if (!drawerOpen && tab.subtabs && tab.subtabs.length > 0) {
 			drawerOpen = true;
 		}
@@ -50,7 +50,7 @@
 				{#each tabs ?? [] as tab (tab.href)}
 					<a
 						href={tab.href}
-						onclick={(e) => handleTabClick(tab, e)}
+						onclick={() => handleTabClick(tab)}
 						class="flex w-full items-center gap-4 rounded px-4 py-2 text-sm whitespace-nowrap hover:bg-gray-200"
 						class:bg-gray-300={isActive(tab.href)}
 						class:text-primary={isActive(tab.href)}

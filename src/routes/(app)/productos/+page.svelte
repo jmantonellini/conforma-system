@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { goto } from '$app/navigation';
 	import { resolve } from '$app/paths';
-	import { Highlight, Table, SearchBar, Pagination } from '$lib/components/ui';
+	import { Can, Highlight, Table, SearchBar, Pagination } from '$lib/components/ui';
 	import PageLayout from '$lib/components/ui/PageLayout.svelte';
 	import { Delete, Edit } from '$lib/components/ui/icons';
 	import { eliminarProducto } from '$lib/remote/productos.remote';
@@ -59,7 +59,9 @@
 				{/each}
 			</select>
 		</div>
-		<a class="btn btn-primary" href={resolve('/productos/crear')}>+ Nuevo Producto</a>
+		<Can modulo="productos" accion="create">
+			<a class="btn btn-primary" href={resolve('/productos/crear')}>+ Nuevo Producto</a>
+		</Can>
 	</div>
 
 	<div class="card bg-base-100 shadow">
@@ -88,15 +90,22 @@
 				</td>
 				<td class="text-center">
 					<div class="flex justify-center gap-2">
-						<a class="btn btn-circle btn-ghost btn-sm" href={resolve(`/productos/${producto.id}`)}>
-							<Edit />
-						</a>
-						<button
-							class="btn btn-circle btn-ghost text-error btn-sm"
-							onclick={() => deleteProducto(producto.id)}
-						>
-							<Delete />
-						</button>
+						<Can modulo="productos" accion="edit">
+							<a
+								class="btn btn-circle btn-ghost btn-sm"
+								href={resolve(`/productos/${producto.id}`)}
+							>
+								<Edit />
+							</a>
+						</Can>
+						<Can modulo="productos" accion="delete">
+							<button
+								class="btn btn-circle btn-ghost text-error btn-sm"
+								onclick={() => deleteProducto(producto.id)}
+							>
+								<Delete />
+							</button>
+						</Can>
 					</div>
 				</td>
 			{/snippet}

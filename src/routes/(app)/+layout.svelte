@@ -22,14 +22,30 @@
 	// === Tabs calculados desde data (única fuente de verdad) ===
 	const tabs = $derived([
 		{ href: Paths.TAREAS, label: 'Tareas', icon: Rocket },
-		{ href: Paths.COTIZACIONES, label: 'Cotizaciones', icon: Price },
-		{ href: Paths.PEDIDOS, label: 'Pedidos', icon: Pedido },
-		{ href: Paths.FABRICACION, label: 'Fabricación', icon: Fabricacion },
-		{ href: Paths.CLIENTES, label: 'Clientes', icon: Users },
-		{ href: Paths.PRODUCTOS, label: 'Productos', icon: Producto },
-		{ href: Paths.INSUMOS, label: 'Insumos', icon: Puzzle },
-		{ href: Paths.INVENTARIO, label: 'Inventario', icon: Stock },
-		{ href: Paths.ENVIOS, label: 'Envíos', icon: Truck },
+		...(can(data.user, data.permisos, Modulos.COTIZACIONES)
+			? [{ href: Paths.COTIZACIONES, label: 'Cotizaciones', icon: Price }]
+			: []),
+		...(can(data.user, data.permisos, Modulos.PEDIDOS)
+			? [{ href: Paths.PEDIDOS, label: 'Pedidos', icon: Pedido }]
+			: []),
+		...(can(data.user, data.permisos, Modulos.FABRICACION)
+			? [{ href: Paths.FABRICACION, label: 'Fabricación', icon: Fabricacion }]
+			: []),
+		...(can(data.user, data.permisos, Modulos.CLIENTES)
+			? [{ href: Paths.CLIENTES, label: 'Clientes', icon: Users }]
+			: []),
+		...(can(data.user, data.permisos, Modulos.PRODUCTOS)
+			? [{ href: Paths.PRODUCTOS, label: 'Productos', icon: Producto }]
+			: []),
+		...(can(data.user, data.permisos, Modulos.INSUMOS)
+			? [{ href: Paths.INSUMOS, label: 'Insumos', icon: Puzzle }]
+			: []),
+		...(can(data.user, data.permisos, Modulos.INVENTARIO)
+			? [{ href: Paths.INVENTARIO, label: 'Inventario', icon: Stock }]
+			: []),
+		...(can(data.user, data.permisos, Modulos.ENVIOS)
+			? [{ href: Paths.ENVIOS, label: 'Envíos', icon: Truck }]
+			: []),
 		...(can(data.user, data.permisos, Modulos.CONFIGURACION)
 			? [
 					{
@@ -40,9 +56,7 @@
 							{ href: Paths.CONFIGURACION_USUARIOS, label: 'Usuarios' },
 							{ href: Paths.CONFIGURACION_EMPLEADOS, label: 'Empleados' },
 							{ href: Paths.CONFIGURACION_ROLES, label: 'Roles' },
-							{ href: Paths.CONFIGURACION_CATEGORIAS_PRODUCTOS, label: 'Categorías de Productos' },
-							{ href: Paths.CONFIGURACION_ESTADOS_FABRICACION, label: 'Estados de Fabricación' },
-							{ href: Paths.CONFIGURACION_ESTADOS_PEDIDOS, label: 'Estados de Pedidos' }
+							{ href: Paths.CONFIGURACION, label: 'Catálogos y estados' }
 							// { href: Paths.CONFIGURACION_TIPOS_MATERIA_PRIMA, label: 'Tipos de Materiales' }
 						]
 					}

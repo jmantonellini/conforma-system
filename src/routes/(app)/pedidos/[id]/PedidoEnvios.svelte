@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { Modal, FormFieldWrapper } from '$lib/components/ui';
+	import { Can, Modal, FormFieldWrapper } from '$lib/components/ui';
 	import {
 		crearEnvio,
 		marcarEntregado,
@@ -26,9 +26,11 @@
 	<div class="card-body">
 		<div class="flex items-center justify-between">
 			<h3 class="card-title">Envíos</h3>
-			<button class="btn btn-primary btn-sm" onclick={() => (showModal = true)}>
-				+ Registrar envío
-			</button>
+			<Can modulo="pedidos" accion="edit">
+				<button class="btn btn-primary btn-sm" onclick={() => (showModal = true)}>
+					+ Registrar envío
+				</button>
+			</Can>
 		</div>
 
 		{#if envios.length === 0}
@@ -50,15 +52,17 @@
 						</p>
 					</div>
 					{#if envio.estado !== 'entregado'}
-						<button
-							class="btn btn-sm btn-success"
-							onclick={async () => {
-								await marcarEntregado(String(envio.id));
-								toast.success('Envío marcado como entregado');
-							}}
-						>
-							Confirmar entrega
-						</button>
+						<Can modulo="pedidos" accion="edit">
+							<button
+								class="btn btn-sm btn-success"
+								onclick={async () => {
+									await marcarEntregado(String(envio.id));
+									toast.success('Envío marcado como entregado');
+								}}
+							>
+								Confirmar entrega
+							</button>
+						</Can>
 					{/if}
 				</div>
 			{/each}
@@ -93,7 +97,7 @@
 			</FormFieldWrapper>
 
 			<FormFieldWrapper label="Bultos" id="cantidad_bultos">
-				<input class="input remove-arrow" {...form.fields.cantidad_bultos.as('number')} />
+				<input class="remove-arrow input" {...form.fields.cantidad_bultos.as('number')} />
 			</FormFieldWrapper>
 
 			<FormFieldWrapper label="Observaciones" id="observaciones">
@@ -104,8 +108,10 @@
 
 	{#snippet actions()}
 		<button class="btn" onclick={cerrar}>Cancelar</button>
-		<button type="submit" form="envio-form" class="btn btn-primary" disabled={!!form.pending}>
-			{form.pending ? 'Registrando...' : 'Registrar'}
-		</button>
+		<Can modulo="pedidos" accion="edit">
+			<button type="submit" form="envio-form" class="btn btn-primary" disabled={!!form.pending}>
+				{form.pending ? 'Registrando...' : 'Registrar'}
+			</button>
+		</Can>
 	{/snippet}
 </Modal>

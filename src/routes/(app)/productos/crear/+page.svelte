@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { getModelos, getCategoriasComp, crearProducto } from '$lib/remote/productos.remote';
-	import { PageLayout, FormFieldWrapper, FormActions } from '$lib/components/ui';
+	import { Can, PageLayout, FormFieldWrapper, FormActions } from '$lib/components/ui';
 	import { toast } from '$lib/stores/toast.svelte';
 	import { page } from '$app/state';
 	import { goto } from '$app/navigation';
@@ -19,28 +19,28 @@
 </script>
 
 <PageLayout>
-	<form
-		{...crearProducto.enhance(async (form) => {
-			try {
-				if (await form.submit()) {
-					toast.success('Producto creado!');
-					form.element.reset();
-					goto(resolve('/productos'));
-				} else {
-					toast.error('Error de validación');
-				}
-			} catch (error) {
-				console.log(error);
+	<Can modulo="productos" accion="create">
+		<form
+			{...crearProducto.enhance(async (form) => {
+				try {
+					if (await form.submit()) {
+						toast.success('Producto creado!');
+						form.element.reset();
+						goto(resolve('/productos'));
+					} else {
+						toast.error('Error de validación');
+					}
+				} catch (error) {
+					console.log(error);
 
-				toast.error('Error del servidor');
-			}
-		})}
-		class="space-y-6"
-	>
-		<!-- Datos básicos -->
-		<div class="card bg-base-100 shadow">
-			<div class="card-body">
-				<h3 class="card-title">Datos básicos</h3>
+					toast.error('Error del servidor');
+				}
+			})}
+			class="space-y-6"
+		>
+			<!-- Datos básicos -->
+			<fieldset class="fieldset rounded-box border border-base-300 bg-base-200 p-4">
+				<legend class="fieldset-legend">Datos básicos</legend>
 
 				<div class="grid grid-cols-1 gap-4 md:grid-cols-4">
 					<FormFieldWrapper label="Código" id="codigo">
@@ -63,14 +63,12 @@
 						<input class="input" step="0.01" {...crearProducto.fields.precio_base.as('number')} />
 					</FormFieldWrapper>
 				</div>
-			</div>
-		</div>
+			</fieldset>
 
-		<!-- Vehículo -->
-		{#if crearProducto.fields.categoria_id.value() === '1'}
-			<div class="card bg-base-100 shadow">
-				<div class="card-body">
-					<h3 class="card-title">Vehículo</h3>
+			<!-- Vehículo -->
+			{#if crearProducto.fields.categoria_id.value() === '1'}
+				<fieldset class="fieldset rounded-box border border-base-300 bg-base-200 p-4">
+					<legend class="fieldset-legend">Vehículo</legend>
 
 					<div class="grid grid-cols-1 gap-4 md:grid-cols-3">
 						<FormFieldWrapper label="Tipo" id="tipo_vehiculo_id">
@@ -141,14 +139,12 @@
 							</FormFieldWrapper>
 						{/if}
 					</div>
-				</div>
-			</div>
+				</fieldset>
 
-			<!-- Medidas (solo si categoría_id === 1) -->
-			{#if crearProducto.fields.categoria_id.value() === '1'}
-				<div class="card bg-base-100 shadow">
-					<div class="card-body">
-						<h3 class="card-title">Aspectos técnicos</h3>
+				<!-- Medidas (solo si categoría_id === 1) -->
+				{#if crearProducto.fields.categoria_id.value() === '1'}
+					<fieldset class="fieldset rounded-box border border-base-300 bg-base-200 p-4">
+						<legend class="fieldset-legend">Aspectos técnicos</legend>
 
 						<div class="grid grid-cols-3 gap-4">
 							<fieldset class="fieldset rounded-box border border-base-300 bg-base-200 p-4">
@@ -219,14 +215,14 @@
 								</FormFieldWrapper>
 							</fieldset>
 						</div>
-					</div>
-				</div>
+					</fieldset>
+				{/if}
 			{/if}
-		{/if}
-		<FormActions
-			cancelHref="/productos"
-			pending={!!crearProducto.pending}
-			submitText="Guardar Producto"
-		/>
-	</form>
+			<FormActions
+				cancelHref="/productos"
+				pending={!!crearProducto.pending}
+				submitText="Guardar Producto"
+			/>
+		</form>
+	</Can>
 </PageLayout>

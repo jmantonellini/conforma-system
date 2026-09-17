@@ -26,17 +26,6 @@ export const getEmpleados = query(async () => {
 		.orderBy(empleados.apellido);
 });
 
-// Query: obtener un empleado por ID
-export const getEmpleadoById = query(
-	v.pipe(v.string(), v.transform(Number), v.number()),
-	async (id) => {
-		const [empleado] = await db.select().from(empleados).where(eq(empleados.id, id)).limit(1);
-
-		if (!empleado) throw new Error('Empleado no encontrado');
-		return empleado;
-	}
-);
-
 // Query: obtener empleados sin usuario (para el select en usuarios)
 export const getEmpleadosSinUsuario = query(async () => {
 	return await db

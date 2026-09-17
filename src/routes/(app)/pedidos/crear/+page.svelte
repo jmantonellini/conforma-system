@@ -93,150 +93,143 @@
 		class="space-y-6"
 	>
 		<!-- Datos del Cliente -->
-		<div class="card bg-base-100 shadow">
-			<div class="card-body">
-				<h3 class="card-title">Información del Cliente</h3>
+		<fieldset class="fieldset rounded-box border border-base-300 bg-base-200 p-4">
+			<legend class="fieldset-legend">Información del Cliente</legend>
 
-				<div class="grid gap-4 md:grid-cols-4">
-					<!-- Cliente -->
-					<SearchSelect
-						id="cliente_id"
-						label="Cliente"
-						options={clientesOptions}
-						placeholder="Buscar cliente..."
-						field={form.fields.cliente_id}
+			<div class="grid gap-4 md:grid-cols-4">
+				<!-- Cliente -->
+				<SearchSelect
+					id="cliente_id"
+					label="Cliente"
+					options={clientesOptions}
+					placeholder="Buscar cliente..."
+					field={form.fields.cliente_id}
+				/>
+
+				<!-- Fecha de entrega -->
+				<FormFieldWrapper label="Fecha de entrega prometida" id="fecha_entrega_prometida">
+					<input
+						class="input"
+						{...form.fields?.fecha_entrega_prometida?.as('date')}
+						min={new Date().toISOString().split('T')[0]}
 					/>
+				</FormFieldWrapper>
 
-					<!-- Fecha de entrega -->
-					<FormFieldWrapper label="Fecha de entrega prometida" id="fecha_entrega_prometida">
-						<input
-							class="input"
-							{...form.fields?.fecha_entrega_prometida?.as('date')}
-							min={new Date().toISOString().split('T')[0]}
-						/>
-					</FormFieldWrapper>
+				<!-- Anticipo -->
+				<FormFieldWrapper label="Anticipo (opcional)" id="anticipo">
+					<input
+						class="remove-arrow input"
+						placeholder="0"
+						min="0"
+						{...form.fields?.anticipo?.as('number')}
+					/>
+				</FormFieldWrapper>
 
-					<!-- Anticipo -->
-					<FormFieldWrapper label="Anticipo (opcional)" id="anticipo">
-						<input
-							class="remove-arrow input"
-							placeholder="0"
-							min="0"
-							{...form.fields?.anticipo?.as('number')}
-						/>
-					</FormFieldWrapper>
-
-					<!-- Presupuesto-->
-					<FormFieldWrapper label="Presupuesto (opcional)" id="presupuesto">
-						<input class="input" {...form.fields?.presupuesto?.as('text')} />
-					</FormFieldWrapper>
-				</div>
-			</div>
-		</div>
-
-		<!-- Productos -->
-		<div class="card bg-base-100 shadow">
-			<div class="card-body">
-				<h3 class="card-title">Productos</h3>
-
-				<div class="space-y-3">
-					{#each lineas as linea, idx (linea.idx)}
-						<div class="card border border-base-300 bg-base-100 p-6">
-							<button
-								type="button"
-								onclick={() => eliminarLinea(linea.idx)}
-								class="btn absolute top-1 right-1 btn-circle btn-ghost btn-xs"
-								class:hidden={lineas.length === 1}
-							>
-								✕
-							</button>
-
-							<div class="grid gap-4 md:grid-cols-8">
-								<!-- Producto -->
-								<SearchSelect
-									label="Producto"
-									class="col-span-3"
-									id={`lineas[${idx}].producto_id`}
-									field={form.fields.lineas[idx].producto_id}
-									options={[
-										{ value: 'personalizado', label: '📝 Personalizado' },
-										...productos.data.map((p) => ({ value: p.id.toString(), label: p.nombre }))
-									]}
-									onChange={(val: string) => onProductoChange(idx, val)}
-								/>
-
-								<!-- Descripción (si es personalizado) -->
-								<FormFieldWrapper
-									label="Descripción"
-									id={`lineas[${idx}].descripcion`}
-									class="col-span-3"
-								>
-									<input
-										class="input"
-										id={`lineas[${idx}].descripcion`}
-										{...form.fields.lineas[idx].descripcion.as('text')}
-									/>
-								</FormFieldWrapper>
-
-								<!-- Cantidad -->
-								<FormFieldWrapper label="Cantidad" id={`lineas[${idx}].cantidad`}>
-									<input
-										class="remove-arrow input"
-										id={`lineas[${idx}].cantidad`}
-										{...form.fields.lineas[idx].cantidad.as('number')}
-										min="1"
-									/>
-								</FormFieldWrapper>
-
-								<!-- Precio -->
-								<FormFieldWrapper label="Precio unitario" id={`lineas[${idx}].precio`}>
-									<input
-										class="remove-arrow input"
-										{...form.fields.lineas[idx].precio.as('number')}
-										step="0.01"
-										min="0"
-									/>
-								</FormFieldWrapper>
-							</div>
-						</div>
-					{/each}
-					<div class="flex w-full items-center justify-end">
-						<button type="button" onclick={agregarLinea} class="btn btn-outline btn-sm">
-							+ Agregar producto
-						</button>
-					</div>
-				</div>
-
-				<!-- Total -->
-				<div class="divider"></div>
-				<div class="flex justify-end">
-					<div class="text-right">
-						<p class="text-sm text-base-content/70">Total</p>
-						<p class="text-3xl font-bold">
-							${total.toLocaleString('es-AR', { minimumFractionDigits: 2 })}
-						</p>
-					</div>
-				</div>
-			</div>
-		</div>
-
-		<!-- Observaciones -->
-		<div class="card bg-base-100 shadow">
-			<div class="card-body">
-				<h3 class="card-title">Observaciones</h3>
-				<legend class="fieldset-legend text-lg">Notas</legend>
-
-				<FormFieldWrapper label="Observaciones" id="observaciones">
-					<textarea
-						placeholder="Notas adicionales sobre el pedido..."
-						rows={3}
-						{...form.fields?.observaciones?.as('text')}
-						class="textarea w-full resize-none"
-					>
-					</textarea>
+				<!-- Presupuesto-->
+				<FormFieldWrapper label="Presupuesto (opcional)" id="presupuesto">
+					<input class="input" {...form.fields?.presupuesto?.as('text')} />
 				</FormFieldWrapper>
 			</div>
-		</div>
+		</fieldset>
+
+		<!-- Productos -->
+		<fieldset class="fieldset rounded-box border border-base-300 bg-base-200 p-4">
+			<legend class="fieldset-legend">Productos</legend>
+
+			<div class="space-y-3">
+				{#each lineas as linea, idx (linea.idx)}
+					<div class="relative border-b border-base-300 py-4 first:pt-0 last:border-b-0">
+						<button
+							type="button"
+							onclick={() => eliminarLinea(linea.idx)}
+							class="btn absolute top-1 right-1 btn-circle btn-ghost btn-xs"
+							class:hidden={lineas.length === 1}
+						>
+							✕
+						</button>
+
+						<div class="grid gap-4 md:grid-cols-8">
+							<!-- Producto -->
+							<SearchSelect
+								label="Producto"
+								class="col-span-3"
+								id={`lineas[${idx}].producto_id`}
+								field={form.fields.lineas[idx].producto_id}
+								options={[
+									{ value: 'personalizado', label: '📝 Personalizado' },
+									...productos.data.map((p) => ({ value: p.id.toString(), label: p.nombre }))
+								]}
+								onChange={(val: string) => onProductoChange(idx, val)}
+							/>
+
+							<!-- Descripción (si es personalizado) -->
+							<FormFieldWrapper
+								label="Descripción"
+								id={`lineas[${idx}].descripcion`}
+								class="col-span-3"
+							>
+								<input
+									class="input"
+									id={`lineas[${idx}].descripcion`}
+									{...form.fields.lineas[idx].descripcion.as('text')}
+								/>
+							</FormFieldWrapper>
+
+							<!-- Cantidad -->
+							<FormFieldWrapper label="Cantidad" id={`lineas[${idx}].cantidad`}>
+								<input
+									class="remove-arrow input"
+									id={`lineas[${idx}].cantidad`}
+									{...form.fields.lineas[idx].cantidad.as('number')}
+									min="1"
+								/>
+							</FormFieldWrapper>
+
+							<!-- Precio -->
+							<FormFieldWrapper label="Precio unitario" id={`lineas[${idx}].precio`}>
+								<input
+									class="remove-arrow input"
+									{...form.fields.lineas[idx].precio.as('number')}
+									step="0.01"
+									min="0"
+								/>
+							</FormFieldWrapper>
+						</div>
+					</div>
+				{/each}
+				<div class="flex w-full items-center justify-end">
+					<button type="button" onclick={agregarLinea} class="btn btn-outline btn-sm">
+						+ Agregar producto
+					</button>
+				</div>
+			</div>
+
+			<!-- Total -->
+			<div class="divider"></div>
+			<div class="flex justify-end">
+				<div class="text-right">
+					<p class="text-sm text-base-content/70">Total</p>
+					<p class="text-3xl font-bold">
+						${total.toLocaleString('es-AR', { minimumFractionDigits: 2 })}
+					</p>
+				</div>
+			</div>
+		</fieldset>
+
+		<!-- Observaciones -->
+		<fieldset class="fieldset rounded-box border border-base-300 bg-base-200 p-4">
+			<legend class="fieldset-legend">Observaciones</legend>
+
+			<FormFieldWrapper label="Observaciones" id="observaciones">
+				<textarea
+					placeholder="Notas adicionales sobre el pedido..."
+					rows={3}
+					{...form.fields?.observaciones?.as('text')}
+					class="textarea w-full resize-none"
+				>
+				</textarea>
+			</FormFieldWrapper>
+		</fieldset>
 
 		<!-- Errores -->
 		{#if form?.fields?.allIssues?.()?.length}

@@ -22,5 +22,6 @@ export const ProductoSchema = v.object({
 
 export const ProductoSchemaUpdate = v.object({
 	...ProductoSchema.entries,
-	id: v.string()
+	id: v.string(),
+	receta: v.optional(v.string())
 });

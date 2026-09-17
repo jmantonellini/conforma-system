@@ -67,6 +67,8 @@
 		data.lineas.map((l: any) => ({
 			idx: l.id,
 			producto_id: l.producto_id ? String(l.producto_id) : '',
+			insumo_id: l.insumo_id ?? undefined,
+			insumos_snapshot: l.insumos_snapshot ?? [],
 			descripcion: l.descripcion,
 			cantidad: l.cantidad,
 			precio_unitario: l.precio_unitario,
@@ -85,6 +87,24 @@
 			{
 				idx: Date.now(),
 				producto_id: '',
+				insumo_id: undefined,
+				insumos_snapshot: [],
+				descripcion: '',
+				cantidad: 1,
+				precio_unitario: 0,
+				costo_mano_obra: 0,
+				costo_materiales: 0
+			}
+		];
+	}
+	function agregarInsumoLinea() {
+		lineas = [
+			...lineas,
+			{
+				idx: Date.now(),
+				producto_id: '',
+				insumo_id: undefined,
+				insumos_snapshot: [],
 				descripcion: '',
 				cantidad: 1,
 				precio_unitario: 0,
@@ -97,15 +117,45 @@
 		if (lineas.length > 1) lineas = lineas.filter((l: any) => l.idx !== idx);
 	}
 	async function onProductoChange(l: any) {
+		l.insumo_id = undefined;
 		if (l.producto_id) {
 			const p = productos.find((p: any) => p.id.toString() === l.producto_id);
-			if (p?.precio_base != null) l.precio_unitario = p.precio_base;
 			const receta = await getProductoInsumos(Number(l.producto_id));
+			l.insumos_snapshot = receta.map((insumo) => ({
+				insumo_id: insumo.insumo_id,
+				codigo: insumo.codigo,
+				nombre: insumo.nombre,
+				cantidad: insumo.cantidad,
+				costo_unitario: insumo.costo_unitario,
+				unidad: insumo.unidad,
+				subtotal: insumo.cantidad * insumo.costo_unitario
+			}));
 			l.costo_materiales = receta.reduce(
 				(total, insumo) => total + insumo.cantidad * insumo.costo_unitario,
 				0
 			);
+			l.descripcion = p?.nombre ?? l.descripcion;
+			l.precio_unitario = (p?.precio_base ?? 0) + l.costo_materiales;
 		}
+	}
+	function onInsumoChange(l: any) {
+		l.producto_id = '';
+		const insumo = data.insumos.find((item: any) => item.id === Number(l.insumo_id));
+		if (!insumo) return;
+		l.descripcion = insumo.nombre;
+		l.costo_materiales = insumo.costo_unitario;
+		l.precio_unitario = insumo.costo_unitario;
+		l.insumos_snapshot = [
+			{
+				insumo_id: insumo.id,
+				codigo: insumo.codigo,
+				nombre: insumo.nombre,
+				cantidad: 1,
+				costo_unitario: insumo.costo_unitario,
+				unidad: insumo.unidad,
+				subtotal: insumo.costo_unitario
+			}
+		];
 	}
 
 	async function guardarCotizacion() {
@@ -115,6 +165,7 @@
 				validez_dias: Number(validezDias) || 15,
 				lineas: lineas.map((l: any) => ({
 					producto_id: l.producto_id || undefined,
+					insumo_id: l.insumo_id ? Number(l.insumo_id) : undefined,
 					es_personalizado: !l.producto_id,
 					descripcion: l.descripcion,
 					cantidad: Number(l.cantidad) || 1,
@@ -220,9 +271,7 @@
 					<Document /> PDF
 				</a>
 				<Can modulo="cotizaciones" accion="delete">
-					<button class="btn btn-outline btn-error btn-sm" onclick={abrirEliminar}>
-						Eliminar
-					</button>
+					<button class="btn btn-outline btn-error btn-sm" onclick={abrirEliminar}>Eliminar</button>
 				</Can>
 			</div>
 		</div>
@@ -312,9 +361,14 @@
 			<div class="card bg-base-100 shadow lg:col-span-2">
 				<div class="card-body gap-4">
 					<h2 class="card-title">Detalles y precios</h2>
-					<button type="button" onclick={agregarLinea} class="btn self-end btn-outline btn-sm"
-						>+ Agregar línea</button
-					>
+					<div class="flex flex-wrap justify-end gap-2">
+						<button type="button" onclick={agregarLinea} class="btn btn-outline btn-sm"
+							>+ Línea personalizada</button
+						>
+						<button type="button" onclick={agregarInsumoLinea} class="btn btn-outline btn-sm"
+							>+ Insumo</button
+						>
+					</div>
 					{#each lineas as linea (linea.idx)}
 						<div class="card relative border border-base-300 bg-base-100 p-4">
 							<button
@@ -334,6 +388,18 @@
 										<option value="">📝 Personalizado</option>
 										{#each productos as p (p.id)}
 											<option value={p.id.toString()}>{p.nombre}</option>
+										{/each}
+									</select>
+								</FormFieldWrapper>
+								<FormFieldWrapper class="lg:col-span-3" label="Insumo independiente" id="insumo_id">
+									<select
+										class="select w-full"
+										bind:value={linea.insumo_id}
+										onchange={() => onInsumoChange(linea)}
+									>
+										<option value={undefined}>No corresponde</option>
+										{#each data.insumos as insumo (insumo.id)}
+											<option value={insumo.id}>{insumo.codigo} - {insumo.nombre}</option>
 										{/each}
 									</select>
 								</FormFieldWrapper>
@@ -385,6 +451,23 @@
 									/>
 								</FormFieldWrapper>
 							</div>
+							{#if linea.insumos_snapshot?.length}
+								<div class="mt-3 rounded-box bg-base-200 p-3 text-sm">
+									<p class="font-semibold">Insumos incluidos en el costo</p>
+									<ul class="mt-1 grid gap-1 sm:grid-cols-2">
+										{#each linea.insumos_snapshot as material}
+											<li class="flex justify-between gap-3">
+												<span>{material.cantidad} {material.unidad} · {material.nombre}</span>
+												<span
+													>${material.subtotal.toLocaleString('es-AR', {
+														minimumFractionDigits: 2
+													})}</span
+												>
+											</li>
+										{/each}
+									</ul>
+								</div>
+							{/if}
 						</div>
 					{/each}
 
@@ -435,13 +518,15 @@
 							{/if}
 							<div class="flex items-center justify-between p-2 text-xs">
 								<span class="truncate underline">{adj.nombre_original}</span>
-								<button
-									class="btn btn-ghost text-error btn-xs"
-									onclick={async () => {
-										await eliminarAdjunto(adj.id);
-										await invalidateAll();
-									}}>✕</button
-								>
+								<Can modulo="cotizaciones" accion="edit">
+									<button
+										class="btn btn-ghost text-error btn-xs"
+										onclick={async () => {
+											await eliminarAdjunto(adj.id);
+											await invalidateAll();
+										}}>✕</button
+									>
+								</Can>
 							</div>
 						</div>
 					{:else}

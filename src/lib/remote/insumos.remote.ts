@@ -4,6 +4,7 @@ import { and, count, eq, ilike, or } from 'drizzle-orm';
 import { db } from '$lib/server/db';
 import { categorias_insumos, insumos, tipos_insumo, unidades_medida } from '$lib/server/db/schema';
 import { ImportarInsumosSchema, InsumoSchema, InsumoSchemaUpdate } from './insumos.schema';
+import { requirePermission } from '$lib/server/auth/permissions';
 
 async function resolverCatalogos(tipo: string, unidad: string) {
 	const tipoId = Number(tipo);
@@ -107,6 +108,7 @@ export const getInsumoById = query(v.number(), async (id) => {
 });
 
 export const crearInsumo = form(InsumoSchema, async (data) => {
+	await requirePermission('insumos', 'create');
 	const catalogo = await resolverCatalogos(data.tipo, data.unidad);
 	const [insumo] = await db
 		.insert(insumos)
@@ -117,6 +119,7 @@ export const crearInsumo = form(InsumoSchema, async (data) => {
 });
 
 export const actualizarInsumo = form(InsumoSchemaUpdate, async ({ id, ...data }) => {
+	await requirePermission('insumos', 'edit');
 	const catalogo = await resolverCatalogos(data.tipo, data.unidad);
 	const [insumo] = await db
 		.update(insumos)
@@ -128,12 +131,14 @@ export const actualizarInsumo = form(InsumoSchemaUpdate, async ({ id, ...data })
 });
 
 export const eliminarInsumo = command(v.number(), async (id) => {
+	await requirePermission('insumos', 'delete');
 	await db.update(insumos).set({ activo: false, updated_at: new Date() }).where(eq(insumos.id, id));
 	getInsumos({}).refresh();
 	return { success: true };
 });
 
 export const importarInsumos = command(ImportarInsumosSchema, async (filas) => {
+	await requirePermission('insumos', 'import');
 	for (const fila of filas) {
 		const catalogo = await resolverCatalogos(fila.tipo, fila.unidad);
 		await db

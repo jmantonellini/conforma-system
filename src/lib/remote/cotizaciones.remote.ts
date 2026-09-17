@@ -18,7 +18,9 @@ import {
 	productos,
 	logs_cambios_estado,
 	transiciones_estado,
-	notificaciones
+	notificaciones,
+	insumos,
+	producto_insumos
 } from '$lib/server/db/schema';
 import { redirect } from '@sveltejs/kit';
 import { resolve } from '$app/paths';
@@ -27,6 +29,7 @@ import { unlink } from 'fs/promises';
 import path from 'path';
 import { env } from '$env/dynamic/private';
 import { getCurrentUser } from './usuarios.remote';
+import { requirePermission } from '$lib/server/auth/permissions';
 import { generarNumeroPedido } from '../server/utils/pedidos';
 import { CotizacionSchema, LineaCotizacionSchema } from './cotizaciones.schema';
 
@@ -275,17 +278,21 @@ export const getCotizacionById = query(v.number(), async (id) => {
 		.select({
 			id: lineas_cotizacion.id,
 			producto_id: lineas_cotizacion.producto_id,
+			insumo_id: lineas_cotizacion.insumo_id,
 			producto_nombre: productos.nombre,
+			insumo_nombre: insumos.nombre,
 			es_personalizado: lineas_cotizacion.es_personalizado,
 			descripcion: lineas_cotizacion.descripcion,
 			cantidad: lineas_cotizacion.cantidad,
 			precio_unitario: lineas_cotizacion.precio_unitario,
 			subtotal: lineas_cotizacion.subtotal,
 			costo_mano_obra: lineas_cotizacion.costo_mano_obra,
-			costo_materiales: lineas_cotizacion.costo_materiales
+			costo_materiales: lineas_cotizacion.costo_materiales,
+			insumos_snapshot: lineas_cotizacion.insumos_snapshot
 		})
 		.from(lineas_cotizacion)
 		.leftJoin(productos, eq(lineas_cotizacion.producto_id, productos.id))
+		.leftJoin(insumos, eq(lineas_cotizacion.insumo_id, insumos.id))
 		.where(eq(lineas_cotizacion.cotizacion_id, id))
 		.orderBy(lineas_cotizacion.orden_linea);
 
@@ -369,6 +376,7 @@ export const marcarNotificacionesLeidas = command(async () => {
 // ============================================================
 
 export const crearCotizacion = form(CotizacionSchema, async (data) => {
+	await requirePermission('cotizaciones', 'create');
 	const user = await getCurrentUser();
 	if (!user) throw new Error('Usuario no autenticado');
 
@@ -406,6 +414,7 @@ export const asignarCotizacion = command(
 		empleado_id: v.number()
 	}),
 	async ({ cotizacion_id, empleado_id }) => {
+		await requirePermission('cotizaciones', 'asignar');
 		const user = await getCurrentUser();
 		if (!user) throw new Error('No autorizado');
 
@@ -480,6 +489,7 @@ export const cotizarCotizacion = command(
 		lineas: v.pipe(v.array(LineaCotizacionSchema), v.minLength(1, 'Agregá al menos una línea'))
 	}),
 	async ({ cotizacion_id, validez_dias, lineas }) => {
+		await requirePermission('cotizaciones', 'cotizar');
 		const user = await getCurrentUser();
 		if (!user) throw new Error('No autorizado');
 
@@ -492,15 +502,65 @@ export const cotizarCotizacion = command(
 			await tx.delete(lineas_cotizacion).where(eq(lineas_cotizacion.cotizacion_id, cotizacion_id));
 
 			for (const [i, linea] of lineas.entries()) {
+				let descripcion = linea.descripcion;
+				let costo_materiales = linea.costo_materiales || 0;
+				let insumos_snapshot: unknown = null;
+
+				if (linea.producto_id) {
+					const receta = await tx
+						.select({
+							insumo_id: producto_insumos.insumo_id,
+							codigo: insumos.codigo,
+							nombre: insumos.nombre,
+							cantidad: producto_insumos.cantidad,
+							costo_unitario: insumos.costo_unitario,
+							unidad: insumos.unidad
+						})
+						.from(producto_insumos)
+						.innerJoin(insumos, eq(producto_insumos.insumo_id, insumos.id))
+						.where(eq(producto_insumos.producto_id, Number(linea.producto_id)));
+
+					insumos_snapshot = receta.map((material) => ({
+						...material,
+						subtotal: material.cantidad * material.costo_unitario
+					}));
+					costo_materiales = receta.reduce(
+						(total, material) => total + material.cantidad * material.costo_unitario,
+						0
+					);
+				} else if (linea.insumo_id) {
+					const [material] = await tx
+						.select()
+						.from(insumos)
+						.where(eq(insumos.id, linea.insumo_id))
+						.limit(1);
+					if (!material) throw new Error('Insumo no encontrado');
+					descripcion = material.nombre;
+					costo_materiales = material.costo_unitario;
+					insumos_snapshot = [
+						{
+							insumo_id: material.id,
+							codigo: material.codigo,
+							nombre: material.nombre,
+							cantidad: 1,
+							costo_unitario: material.costo_unitario,
+							subtotal: material.costo_unitario,
+							unidad: material.unidad
+						}
+					];
+				}
+
 				await tx.insert(lineas_cotizacion).values({
 					cotizacion_id,
 					producto_id: linea.producto_id ?? null,
+					insumo_id: linea.insumo_id ?? null,
 					es_personalizado: linea.es_personalizado ?? !linea.producto_id,
-					descripcion: linea.descripcion,
+					descripcion,
 					cantidad: linea.cantidad,
 					precio_unitario: linea.precio_unitario,
 					costo_mano_obra: linea.costo_mano_obra || null,
-					costo_materiales: linea.costo_materiales || null,
+					costo_materiales: costo_materiales || null,
+					insumos_snapshot,
 					orden_linea: i
 				});
 			}
@@ -524,6 +584,7 @@ export const cambiarEstadoCotizacion = command(
 		comentario: v.optional(v.string())
 	}),
 	async ({ cotizacion_id, estado_destino_id, comentario }) => {
+		await requirePermission('cotizaciones', 'edit');
 		const user = await getCurrentUser();
 		if (!user) throw new Error('No autorizado');
 
@@ -610,6 +671,7 @@ export const cambiarEstadoCotizacion = command(
 );
 
 export const convertirCotizacionAPedido = command(v.number(), async (cotizacionId) => {
+	await requirePermission('cotizaciones', 'convertir');
 	const user = await getCurrentUser();
 	if (!user) throw new Error('No autorizado');
 
@@ -680,6 +742,7 @@ export const convertirCotizacionAPedido = command(v.number(), async (cotizacionI
 				descripcion_personalizada: linea.es_personalizado ? linea.descripcion : null,
 				cantidad: linea.cantidad,
 				precio_unitario: linea.precio_unitario,
+				insumos_snapshot: linea.insumos_snapshot,
 				orden_linea: linea.orden_linea
 			});
 		}
@@ -702,6 +765,7 @@ export const convertirCotizacionAPedido = command(v.number(), async (cotizacionI
 });
 
 export const eliminarAdjunto = command(v.number(), async (adjuntoId) => {
+	await requirePermission('cotizaciones', 'edit');
 	const user = await getCurrentUser();
 	if (!user) throw new Error('No autorizado');
 
@@ -720,6 +784,7 @@ export const eliminarAdjunto = command(v.number(), async (adjuntoId) => {
 });
 
 export const eliminarCotizacion = command(v.number(), async (cotizacionId) => {
+	await requirePermission('cotizaciones', 'delete');
 	const user = await getCurrentUser();
 	if (!user) throw new Error('No autorizado');
 

@@ -180,6 +180,7 @@ export const lineas_cotizacion = pgTable(
 			.references(() => cotizaciones.id, { onDelete: 'cascade' })
 			.notNull(),
 		producto_id: integer('producto_id').references(() => productos.id, { onDelete: 'set null' }),
+		insumo_id: integer('insumo_id').references(() => insumos.id, { onDelete: 'set null' }),
 		es_personalizado: boolean('es_personalizado').default(false),
 		descripcion: text('descripcion').notNull(),
 		cantidad: integer('cantidad').notNull().default(1),
@@ -188,6 +189,7 @@ export const lineas_cotizacion = pgTable(
 		// Base para las futuras fórmulas de costos
 		costo_mano_obra: real('costo_mano_obra'),
 		costo_materiales: real('costo_materiales'),
+		insumos_snapshot: jsonb('insumos_snapshot'),
 		orden_linea: integer('orden_linea'),
 		created_at: timestamp('created_at').defaultNow(),
 		updated_at: timestamp('updated_at').$onUpdate(() => new Date())
@@ -331,6 +333,7 @@ export const lineas_pedido = pgTable(
 		cantidad: integer('cantidad').notNull().default(1),
 		precio_unitario: real('precio_unitario').notNull(),
 		subtotal: real('subtotal').generatedAlwaysAs(sql`cantidad * precio_unitario`),
+		insumos_snapshot: jsonb('insumos_snapshot'),
 		orden_linea: integer('orden_linea'),
 		created_at: timestamp('created_at').defaultNow(),
 		updated_at: timestamp('updated_at').$onUpdate(() => new Date())

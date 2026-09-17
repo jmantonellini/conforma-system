@@ -3,12 +3,7 @@ import { query, command } from '$app/server';
 import { db } from '$lib/server/db';
 import { roles, permisos, roles_permisos } from '$lib/server/db/schema';
 import { eq } from 'drizzle-orm';
-
-// Schema
-const RolSchema = v.object({
-	nombre: v.pipe(v.string(), v.nonEmpty('Nombre requerido')),
-	descripcion: v.optional(v.string())
-});
+import { requirePermission } from '$lib/server/auth/permissions';
 
 const PermisoAsignacionSchema = v.object({
 	rol_id: v.pipe(v.string(), v.transform(Number), v.number()),
@@ -37,26 +32,8 @@ export const getPermisosByRol = query(v.number(), async (rol_id) => {
 });
 
 // Commands
-export const crearRol = command(RolSchema, async (data) => {
-	const [rol] = await db.insert(roles).values(data).returning();
-	return { success: true, rol };
-});
-
-export const actualizarRol = command(
-	v.object({ id: v.number(), ...RolSchema.entries }),
-	async (data) => {
-		const { id, ...updateData } = data;
-		const [rol] = await db.update(roles).set(updateData).where(eq(roles.id, id)).returning();
-		return { success: true, rol };
-	}
-);
-
-export const eliminarRol = command(v.object({ id: v.number() }), async ({ id }) => {
-	await db.delete(roles).where(eq(roles.id, id));
-	return { success: true };
-});
-
 export const asignarPermisos = command(PermisoAsignacionSchema, async (data) => {
+	await requirePermission('configuracion', 'edit');
 	// Eliminar permisos existentes
 	await db.delete(roles_permisos).where(eq(roles_permisos.rol_id, data.rol_id));
 

@@ -3,6 +3,7 @@ import { query, form, command } from '$app/server';
 import { db } from '$lib/server/db';
 import { envios, transportistas, pedidos, clientes } from '$lib/server/db/schema';
 import { eq, desc, count } from 'drizzle-orm';
+import { requirePermission } from '$lib/server/auth/permissions';
 
 export const getTransportistas = query(async () => {
 	return db.select().from(transportistas).where(eq(transportistas.activo, true));
@@ -73,6 +74,7 @@ const EnvioSchema = v.object({
 });
 
 export const crearEnvio = form(EnvioSchema, async (data) => {
+	await requirePermission('pedidos', 'edit');
 	await db.insert(envios).values({
 		pedido_id: data.pedido_id,
 		transportista_id: data.transportista_id,
@@ -91,6 +93,7 @@ export const crearEnvio = form(EnvioSchema, async (data) => {
 export const marcarEntregado = command(
 	v.pipe(v.string(), v.transform(Number), v.number()),
 	async (envioId) => {
+		await requirePermission('pedidos', 'edit');
 		await db
 			.update(envios)
 			.set({ estado: 'entregado', fecha_entrega: new Date() })

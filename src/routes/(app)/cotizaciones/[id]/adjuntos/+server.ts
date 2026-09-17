@@ -5,6 +5,7 @@ import { writeFile, mkdir } from 'fs/promises';
 import path from 'path';
 import { env } from '$env/dynamic/private';
 import sharp from 'sharp';
+import { requirePermission } from '$lib/server/auth/permissions';
 
 // Configuración
 const UPLOAD_DIR = env.UPLOAD_DIR || 'static/uploads/cotizaciones';
@@ -48,6 +49,7 @@ async function comprimirImagen(buffer: Buffer): Promise<Buffer> {
 
 export async function POST({ request, params }) {
 	try {
+		await requirePermission('cotizaciones', 'edit');
 		const formData = await request.formData();
 		const files = formData
 			.getAll('archivos')

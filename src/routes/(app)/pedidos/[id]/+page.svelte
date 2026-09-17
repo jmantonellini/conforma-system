@@ -2,7 +2,7 @@
 	import { goto } from '$app/navigation';
 	import { resolve } from '$app/paths';
 	import { page } from '$app/state';
-	import { FormFieldWrapper, Modal, PageLayout, Table } from '$lib/components/ui';
+	import { Can, FormFieldWrapper, Modal, PageLayout, Table } from '$lib/components/ui';
 	import {
 		cambiarEstadoPedido,
 		eliminarPedido,
@@ -71,7 +71,11 @@
 		<div class="flex flex-col gap-4">
 			<div class="flex items-center justify-between">
 				<button onclick={() => history.back()} class="btn btn-ghost btn-sm">← Volver</button>
-				<button class="btn btn-outline btn-error btn-sm" onclick={abrirEliminar}> Eliminar </button>
+				<Can modulo="pedidos" accion="delete">
+					<button class="btn btn-outline btn-error btn-sm" onclick={abrirEliminar}>
+						Eliminar
+					</button>
+				</Can>
 			</div>
 
 			<!-- Datos del pedido -->
@@ -107,10 +111,14 @@
 									>
 										{#each pedido.transiciones as t (t.estado_destino_id)}
 											<li>
-												<button onclick={() => moverPedido(t.estado_destino_id, t.destino_nombre)}>
-													<span class="badge badge-{t.destino_color} badge-xs"></span>
-													{t.destino_nombre}
-												</button>
+												<Can modulo="pedidos" accion="edit">
+													<button
+														onclick={() => moverPedido(t.estado_destino_id, t.destino_nombre)}
+													>
+														<span class="badge badge-{t.destino_color} badge-xs"></span>
+														{t.destino_nombre}
+													</button>
+												</Can>
 											</li>
 										{/each}
 									</ul>
@@ -188,12 +196,14 @@
 										Ver orden
 									</button>
 								{:else}
-									<button
-										class="btn text-nowrap btn-primary btn-sm"
-										onclick={() => irAFabricacion(linea.id)}
-									>
-										Pasar a fabricación
-									</button>
+									<Can modulo="fabricacion" accion="create">
+										<button
+											class="btn text-nowrap btn-primary btn-sm"
+											onclick={() => irAFabricacion(linea.id)}
+										>
+											Pasar a fabricación
+										</button>
+									</Can>
 								{/if}
 							</td>
 						{/snippet}

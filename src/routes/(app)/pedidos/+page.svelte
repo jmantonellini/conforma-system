@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { goto } from '$app/navigation';
 	import { resolve } from '$app/paths';
-	import { Highlight, Table, SearchBar, Pagination } from '$lib/components/ui';
+	import { Highlight, Table, SearchBar, Pagination, Can } from '$lib/components/ui';
 	import PageLayout from '$lib/components/ui/PageLayout.svelte';
 	import { Eye } from '$lib/components/ui/icons';
 	import type { PageProps } from './$types';
@@ -37,7 +37,9 @@
 				{/each}
 			</select>
 		</div>
-		<a class="btn btn-primary" href={resolve('/pedidos/crear')}>+ Nuevo Pedido</a>
+		<Can modulo="pedidos" accion="create">
+			<a class="btn btn-primary" href={resolve('/pedidos/crear')}>+ Nuevo Pedido</a>
+		</Can>
 	</div>
 
 	<div class="card bg-base-100 shadow">

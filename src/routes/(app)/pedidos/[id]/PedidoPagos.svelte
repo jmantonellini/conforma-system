@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { Modal, FormFieldWrapper } from '$lib/components/ui';
+	import { Can, Modal, FormFieldWrapper } from '$lib/components/ui';
 	import { getPagosByPedido, registrarPago } from '$lib/remote/facturacion.remote';
 	import { toast } from '$lib/stores/toast.svelte';
 	import { formatearFecha } from '$lib/utils/fechas';
@@ -22,9 +22,11 @@
 	<div class="card-body">
 		<div class="flex items-center justify-between">
 			<h3 class="card-title">Pagos</h3>
-			<button class="btn btn-primary btn-sm" onclick={() => (showModal = true)}>
-				+ Registrar pago
-			</button>
+			<Can modulo="pedidos" accion="edit">
+				<button class="btn btn-primary btn-sm" onclick={() => (showModal = true)}>
+					+ Registrar pago
+				</button>
+			</Can>
 		</div>
 
 		{#if facturacion && typeof facturacion.estado === 'string'}
@@ -93,7 +95,7 @@
 		<input type="hidden" name="pedido_id" value={pedidoId} />
 		<div class="grid gap-3">
 			<FormFieldWrapper label="Monto" id="monto" required>
-				<input class="input remove-arrow" step="0.01" {...form.fields.monto.as('number')} />
+				<input class="remove-arrow input" step="0.01" {...form.fields.monto.as('number')} />
 			</FormFieldWrapper>
 			<FormFieldWrapper label="Método" id="metodo_pago">
 				<select class="select" {...form.fields.metodo_pago.as('select', 'efectivo')}>
@@ -110,8 +112,10 @@
 
 	{#snippet actions()}
 		<button class="btn" onclick={cerrar}>Cancelar</button>
-		<button type="submit" form="pago-form" class="btn btn-primary" disabled={!!form.pending}>
-			{form.pending ? 'Registrando...' : 'Registrar'}
-		</button>
+		<Can modulo="pedidos" accion="edit">
+			<button type="submit" form="pago-form" class="btn btn-primary" disabled={!!form.pending}>
+				{form.pending ? 'Registrando...' : 'Registrar'}
+			</button>
+		</Can>
 	{/snippet}
 </Modal>

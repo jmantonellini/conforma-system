@@ -5,6 +5,7 @@ import { desc, eq } from 'drizzle-orm';
 import * as v from 'valibot';
 import { getCurrentUser } from './usuarios.remote';
 import { getPedidoById } from './pedidos.remote';
+import { requirePermission } from '$lib/server/auth/permissions';
 
 const RegistrarPagoSchema = v.object({
 	pedido_id: v.pipe(v.string(), v.transform(Number), v.number()),
@@ -46,6 +47,7 @@ export const getPagosByPedido = query(v.number(), async (pedidoId) => {
 // FORMS
 
 export const registrarPago = form(RegistrarPagoSchema, async (data) => {
+	await requirePermission('pedidos', 'edit');
 	const user = await getCurrentUser();
 	if (!user) throw new Error('No autorizado');
 

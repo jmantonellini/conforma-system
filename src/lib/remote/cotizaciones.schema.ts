@@ -2,6 +2,7 @@ import * as v from 'valibot';
 
 export const LineaCotizacionSchema = v.object({
 	producto_id: v.optional(v.pipe(v.string(), v.transform(Number), v.number())),
+	insumo_id: v.optional(v.number()),
 	es_personalizado: v.optional(v.boolean(), false),
 	descripcion: v.pipe(v.string(), v.nonEmpty('La descripción es requerida')),
 	cantidad: v.pipe(v.number(), v.toMinValue(1)),
