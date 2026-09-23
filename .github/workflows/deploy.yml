@@ -15,9 +15,31 @@ jobs:
           username: ${{ secrets.VPS_USER }}
           key: ${{ secrets.VPS_SSH_KEY }}
           port: 22
-          script_stop: true
           command_timeout: 20m
           script: |
-            cd ~/conforma-system
+            set -e
+            cd /var/www/conforma-system
+
+            echo ">>> Backup DB"
+            docker compose exec -T postgres pg_dump -U postgres -d conforma_db > /tmp/backup_$(date +%F_%H%M).sql || true
+            ls -lh /tmp/backup_* | tail -1
+
+            echo ">>> Git pull"
             git pull origin main
+
+            echo ">>> Rebuild"
             docker compose up -d --build app
+
+            echo ">>> Esperando arranque..."
+            sleep 8
+
+            echo ">>> Logs (últimas 30 líneas)"
+            docker compose logs app --no-color | tail -30
+
+            echo ">>> Estado"
+            docker compose ps
+
+            echo ">>> Healthcheck"
+            curl -sS -o /dev/null -w "HTTP %{http_code}\n" http://localhost:3000 || exit 1
+
+            echo ">>> Deploy OK"

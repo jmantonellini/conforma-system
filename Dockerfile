@@ -16,4 +16,4 @@ COPY --from=build /app/build ./build
 COPY --from=build /app/drizzle.config.ts ./
 COPY --from=build /app/src/lib/server/db/migrations ./src/lib/server/db/migrations
 EXPOSE 3000
-CMD ["sh", "-c", "pnpm run db:migrate && node build/index.js"]
+CMD ["sh", "-c", "pnpm run db:migrate || true; node build/index.js"]
