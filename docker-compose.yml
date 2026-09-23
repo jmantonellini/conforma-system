@@ -26,7 +26,7 @@ services:
       DB_HOST: postgres
       DATABASE_URL: postgres://${DB_USER}:${DB_PASSWORD}@postgres:5432/${DB_NAME}
     ports:
-      - "${APP_PORT:-3000}:3000"
+      - "127.0.0.1:3000:3000"
     depends_on:
       postgres:
         condition: service_healthy
