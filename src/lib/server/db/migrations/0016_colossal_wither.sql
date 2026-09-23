@@ -1,0 +1,1 @@
+ALTER TABLE "producto_insumos" DROP COLUMN "opcional";

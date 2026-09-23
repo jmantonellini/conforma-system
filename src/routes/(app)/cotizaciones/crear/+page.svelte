@@ -1,14 +1,14 @@
 <script lang="ts">
 	import { crearCotizacion } from '$lib/remote/cotizaciones.remote';
-	import { getClientes } from '$lib/remote/clientes.remote';
+	import { obtenerContactosCliente } from '$lib/remote/contactos.remote';
 	import SearchSelect from '$lib/components/ui/SearchSelect.svelte';
 	import FormFieldWrapper from '$lib/components/ui/FormFieldWrapper.svelte';
-	import { Can, FormActions, PageLayout } from '$lib/components/ui';
+	import { Can, FormActions, FormErrors, PageLayout } from '$lib/components/ui';
 	import { toast } from '$lib/stores/toast.svelte';
 	import { Paths } from '$lib/types';
 
 	let form = crearCotizacion;
-	let clientes = await getClientes({ limit: 100 });
+	let clientes = await obtenerContactosCliente({ limit: 100 });
 
 	const CANALES = [
 		{ value: 'whatsapp', label: 'WhatsApp' },
@@ -20,11 +20,23 @@
 
 	const clientesOptions = clientes.data.map((c) => ({
 		value: c.id.toString(),
-		label:
-			c.nombre +
-			(c.apellido ? ` ${c.apellido}` : '') +
-			(c.razon_social ? ` (${c.razon_social})` : '')
+		label: c.razon_social
 	}));
+	const distribuidoresOptions = clientes.data
+		.filter((c) => c.es_distribuidor)
+		.map((c) => ({
+			value: c.id.toString(),
+			label: `${c.razon_social} (distribuidor)`
+		}));
+
+	function completarContacto(clienteId: string) {
+		const cliente = clientes.data.find((item) => item.id.toString() === clienteId);
+		if (!cliente) return;
+		const nombreCompleto = [cliente.nombre, cliente.apellido].filter(Boolean).join(' ');
+		form.fields.cliente_nombre.set(nombreCompleto || cliente.razon_social);
+		form.fields.cliente_telefono.set(cliente.telefono || '');
+		form.fields.cliente_email.set(cliente.email || '');
+	}
 </script>
 
 <PageLayout>
@@ -51,11 +63,20 @@
 
 				<div class="grid gap-4 md:grid-cols-4">
 					<SearchSelect
-						id="cliente_id"
+						id="contacto_id"
 						label="Cliente (opcional)"
 						options={clientesOptions}
 						placeholder="Buscar cliente cargado..."
-						field={form.fields.cliente_id}
+						field={form.fields.contacto_id}
+						onChange={completarContacto}
+					/>
+
+					<SearchSelect
+						id="contacto_distribuidor_id"
+						label="Distribuidor (opcional)"
+						options={distribuidoresOptions}
+						placeholder="Buscar distribuidor..."
+						field={form.fields.contacto_distribuidor_id}
 					/>
 
 					<FormFieldWrapper label="Nombre del contacto" id="cliente_nombre" required>
@@ -118,24 +139,7 @@
 				</p>
 			</fieldset>
 
-			<!-- Errores -->
-			{#if form?.fields?.allIssues?.()?.length}
-				<div role="alert" class="alert gap-4 alert-error">
-					<svg class="h-6 w-6 shrink-0 stroke-current" fill="none" viewBox="0 0 24 24">
-						<path
-							stroke-linecap="round"
-							stroke-linejoin="round"
-							stroke-width="2"
-							d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z"
-						/>
-					</svg>
-					<div>
-						{#each form?.fields?.allIssues() as issue (issue)}
-							<p class="text-sm">{issue.message}</p>
-						{/each}
-					</div>
-				</div>
-			{/if}
+			<FormErrors {form} />
 
 			<FormActions
 				cancelHref={Paths.COTIZACIONES}

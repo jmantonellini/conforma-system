@@ -1,15 +1,33 @@
 <script lang="ts">
-	import { getModelos, getCategoriasComp, crearProducto } from '$lib/remote/productos.remote';
-	import { Can, PageLayout, FormFieldWrapper, FormActions } from '$lib/components/ui';
+	import {
+		getModelos,
+		getCategoriasComp,
+		crearProducto,
+		getProductos
+	} from '$lib/remote/productos.remote';
+	import { getInsumos } from '$lib/remote/insumos.remote';
+	import { Can, PageLayout, FormFieldWrapper, FormActions, SearchSelect } from '$lib/components/ui';
+	import { Delete } from '$lib/components/ui/icons';
 	import { toast } from '$lib/stores/toast.svelte';
 	import { page } from '$app/state';
-	import { goto } from '$app/navigation';
+	import { goto, invalidateAll } from '$app/navigation';
 	import { resolve } from '$app/paths';
 
 	let categorias = page.data.categorias;
 	let marcas = page.data.marcas;
 	let tiposDeUso = page.data.tiposDeUso;
 	let tiposVehiculo = page.data.tiposVehiculo;
+	let insumos = (await getInsumos({ limit: 100 })).data;
+	let productos = (await getProductos({ limit: 100 })).data;
+	let receta = $state([{ insumo_id: '', producto_id: '', cantidad: 1 }]);
+
+	function agregarInsumo() {
+		receta = [...receta, { insumo_id: '', producto_id: '', cantidad: 1 }];
+	}
+
+	function quitarInsumo(indice: number) {
+		if (receta.length > 1) receta = receta.filter((_, i) => i !== indice);
+	}
 
 	let modelos = $derived(
 		crearProducto.fields.marca_id.value()
@@ -24,8 +42,9 @@
 			{...crearProducto.enhance(async (form) => {
 				try {
 					if (await form.submit()) {
+						await getProductos({}).refresh();
+						await invalidateAll();
 						toast.success('Producto creado!');
-						form.element.reset();
 						goto(resolve('/productos'));
 					} else {
 						toast.error('Error de validación');
@@ -38,6 +57,7 @@
 			})}
 			class="space-y-6"
 		>
+			<input type="hidden" name="receta" value={JSON.stringify(receta)} />
 			<!-- Datos básicos -->
 			<fieldset class="fieldset rounded-box border border-base-300 bg-base-200 p-4">
 				<legend class="fieldset-legend">Datos básicos</legend>
@@ -218,6 +238,77 @@
 					</fieldset>
 				{/if}
 			{/if}
+
+			<fieldset class="fieldset rounded-box border border-base-300 bg-base-200 p-4">
+				<legend class="fieldset-legend">Receta del producto</legend>
+				<div class="space-y-3">
+					{#each receta as linea, indice (indice)}
+						<div class="grid gap-1 sm:grid-cols-[minmax(0,1fr)_8rem_auto_auto] sm:items-center">
+							<div class="fieldset min-w-0">
+								<SearchSelect
+									label="Componente"
+									id={`receta-create-${indice}`}
+									placeholder="Buscar componente..."
+									field={{
+										value: () =>
+											linea.insumo_id
+												? `insumo:${linea.insumo_id}`
+												: linea.producto_id
+													? `producto:${linea.producto_id}`
+													: '',
+										set: (value: string) => {
+											const [tipo, id] = value.split(':');
+											linea.insumo_id = tipo === 'insumo' ? id : '';
+											linea.producto_id = tipo === 'producto' ? id : '';
+										}
+									}}
+									options={[
+										...insumos.map((insumo) => ({
+											value: `insumo:${insumo.id}`,
+											label: `${insumo.codigo} - ${insumo.nombre}`
+										})),
+										...productos.map((producto) => ({
+											value: `producto:${producto.id}`,
+											label: `${producto.codigo} - ${producto.nombre}`
+										}))
+									]}
+									onChange={(value: string) => {
+										const [tipo, id] = value.split(':');
+										linea.insumo_id = tipo === 'insumo' ? id : '';
+										linea.producto_id = tipo === 'producto' ? id : '';
+									}}
+								/>
+							</div>
+							<div class="fieldset">
+								<span class="label">Cantidad</span>
+								<input
+									class="remove-arrow input"
+									type="number"
+									min="0"
+									step="0.01"
+									bind:value={linea.cantidad}
+								/>
+							</div>
+							<span class="label whitespace-nowrap">
+								Unidad: <strong
+									>{insumos.find((insumo) => String(insumo.id) === linea.insumo_id)?.unidad ??
+										(linea.producto_id ? 'Producto' : '-')}</strong
+								>
+							</span>
+							<button
+								type="button"
+								class="btn btn-square btn-ghost text-error btn-sm sm:justify-self-end"
+								title="Quitar componente"
+								aria-label="Quitar componente"
+								onclick={() => quitarInsumo(indice)}><Delete /></button
+							>
+						</div>
+					{/each}
+					<button type="button" class="btn btn-outline btn-sm" onclick={agregarInsumo}
+						>+ Agregar componente</button
+					>
+				</div>
+			</fieldset>
 			<FormActions
 				cancelHref="/productos"
 				pending={!!crearProducto.pending}

@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { goto } from '$app/navigation';
 	import { resolve } from '$app/paths';
-	import { FormFieldWrapper } from '$lib/components/ui';
+	import { FormErrors, FormFieldWrapper } from '$lib/components/ui';
 	import { login } from '$lib/remote/auth.remote';
 	import { toast } from '$lib/stores/toast.svelte';
 	import Logo from '$lib/assets/Logo.png';
@@ -9,7 +9,7 @@
 	const form = login;
 </script>
 
-<div class="flex flex-col gap-4 min-h-screen items-center justify-center">
+<div class="flex min-h-screen flex-col items-center justify-center gap-4">
 	<img src={Logo} alt="Conforma Logo" class="h-10 w-auto" />
 
 	<form
@@ -55,6 +55,7 @@
 					<p class="text-sm text-error">{issue.message}</p>
 				{/each}
 			</FormFieldWrapper>
+			<FormErrors {form} />
 
 			<button class="btn mt-4 btn-neutral" type="submit" disabled={!!form.pending}>
 				{form.pending ? 'Ingresando...' : 'Ingresar'}

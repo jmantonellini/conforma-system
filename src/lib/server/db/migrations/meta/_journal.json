@@ -85,6 +85,118 @@
 			"when": 1789679000000,
 			"tag": "0011_seed_permission_modules",
 			"breakpoints": true
+		},
+		{
+			"idx": 12,
+			"version": "7",
+			"when": 1789755113503,
+			"tag": "0012_lush_agent_zero",
+			"breakpoints": true
+		},
+		{
+			"idx": 13,
+			"version": "7",
+			"when": 1789760599581,
+			"tag": "0013_young_gressill",
+			"breakpoints": true
+		},
+		{
+			"idx": 14,
+			"version": "7",
+			"when": 1789764003539,
+			"tag": "0014_lumpy_beyonder",
+			"breakpoints": true
+		},
+		{
+			"idx": 15,
+			"version": "7",
+			"when": 1789769451803,
+			"tag": "0015_curved_anthem",
+			"breakpoints": true
+		},
+		{
+			"idx": 16,
+			"version": "7",
+			"when": 1789869055173,
+			"tag": "0016_colossal_wither",
+			"breakpoints": true
+		},
+		{
+			"idx": 17,
+			"version": "7",
+			"when": 1790024970831,
+			"tag": "0017_quiet_nicolaos",
+			"breakpoints": true
+		},
+		{
+			"idx": 18,
+			"version": "7",
+			"when": 1790026088362,
+			"tag": "0018_black_ultimatum",
+			"breakpoints": true
+		},
+		{
+			"idx": 19,
+			"version": "7",
+			"when": 1790101817724,
+			"tag": "0019_add_distribuidor_fields",
+			"breakpoints": true
+		},
+		{
+			"idx": 20,
+			"version": "7",
+			"when": 1790102908687,
+			"tag": "0020_add_distribuidor_assignment",
+			"breakpoints": true
+		},
+		{
+			"idx": 21,
+			"version": "7",
+			"when": 1790109581237,
+			"tag": "0021_remove_compensacion_fields",
+			"breakpoints": true
+		},
+		{
+			"idx": 22,
+			"version": "7",
+			"when": 1790110000000,
+			"tag": "0022_contact_compensation",
+			"breakpoints": true
+		},
+		{
+			"idx": 23,
+			"version": "7",
+			"when": 1790110000001,
+			"tag": "0023_remove_presupuesto",
+			"breakpoints": true
+		},
+		{
+			"idx": 24,
+			"version": "7",
+			"when": 1790110000002,
+			"tag": "0024_contact_permissions",
+			"breakpoints": true
+		},
+		{
+			"idx": 25,
+			"version": "7",
+			"when": 1790110000003,
+			"tag": "0025_rename_empresas_to_contactos",
+			"breakpoints": true
+		},
+		{
+			"idx": 26,
+			"version": "7",
+			"when": 1790110000004,
+			"tag": "0026_remove_contact_compensation_type",
+			"breakpoints": true
+		},
+		{
+			"idx": 27,
+			"version": "7",
+			"when": 1790110000005,
+			"tag": "0027_debit_distributor_balance",
+			"breakpoints": true
 		}
 	]
 }

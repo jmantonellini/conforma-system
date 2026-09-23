@@ -14,14 +14,12 @@
 	function onProvinciaChange() {
 		form.fields.ciudad = '';
 	}
-
-	let pais = $derived(form.fields?.pais?.value());
 </script>
 
-<fieldset class="fieldset rounded-lg border p-4">
-	<legend class="text-md fieldset-legend px-2 font-semibold">Dirección</legend>
+<fieldset class="fieldset rounded-box border border-base-300 bg-base-200 p-4">
+	<legend class="fieldset-legend">Dirección</legend>
 
-	<div class="grid gap-4 md:grid-cols-2">
+	<div class="grid gap-4 md:grid-cols-3">
 		<!-- País (select) -->
 		<div class="flex w-full flex-col gap-2">
 			<label class="label" for="pais"> País </label>
@@ -38,38 +36,30 @@
 			</select>
 		</div>
 
-		{#if pais === 'Argentina'}
-			<!-- Provincia (select) -->
-			<div class="flex w-full flex-col gap-2">
-				<label class="label" for="provincia"> Provincia </label>
-				<select
-					id="provincia"
-					class="select"
-					class:select-disabled={disabled}
-					{...form.fields?.provincia?.as('select', initialData?.provincia || '')}
-					onchange={onProvinciaChange}
-					{disabled}
-				>
-					<option value={0}>Seleccionar provincia...</option>
-					{#each provincias as provincia (provincia)}
-						<option value={provincia}>{provincia}</option>
-					{/each}
-				</select>
-			</div>
-		{:else}
-			<!-- Para otros países, campos de texto libre -->
-			<FormFieldWrapper id="provincia" label="Provincia / Estado">
-				<input
-					class="input"
-					{...form.fields?.provincia?.as('text', initialData?.provincia || '')}
-					{disabled}
-				/>
-			</FormFieldWrapper>
-		{/if}
+		<!-- Para otros países, campos de texto libre -->
+		<FormFieldWrapper id="provincia" label="Provincia">
+			<select
+				id="provincia"
+				class="select"
+				class:select-disabled={disabled}
+				{...form.fields?.provincia?.as('select', initialData?.provincia || '')}
+				onchange={onProvinciaChange}
+				{disabled}
+			>
+				<option value={0}>Seleccionar provincia...</option>
+				{#each provincias as provincia (provincia)}
+					<option value={provincia}>{provincia}</option>
+				{/each}
+			</select>
+		</FormFieldWrapper>
 
 		<!-- Ciudad -->
 		<FormFieldWrapper id="ciudad" label="Ciudad">
-			<input class="input" {...form.fields?.ciudad?.as('text', initialData?.ciudad || '')} />
+			<input
+				class="input"
+				{...form.fields?.ciudad?.as('text', initialData?.ciudad || '')}
+				{disabled}
+			/>
 		</FormFieldWrapper>
 
 		<!-- Código Postal -->
@@ -82,7 +72,7 @@
 		</FormFieldWrapper>
 
 		<!-- Calle -->
-		<FormFieldWrapper class="col-span-2" id="calle" label="Calle">
+		<FormFieldWrapper id="calle" label="Calle">
 			<input
 				class="input"
 				{...form.fields?.calle?.as('text', initialData?.calle || '')}
@@ -91,28 +81,22 @@
 		</FormFieldWrapper>
 
 		<!-- Número, Piso, Departamento -->
-		<div class="grid grid-cols-3 gap-4 md:col-span-2">
-			<FormFieldWrapper id="numero" label="Número">
-				<input
-					class="input"
-					{...form.fields?.numero?.as('text', initialData?.numero || '')}
-					{disabled}
-				/>
-			</FormFieldWrapper>
-			<FormFieldWrapper id="piso" label="Piso">
-				<input
-					class="input"
-					{...form.fields?.piso?.as('text', initialData?.piso || '')}
-					{disabled}
-				/>
-			</FormFieldWrapper>
-			<FormFieldWrapper id="departamento" label="Departamento">
-				<input
-					class="input"
-					{...form.fields?.departamento?.as('text', initialData?.departamento || '')}
-					{disabled}
-				/>
-			</FormFieldWrapper>
-		</div>
+		<FormFieldWrapper id="numero" label="Número">
+			<input
+				class="input"
+				{...form.fields?.numero?.as('text', initialData?.numero || '')}
+				{disabled}
+			/>
+		</FormFieldWrapper>
+		<FormFieldWrapper id="piso" label="Piso">
+			<input class="input" {...form.fields?.piso?.as('text', initialData?.piso || '')} {disabled} />
+		</FormFieldWrapper>
+		<FormFieldWrapper id="departamento" label="Departamento">
+			<input
+				class="input"
+				{...form.fields?.departamento?.as('text', initialData?.departamento || '')}
+				{disabled}
+			/>
+		</FormFieldWrapper>
 	</div>
 </fieldset>

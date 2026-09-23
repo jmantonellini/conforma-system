@@ -5,6 +5,7 @@ import {
 	ordenes_fabricacion,
 	unidades_fabricacion,
 	lineas_pedido,
+	pedido_insumos,
 	pedidos,
 	productos,
 	insumos,
@@ -13,7 +14,7 @@ import {
 	cotizaciones,
 	estados_fabricacion,
 	empleados,
-	clientes,
+	contactos,
 	transiciones_estado,
 	logs_cambios_estado,
 	estados_pedido,
@@ -24,6 +25,7 @@ import { getCurrentUser } from './usuarios.remote';
 import { CrearOrdenSchema } from './fabricacion.schema';
 import { getPedidos } from './pedidos.remote';
 import { PEDIDO_SLUG } from '$lib/types';
+import { getProductoConReceta } from './productos.remote';
 
 // ============================================================
 // QUERIES
@@ -78,7 +80,7 @@ export const getOrdenesFabricacion = query(
 			? or(
 					ilike(ordenes_fabricacion.nombre_trabajo, searchTerm),
 					ilike(pedidos.numero_pedido, searchTerm),
-					ilike(clientes.nombre, searchTerm),
+					ilike(contactos.razon_social, searchTerm),
 					ilike(productos.nombre, searchTerm)
 				)
 			: undefined;
@@ -99,7 +101,7 @@ export const getOrdenesFabricacion = query(
 				.from(ordenes_fabricacion)
 				.leftJoin(lineas_pedido, eq(ordenes_fabricacion.linea_pedido_id, lineas_pedido.id))
 				.leftJoin(pedidos, eq(lineas_pedido.pedido_id, pedidos.id))
-				.leftJoin(clientes, eq(pedidos.cliente_id, clientes.id))
+				.leftJoin(contactos, eq(pedidos.contacto_id, contactos.id))
 				.leftJoin(productos, eq(lineas_pedido.producto_id, productos.id))
 				.where(searchCondition)
 				.orderBy(desc(ordenes_fabricacion.prioridad), desc(ordenes_fabricacion.id))
@@ -136,7 +138,7 @@ export const getOrdenesFabricacion = query(
 							orden_id: ordenes_fabricacion.id,
 							pedido_id: pedidos.id,
 							pedido_numero: pedidos.numero_pedido,
-							cliente_nombre: clientes.nombre,
+							cliente_nombre: contactos.razon_social,
 							producto_nombre: productos.nombre,
 							empleado_nombre: empleados.nombre,
 							empleado_apellido: empleados.apellido
@@ -144,7 +146,7 @@ export const getOrdenesFabricacion = query(
 						.from(ordenes_fabricacion)
 						.leftJoin(lineas_pedido, eq(ordenes_fabricacion.linea_pedido_id, lineas_pedido.id))
 						.leftJoin(pedidos, eq(lineas_pedido.pedido_id, pedidos.id))
-						.leftJoin(clientes, eq(pedidos.cliente_id, clientes.id))
+						.leftJoin(contactos, eq(pedidos.contacto_id, contactos.id))
 						.leftJoin(productos, eq(lineas_pedido.producto_id, productos.id))
 						.leftJoin(empleados, eq(ordenes_fabricacion.asignado_a, empleados.id))
 						.where(sql`${ordenes_fabricacion.id} IN ${ordenIds}`)
@@ -252,20 +254,29 @@ export const getOrdenFabricacion = query(v.number(), async (id) => {
 
 	const relacionados = await db
 		.select({
+			pedido_id: pedidos.id,
 			pedido_numero: pedidos.numero_pedido,
-			cliente_nombre: clientes.nombre,
+			cliente_nombre: contactos.razon_social,
 			producto_nombre: productos.nombre,
 			empleado_nombre: empleados.nombre,
 			empleado_apellido: empleados.apellido
 		})
 		.from(lineas_pedido)
 		.leftJoin(pedidos, eq(lineas_pedido.pedido_id, pedidos.id))
-		.leftJoin(clientes, eq(pedidos.cliente_id, clientes.id))
+		.leftJoin(contactos, eq(pedidos.contacto_id, contactos.id))
 		.leftJoin(productos, eq(lineas_pedido.producto_id, productos.id))
 		.leftJoin(ordenes_fabricacion, eq(ordenes_fabricacion.linea_pedido_id, lineas_pedido.id))
 		.leftJoin(empleados, eq(ordenes_fabricacion.asignado_a, empleados.id))
 		.where(eq(ordenes_fabricacion.id, orden.id))
 		.then((rows) => rows[0]);
+
+	const [cotizacion] = relacionados?.pedido_id
+		? await db
+				.select({ id: cotizaciones.id })
+				.from(cotizaciones)
+				.where(eq(cotizaciones.pedido_id, relacionados.pedido_id))
+				.limit(1)
+		: [];
 
 	const [lineaTrabajo] = await db
 		.select({
@@ -301,19 +312,23 @@ export const getOrdenFabricacion = query(v.number(), async (id) => {
 		.limit(1);
 
 	const recetaActual = lineaTrabajo?.producto_id
+		? (await getProductoConReceta(lineaTrabajo.producto_id)).receta
+		: [];
+
+	const insumosAdicionales = lineaTrabajo?.pedido_id
 		? await db
 				.select({
-					insumo_id: producto_insumos.insumo_id,
+					id: pedido_insumos.id,
+					insumo_id: pedido_insumos.insumo_id,
 					codigo: insumos.codigo,
 					nombre: insumos.nombre,
-					cantidad: producto_insumos.cantidad,
-					unidad: insumos.unidad,
-					costo_unitario: insumos.costo_unitario
+					cantidad: pedido_insumos.cantidad,
+					unidad: pedido_insumos.unidad,
+					costo_unitario: pedido_insumos.costo_unitario
 				})
-				.from(producto_insumos)
-				.innerJoin(insumos, eq(producto_insumos.insumo_id, insumos.id))
-				.where(eq(producto_insumos.producto_id, lineaTrabajo.producto_id))
-				.orderBy(producto_insumos.orden)
+				.from(pedido_insumos)
+				.innerJoin(insumos, eq(pedido_insumos.insumo_id, insumos.id))
+				.where(eq(pedido_insumos.pedido_id, lineaTrabajo.pedido_id))
 		: [];
 
 	const adjuntos = lineaTrabajo?.pedido_id
@@ -330,6 +345,25 @@ export const getOrdenFabricacion = query(v.number(), async (id) => {
 				.orderBy(desc(adjuntos_cotizacion.id))
 		: [];
 
+	type MaterialRequerido = {
+		insumo_id: number;
+		codigo: string;
+		nombre: string;
+		cantidad: number;
+		unidad: string;
+		costo_unitario?: number | null;
+		subtotal?: number;
+	};
+	const recetaBase = (
+		Array.isArray(lineaTrabajo?.insumos_snapshot) ? lineaTrabajo.insumos_snapshot : recetaActual
+	) as MaterialRequerido[];
+	const insumosRequeridos = recetaBase.map((material) => ({
+		...material,
+		cantidad: material.cantidad * orden.cantidad_total,
+		subtotal: Number(
+			(material.cantidad * orden.cantidad_total * (material.costo_unitario ?? 0)).toFixed(2)
+		)
+	}));
 	const medidasProducto = lineaTrabajo?.producto;
 	const medidas = Object.fromEntries(
 		Object.entries(lineaTrabajo?.medidas ?? {}).map(([key, value]) => [
@@ -337,8 +371,6 @@ export const getOrdenFabricacion = query(v.number(), async (id) => {
 			value ?? medidasProducto?.[key as keyof typeof medidasProducto] ?? null
 		])
 	);
-	const insumosRequeridos = lineaTrabajo?.insumos_snapshot ?? recetaActual;
-
 	const estadoCalculado = estadoOrdenFromUnidades(unidades, estados);
 	const cantidadProducida = unidades.filter(
 		(u) => estados.find((e) => e.id === u.estado_id)?.es_final
@@ -375,12 +407,18 @@ export const getOrdenFabricacion = query(v.number(), async (id) => {
 		},
 		cantidad_producida: cantidadProducida,
 		pedido_numero: relacionados?.pedido_numero,
+		navegacion: {
+			cotizacion_id: cotizacion?.id ?? null,
+			pedido_id: relacionados?.pedido_id ?? null,
+			orden_fabricacion_id: orden.id
+		},
 		cliente_nombre: relacionados?.cliente_nombre,
 		producto_nombre: relacionados?.producto_nombre,
 		producto: lineaTrabajo?.producto ?? null,
 		descripcion_producto: lineaTrabajo?.descripcion ?? null,
 		medidas,
 		insumos_requeridos: insumosRequeridos,
+		insumos_adicionales: insumosAdicionales,
 		adjuntos,
 		empleado: relacionados?.empleado_nombre
 			? {

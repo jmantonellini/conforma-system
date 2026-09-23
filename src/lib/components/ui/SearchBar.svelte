@@ -8,7 +8,7 @@
 		bind:value={search}
 		{placeholder}
 		{...restProps}
-		class="input join-item w-full"
+		class="input input-sm join-item w-full"
 	/>
-	<button class="btn join-item bg-base-300">Buscar</button>
+	<button class="btn btn-sm join-item bg-base-300">Buscar</button>
 </div>

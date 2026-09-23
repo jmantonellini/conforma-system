@@ -2,7 +2,14 @@
 	import { goto } from '$app/navigation';
 	import { resolve } from '$app/paths';
 	import { page } from '$app/state';
-	import { Can, FormFieldWrapper, Modal, PageLayout, Table } from '$lib/components/ui';
+	import {
+		Can,
+		FormFieldWrapper,
+		Modal,
+		PageLayout,
+		NavegacionProceso,
+		Table
+	} from '$lib/components/ui';
 	import {
 		cambiarEstadoPedido,
 		eliminarPedido,
@@ -15,7 +22,9 @@
 	import PedidoEnvios from './PedidoEnvios.svelte';
 	import PedidoPagos from './PedidoPagos.svelte';
 
-	let { pedido, lineas } = $derived(await getPedidoById(parseInt(page.params.id ?? '')));
+	let { pedido, lineas, insumosAdicionales } = $derived(
+		await getPedidoById(parseInt(page.params.id ?? ''))
+	);
 
 	function irAFabricacion(lineaId: number) {
 		goto(resolve(`/fabricacion/crear?linea=${lineaId}`));
@@ -69,8 +78,34 @@
 <PageLayout>
 	{#if pedido}
 		<div class="flex flex-col gap-4">
-			<div class="flex items-center justify-between">
+			<div class="grid grid-cols-[auto_1fr_auto] items-center gap-3">
 				<button onclick={() => history.back()} class="btn btn-ghost btn-sm">← Volver</button>
+				<div class="flex justify-center">
+					<NavegacionProceso
+						currentKey="pedido"
+						steps={[
+							...(pedido.navegacion.cotizacion_id
+								? [
+										{
+											key: 'cotizacion',
+											label: 'Cotización',
+											href: `/cotizaciones/${pedido.navegacion.cotizacion_id}`
+										}
+									]
+								: []),
+							{ key: 'pedido', label: 'Pedido', status: pedido.estado.nombre },
+							...(pedido.navegacion.orden_fabricacion_id
+								? [
+										{
+											key: 'fabricacion',
+											label: 'Fabricación',
+											href: `/fabricacion/${pedido.navegacion.orden_fabricacion_id}`
+										}
+									]
+								: [])
+						]}
+					/>
+				</div>
 				<Can modulo="pedidos" accion="delete">
 					<button class="btn btn-outline btn-error btn-sm" onclick={abrirEliminar}>
 						Eliminar
@@ -125,11 +160,6 @@
 								{/if}
 							</div>
 						</FormFieldWrapper>
-						{#if pedido.presupuesto}
-							<FormFieldWrapper label="Presupuesto" id="presupuesto">
-								<p class="font-semibold">{pedido.presupuesto}</p>
-							</FormFieldWrapper>
-						{/if}
 						{#if pedido.observaciones}
 							<FormFieldWrapper label="Observaciones" id="observaciones">
 								<p class="whitespace-pre-wrap">{pedido.observaciones}</p>
@@ -217,6 +247,35 @@
 					</div>
 				</div>
 			</div>
+
+			{#if insumosAdicionales.length}
+				<div class="card bg-base-100 shadow">
+					<div class="card-body">
+						<h2 class="card-title">Insumos adicionales</h2>
+						<div class="overflow-x-auto">
+							<table class="table table-sm">
+								<thead>
+									<tr
+										><th>Código</th><th>Insumo</th><th>Unidad</th><th class="text-right"
+											>Cantidad</th
+										></tr
+									>
+								</thead>
+								<tbody>
+									{#each insumosAdicionales as insumo (insumo.id)}
+										<tr>
+											<td class="font-mono text-sm">{insumo.codigo}</td>
+											<td>{insumo.nombre}</td>
+											<td>{insumo.unidad}</td>
+											<td class="text-right">{insumo.cantidad}</td>
+										</tr>
+									{/each}
+								</tbody>
+							</table>
+						</div>
+					</div>
+				</div>
+			{/if}
 
 			<div class="grid grid-cols-2 gap-4">
 				<PedidoPagos pedidoId={pedido.id} />

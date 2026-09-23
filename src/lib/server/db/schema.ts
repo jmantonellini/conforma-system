@@ -15,15 +15,11 @@ import type { AnyPgColumn } from 'drizzle-orm/pg-core';
 import { sql } from 'drizzle-orm';
 import { EstadosTarea, Prioridades } from '$lib/types';
 
-// ============================================================
-// CATÁLOGO DE ESTADOS — Con campo GRUPO para rollup
-// ============================================================
-
 export const estados_fabricacion = pgTable('estados_fabricacion', {
 	id: serial('id').primaryKey(),
 	nombre: text('nombre').notNull().unique(),
 	slug: text('slug').notNull().unique(),
-	grupo: text('grupo').notNull(), // "preparacion" | "activo" | "pausado" | "final"
+	grupo: text('grupo').notNull(),
 	orden: integer('orden').notNull(),
 	color: text('color'),
 	es_final: boolean('es_final').default(false),
@@ -34,7 +30,7 @@ export const estados_pedido = pgTable('estados_pedido', {
 	id: serial('id').primaryKey(),
 	nombre: text('nombre').notNull().unique(),
 	slug: text('slug').notNull().unique(),
-	grupo: text('grupo').notNull(), // "inicial" | "proceso" | "final" | "excepcion"
+	grupo: text('grupo').notNull(),
 	orden: integer('orden').notNull(),
 	color: text('color'),
 	es_final: boolean('es_final').default(false),
@@ -45,16 +41,12 @@ export const estados_cotizacion = pgTable('estados_cotizacion', {
 	id: serial('id').primaryKey(),
 	nombre: text('nombre').notNull().unique(),
 	slug: text('slug').notNull().unique(),
-	grupo: text('grupo').notNull(), // "entrada" | "revision" | "respuesta" | "final"
+	grupo: text('grupo').notNull(),
 	orden: integer('orden').notNull(),
 	color: text('color'),
 	es_final: boolean('es_final').default(false),
 	created_at: timestamp('created_at').defaultNow()
 });
-
-// ============================================================
-// STATE MACHINE — Transiciones permitidas
-// ============================================================
 
 export const transiciones_estado = pgTable(
 	'transiciones_estado',
@@ -74,10 +66,6 @@ export const transiciones_estado = pgTable(
 		)
 	]
 );
-
-// ============================================================
-// SEGURIDAD Y AUTENTICACIÓN
-// ============================================================
 
 export const roles = pgTable('roles', {
 	id: serial('id').primaryKey(),
@@ -151,7 +139,10 @@ export const feedback = pgTable('feedback', {
 export const cotizaciones = pgTable('cotizaciones', {
 	id: serial('id').primaryKey(),
 	numero_cotizacion: text('numero_cotizacion').notNull().unique(),
-	cliente_id: integer('cliente_id').references(() => clientes.id, { onDelete: 'set null' }),
+	contacto_id: integer('contacto_id').references(() => contactos.id, { onDelete: 'set null' }),
+	contacto_distribuidor_id: integer('contacto_distribuidor_id').references(() => contactos.id, {
+		onDelete: 'set null'
+	}),
 	// Contacto espontáneo (todavía no es cliente cargado)
 	cliente_nombre: text('cliente_nombre').notNull(),
 	cliente_telefono: text('cliente_telefono'),
@@ -217,11 +208,11 @@ export const adjuntos_cotizacion = pgTable(
 // CLIENTES Y PEDIDOS
 // ============================================================
 
-export const clientes = pgTable('clientes', {
+export const contactos = pgTable('contactos', {
 	id: serial('id').primaryKey(),
-	nombre: text('nombre').notNull(),
+	razon_social: text('razon_social').notNull(),
+	nombre: text('nombre'),
 	apellido: text('apellido'),
-	razon_social: text('razon_social'),
 	cuit: text('cuit').unique(),
 	email: text('email'),
 	telefono: text('telefono'),
@@ -233,10 +224,44 @@ export const clientes = pgTable('clientes', {
 	numero: text('numero'),
 	piso: text('piso'),
 	departamento: text('departamento'),
+	es_cliente: boolean('es_cliente').default(false),
+	es_distribuidor: boolean('es_distribuidor').default(false),
+	porcentaje_compensacion: real('porcentaje_compensacion').default(0),
+	saldo_disponible: real('saldo_disponible').default(0),
 	activo: boolean('activo').default(true),
 	created_at: timestamp('created_at').defaultNow(),
 	updated_at: timestamp('updated_at').$onUpdate(() => new Date())
 });
+
+export const configuracion_empresa = pgTable('configuracion_empresa', {
+	id: integer('id').primaryKey().default(1),
+	razon_social: text('razon_social').notNull().default('Conforma'),
+	cuit: text('cuit'),
+	direccion: text('direccion'),
+	telefono: text('telefono'),
+	email: text('email'),
+	logo_url: text('logo_url'),
+	updated_at: timestamp('updated_at').$onUpdate(() => new Date())
+});
+
+export const proveedores = pgTable(
+	'proveedores',
+	{
+		id: serial('id').primaryKey(),
+		contacto_id: integer('contacto_id')
+			.references(() => contactos.id, { onDelete: 'restrict' })
+			.notNull(),
+		codigo: text('codigo').unique(),
+		contacto_nombre: text('contacto_nombre'),
+		contacto_email: text('contacto_email'),
+		contacto_telefono: text('contacto_telefono'),
+		condiciones_pago: text('condiciones_pago'),
+		activo: boolean('activo').default(true),
+		created_at: timestamp('created_at').defaultNow(),
+		updated_at: timestamp('updated_at').$onUpdate(() => new Date())
+	},
+	(table) => [uniqueIndex('idx_proveedor_contacto').on(table.contacto_id)]
+);
 
 export const categorias_productos = pgTable('categorias_productos', {
 	id: serial('id').primaryKey(),
@@ -277,6 +302,7 @@ export const insumos = pgTable('insumos', {
 	id: serial('id').primaryKey(),
 	codigo: text('codigo').notNull().unique(),
 	nombre: text('nombre').notNull(),
+	proveedor_id: integer('proveedor_id').references(() => proveedores.id, { onDelete: 'set null' }),
 	tipo_id: integer('tipo_id').references(() => tipos_insumo.id, { onDelete: 'restrict' }),
 	categoria_id: integer('categoria_id').references(() => categorias_insumos.id, {
 		onDelete: 'set null'
@@ -285,6 +311,7 @@ export const insumos = pgTable('insumos', {
 	tipo: text('tipo').notNull().default('material'),
 	unidad: text('unidad').notNull().default('unidad'),
 	costo_unitario: real('costo_unitario').notNull().default(0),
+	flete_porcentaje: real('flete_porcentaje').notNull().default(0),
 	activo: boolean('activo').default(true),
 	observaciones: text('observaciones'),
 	created_at: timestamp('created_at').defaultNow(),
@@ -294,9 +321,17 @@ export const insumos = pgTable('insumos', {
 export const pedidos = pgTable('pedidos', {
 	id: serial('id').primaryKey(),
 	numero_pedido: text('numero_pedido').notNull().unique(),
-	cliente_id: integer('cliente_id')
-		.references(() => clientes.id, { onDelete: 'set null' })
+	contacto_id: integer('contacto_id')
+		.references(() => contactos.id, { onDelete: 'restrict' })
 		.notNull(),
+	contacto_distribuidor_id: integer('contacto_distribuidor_id').references(() => contactos.id, {
+		onDelete: 'set null'
+	}),
+	usar_credito_distribuidor: boolean('usar_credito_distribuidor').default(false),
+	monto_credito_distribuidor: real('monto_credito_distribuidor').default(0),
+	porcentaje_comision_distribuidor: real('porcentaje_comision_distribuidor').default(0),
+	monto_comision_distribuidor: real('monto_comision_distribuidor').default(0),
+	comision_distribuidor_descontada: boolean('comision_distribuidor_descontada').default(false),
 	fecha_pedido: timestamp('fecha_pedido').notNull(),
 	fecha_entrega_prometida: timestamp('fecha_entrega_prometida'),
 	fecha_entrega_real: timestamp('fecha_entrega_real'),
@@ -304,7 +339,6 @@ export const pedidos = pgTable('pedidos', {
 		.references(() => estados_pedido.id, { onDelete: 'restrict' })
 		.notNull(),
 	precio_total: real('precio_total'),
-	presupuesto: text('presupuesto'),
 	anticipo: real('anticipo'),
 	saldo_pendiente: real('saldo_pendiente'),
 	observaciones: text('observaciones'),
@@ -339,6 +373,29 @@ export const lineas_pedido = pgTable(
 		updated_at: timestamp('updated_at').$onUpdate(() => new Date())
 	},
 	(table) => [index('idx_lineas_pedido').on(table.pedido_id)]
+);
+
+export const pedido_insumos = pgTable(
+	'pedido_insumos',
+	{
+		id: serial('id').primaryKey(),
+		pedido_id: integer('pedido_id')
+			.references(() => pedidos.id, { onDelete: 'cascade' })
+			.notNull(),
+		insumo_id: integer('insumo_id')
+			.references(() => insumos.id, { onDelete: 'restrict' })
+			.notNull(),
+		cantidad: real('cantidad').notNull().default(1),
+		unidad: text('unidad').notNull(),
+		costo_unitario: real('costo_unitario'),
+		cotizacion_linea_id: integer('cotizacion_linea_id').references(() => lineas_cotizacion.id, {
+			onDelete: 'set null'
+		}),
+		observaciones: text('observaciones'),
+		created_at: timestamp('created_at').defaultNow(),
+		updated_at: timestamp('updated_at').$onUpdate(() => new Date())
+	},
+	(table) => [index('idx_pedido_insumos_pedido').on(table.pedido_id)]
 );
 
 // ============================================================
@@ -447,11 +504,27 @@ export const producto_insumos = pgTable(
 			.notNull(),
 		cantidad: real('cantidad').notNull().default(1),
 		orden: integer('orden').notNull().default(0),
-		opcional: boolean('opcional').default(false),
 		created_at: timestamp('created_at').defaultNow(),
 		updated_at: timestamp('updated_at').$onUpdate(() => new Date())
 	},
 	(table) => [index('idx_producto_insumos_producto').on(table.producto_id)]
+);
+
+export const producto_componentes = pgTable(
+	'producto_componentes',
+	{
+		id: serial('id').primaryKey(),
+		producto_id: integer('producto_id')
+			.references(() => productos.id, { onDelete: 'cascade' })
+			.notNull(),
+		componente_id: integer('componente_id')
+			.references(() => productos.id, { onDelete: 'restrict' })
+			.notNull(),
+		cantidad: integer('cantidad').notNull().default(1),
+		orden: integer('orden').notNull().default(0),
+		created_at: timestamp('created_at').defaultNow()
+	},
+	(table) => [index('idx_producto_componentes_producto').on(table.producto_id)]
 );
 
 // ============================================================
@@ -650,7 +723,6 @@ export type Usuario = typeof usuarios.$inferSelect;
 export type Rol = typeof roles.$inferSelect;
 export type Permiso = typeof permisos.$inferSelect;
 export type Empleado = typeof empleados.$inferSelect;
-export type Cliente = typeof clientes.$inferSelect;
 export type Pedido = typeof pedidos.$inferSelect;
 export type LineaPedido = typeof lineas_pedido.$inferSelect;
 export type Producto = typeof productos.$inferSelect;
@@ -671,3 +743,4 @@ export type TipoMaterial = typeof tipos_material.$inferSelect;
 export type MaterialEmpleado = typeof materiales_empleados.$inferSelect;
 export type Insumos = typeof insumos.$inferSelect;
 export type ProductoInsumo = typeof producto_insumos.$inferSelect;
+export type PedidoInsumo = typeof pedido_insumos.$inferSelect;

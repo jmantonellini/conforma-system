@@ -10,7 +10,6 @@ const PermisoAsignacionSchema = v.object({
 	permisos: v.array(v.number())
 });
 
-// Queries
 export const getRoles = query(async () => {
 	return await db.select().from(roles).orderBy(roles.nombre);
 });
@@ -31,7 +30,6 @@ export const getPermisosByRol = query(v.number(), async (rol_id) => {
 		.where(eq(roles_permisos.rol_id, rol_id));
 });
 
-// Commands
 export const asignarPermisos = command(PermisoAsignacionSchema, async (data) => {
 	await requirePermission('configuracion', 'edit');
 	// Eliminar permisos existentes

@@ -6,7 +6,7 @@ import {
 	lineas_cotizacion,
 	adjuntos_cotizacion,
 	estados_cotizacion,
-	clientes,
+	contactos,
 	empleados,
 	usuarios,
 	roles,
@@ -14,6 +14,8 @@ import {
 	roles_permisos,
 	pedidos,
 	lineas_pedido,
+	pedido_insumos,
+	ordenes_fabricacion,
 	estados_pedido,
 	productos,
 	logs_cambios_estado,
@@ -32,10 +34,14 @@ import { getCurrentUser } from './usuarios.remote';
 import { requirePermission } from '$lib/server/auth/permissions';
 import { generarNumeroPedido } from '../server/utils/pedidos';
 import { CotizacionSchema, LineaCotizacionSchema } from './cotizaciones.schema';
-
-// ============================================================
-// HELPERS INTERNOS
-// ============================================================
+import { getProductoConReceta } from './productos.remote';
+import {
+	aplicarCambioDeEstado,
+	calcularTotalLineas,
+	obtenerTransicionPermitida,
+	redondearMoneda,
+	registrarCambioEstado
+} from '$lib/server/utils/estado-negocio';
 
 const UPLOAD_DIR = env.UPLOAD_DIR || 'static/uploads/cotizaciones';
 
@@ -72,7 +78,7 @@ async function generarNumeroCotizacion() {
 	return `C-${(mayorNumero + 1).toString().padStart(5, '0')}`;
 }
 
-async function getEstadoPorSlug(slug: string) {
+async function obtenerEstadoPorSlug(slug: string) {
 	const [estado] = await db
 		.select()
 		.from(estados_cotizacion)
@@ -81,7 +87,35 @@ async function getEstadoPorSlug(slug: string) {
 	return estado;
 }
 
-/** Notifica a todos los usuarios activos que tienen un permiso dado. */
+const crearCondicionBusquedaCotizacion = ({
+	search,
+	estadoId,
+	asignadaA
+}: {
+	search?: string;
+	estadoId?: number;
+	asignadaA?: number;
+}) => {
+	const condiciones = [];
+
+	if (search) {
+		const termino = `%${search}%`;
+		condiciones.push(
+			or(
+				ilike(cotizaciones.numero_cotizacion, termino),
+				ilike(cotizaciones.cliente_nombre, termino),
+				ilike(contactos.razon_social, termino),
+				ilike(contactos.cuit, termino)
+			)
+		);
+	}
+
+	if (estadoId) condiciones.push(eq(cotizaciones.estado_id, estadoId));
+	if (asignadaA) condiciones.push(eq(cotizaciones.asignada_a, asignadaA));
+
+	return condiciones.length ? and(...condiciones) : undefined;
+};
+
 async function notificarUsuariosConPermiso(
 	modulo: string,
 	accion: string,
@@ -116,7 +150,6 @@ async function notificarUsuariosConPermiso(
 	);
 }
 
-/** Notifica al usuario vinculado a un empleado (su usuario del sistema). */
 async function notificarEmpleado(
 	empleadoId: number | null,
 	titulo: string,
@@ -136,9 +169,40 @@ async function notificarEmpleado(
 	await db.insert(notificaciones).values({ usuario_id: usuario.id, titulo, mensaje, link });
 }
 
-// ============================================================
-// QUERIES
-// ============================================================
+async function notificarCambioEstadoCotizacion({
+	cotizacionId,
+	numeroCotizacion,
+	clienteNombre,
+	estadoDestinoSlug
+}: {
+	cotizacionId: number;
+	numeroCotizacion: string;
+	clienteNombre: string | null;
+	estadoDestinoSlug?: string | null;
+}) {
+	if (!estadoDestinoSlug) return;
+
+	if (estadoDestinoSlug === 'lista_para_enviar') {
+		await notificarUsuariosConPermiso(
+			'cotizaciones',
+			'enviar',
+			'Cotización lista para enviar',
+			`La cotización ${numeroCotizacion} (${clienteNombre}) está lista para enviar al cliente.`,
+			`/cotizaciones/${cotizacionId}`
+		);
+		return;
+	}
+
+	if (estadoDestinoSlug === 'aprobada') {
+		await notificarUsuariosConPermiso(
+			'cotizaciones',
+			'convertir',
+			'Cotización aprobada',
+			`El cliente aprobó la cotización ${numeroCotizacion}. Ya podés generar el pedido.`,
+			`/cotizaciones/${cotizacionId}`
+		);
+	}
+}
 
 export const getCotizaciones = query(
 	v.object({
@@ -150,24 +214,7 @@ export const getCotizaciones = query(
 	}),
 	async ({ search, estadoId, asignadaA, page = 1, limit = 10 }) => {
 		const offset = (page - 1) * limit;
-
-		const conditions = [];
-		if (search) {
-			const term = `%${search}%`;
-			conditions.push(
-				or(
-					ilike(cotizaciones.numero_cotizacion, term),
-					ilike(cotizaciones.cliente_nombre, term),
-					ilike(clientes.nombre, term),
-					ilike(clientes.apellido, term),
-					ilike(clientes.razon_social, term)
-				)
-			);
-		}
-		if (estadoId) conditions.push(eq(cotizaciones.estado_id, estadoId));
-		if (asignadaA) conditions.push(eq(cotizaciones.asignada_a, asignadaA));
-
-		const where = conditions.length ? and(...conditions) : undefined;
+		const where = crearCondicionBusquedaCotizacion({ search, estadoId, asignadaA });
 
 		const data = await db
 			.select({
@@ -175,8 +222,7 @@ export const getCotizaciones = query(
 				numero_cotizacion: cotizaciones.numero_cotizacion,
 				cliente_nombre: sql<string>`
 					COALESCE(
-						NULLIF(TRIM(CONCAT_WS(' ', ${clientes.nombre}, ${clientes.apellido})), ''),
-						${clientes.razon_social},
+						${contactos.razon_social},
 						${cotizaciones.cliente_nombre}
 					)`.as('cliente_nombre'),
 				canal: cotizaciones.canal,
@@ -190,7 +236,7 @@ export const getCotizaciones = query(
 				asignado_apellido: empleados.apellido
 			})
 			.from(cotizaciones)
-			.leftJoin(clientes, eq(cotizaciones.cliente_id, clientes.id))
+			.leftJoin(contactos, eq(cotizaciones.contacto_id, contactos.id))
 			.leftJoin(estados_cotizacion, eq(cotizaciones.estado_id, estados_cotizacion.id))
 			.leftJoin(empleados, eq(cotizaciones.asignada_a, empleados.id))
 			.where(where)
@@ -223,12 +269,12 @@ export const getCotizacionById = query(v.number(), async (id) => {
 			created_at: cotizaciones.created_at,
 			pedido_id: cotizaciones.pedido_id,
 			cliente: {
-				id: clientes.id,
-				nombre: clientes.nombre,
-				apellido: clientes.apellido,
-				razon_social: clientes.razon_social,
-				telefono: clientes.telefono,
-				email: clientes.email
+				id: contactos.id,
+				nombre: contactos.razon_social,
+				apellido: sql<string | null>`NULL`,
+				razon_social: contactos.razon_social,
+				telefono: contactos.telefono,
+				email: contactos.email
 			},
 			cliente_nombre: cotizaciones.cliente_nombre,
 			cliente_telefono: cotizaciones.cliente_telefono,
@@ -247,7 +293,7 @@ export const getCotizacionById = query(v.number(), async (id) => {
 			creada_por: usuarios.username
 		})
 		.from(cotizaciones)
-		.leftJoin(clientes, eq(cotizaciones.cliente_id, clientes.id))
+		.leftJoin(contactos, eq(cotizaciones.contacto_id, contactos.id))
 		.leftJoin(estados_cotizacion, eq(cotizaciones.estado_id, estados_cotizacion.id))
 		.leftJoin(empleados, eq(cotizaciones.asignada_a, empleados.id))
 		.leftJoin(usuarios, eq(cotizaciones.creada_por, usuarios.id))
@@ -281,6 +327,7 @@ export const getCotizacionById = query(v.number(), async (id) => {
 			insumo_id: lineas_cotizacion.insumo_id,
 			producto_nombre: productos.nombre,
 			insumo_nombre: insumos.nombre,
+			insumo_unidad: insumos.unidad,
 			es_personalizado: lineas_cotizacion.es_personalizado,
 			descripcion: lineas_cotizacion.descripcion,
 			cantidad: lineas_cotizacion.cantidad,
@@ -302,7 +349,27 @@ export const getCotizacionById = query(v.number(), async (id) => {
 		.where(eq(adjuntos_cotizacion.cotizacion_id, id))
 		.orderBy(desc(adjuntos_cotizacion.id));
 
-	return { cotizacion: { ...cotizacion, transiciones }, lineas, adjuntos };
+	const ordenes = cotizacion.pedido_id
+		? await db
+				.select({ id: ordenes_fabricacion.id })
+				.from(ordenes_fabricacion)
+				.innerJoin(lineas_pedido, eq(ordenes_fabricacion.linea_pedido_id, lineas_pedido.id))
+				.where(eq(lineas_pedido.pedido_id, cotizacion.pedido_id))
+				.limit(2)
+		: [];
+
+	return {
+		cotizacion: {
+			...cotizacion,
+			transiciones,
+			navegacion: {
+				pedido_id: cotizacion.pedido_id,
+				orden_fabricacion_id: ordenes.length === 1 ? ordenes[0].id : null
+			}
+		},
+		lineas,
+		adjuntos
+	};
 });
 
 export const getEstadosCotizacion = query(async () => {
@@ -380,14 +447,18 @@ export const crearCotizacion = form(CotizacionSchema, async (data) => {
 	const user = await getCurrentUser();
 	if (!user) throw new Error('Usuario no autenticado');
 
-	const estadoInicial = await getEstadoPorSlug('ingresada');
+	const estadoInicial = await obtenerEstadoPorSlug('ingresada');
 	if (!estadoInicial) throw new Error('No existe el estado inicial "ingresada"');
 
 	const [cotizacion] = await db
 		.insert(cotizaciones)
 		.values({
 			numero_cotizacion: await generarNumeroCotizacion(),
-			cliente_id: data.cliente_id && data.cliente_id > 0 ? data.cliente_id : null,
+			contacto_id: data.contacto_id && data.contacto_id > 0 ? data.contacto_id : null,
+			contacto_distribuidor_id:
+				data.contacto_distribuidor_id && data.contacto_distribuidor_id > 0
+					? data.contacto_distribuidor_id
+					: null,
 			cliente_nombre: data.cliente_nombre,
 			cliente_telefono: data.cliente_telefono || null,
 			cliente_email: data.cliente_email || null,
@@ -433,36 +504,30 @@ export const asignarCotizacion = command(
 			.set({ asignada_a: empleado_id, updated_at: now })
 			.where(eq(cotizaciones.id, cotizacion_id));
 
-		// Si existe la transición ingresada -> asignada, la aplicamos automáticamente
-		const estadoAsignada = await getEstadoPorSlug('asignada');
+		const estadoAsignada = await obtenerEstadoPorSlug('asignada');
 		if (estadoAsignada && estadoAsignada.id !== cotizacion.estado_id) {
-			const transicion = await db
-				.select()
-				.from(transiciones_estado)
-				.where(
-					and(
-						eq(transiciones_estado.tipo, 'cotizacion'),
-						eq(transiciones_estado.estado_origen_id, cotizacion.estado_id),
-						eq(transiciones_estado.estado_destino_id, estadoAsignada.id)
-					)
-				)
-				.limit(1);
+			const transicion = await obtenerTransicionPermitida({
+				tipo: 'cotizacion',
+				estadoOrigenId: cotizacion.estado_id,
+				estadoDestinoId: estadoAsignada.id
+			});
 
-			if (transicion.length) {
+			if (transicion) {
 				await db.transaction(async (tx) => {
 					await tx
 						.update(cotizaciones)
 						.set({ estado_id: estadoAsignada.id, updated_at: now })
 						.where(eq(cotizaciones.id, cotizacion_id));
 
-					await tx.insert(logs_cambios_estado).values({
-						entidad_tipo: 'cotizacion',
-						entidad_id: cotizacion_id,
-						usuario_id: user.id,
-						estado_anterior_id: cotizacion.estado_id,
-						estado_nuevo_id: estadoAsignada.id,
+					await registrarCambioEstado({
+						tx,
+						entidadTipo: 'cotizacion',
+						entidadId: cotizacion_id,
+						usuarioId: user.id,
+						estadoAnteriorId: cotizacion.estado_id,
+						estadoNuevoId: estadoAsignada.id,
 						comentario: 'Cotización asignada',
-						created_at: now
+						createdAt: now
 					});
 				});
 			}
@@ -493,10 +558,7 @@ export const cotizarCotizacion = command(
 		const user = await getCurrentUser();
 		if (!user) throw new Error('No autorizado');
 
-		const precio_total = lineas.reduce(
-			(sum, l) => sum + (l.cantidad || 0) * (l.precio_unitario || 0),
-			0
-		);
+		const precio_total = calcularTotalLineas(lineas);
 
 		await db.transaction(async (tx) => {
 			await tx.delete(lineas_cotizacion).where(eq(lineas_cotizacion.cotizacion_id, cotizacion_id));
@@ -507,26 +569,23 @@ export const cotizarCotizacion = command(
 				let insumos_snapshot: unknown = null;
 
 				if (linea.producto_id) {
-					const receta = await tx
-						.select({
-							insumo_id: producto_insumos.insumo_id,
-							codigo: insumos.codigo,
-							nombre: insumos.nombre,
-							cantidad: producto_insumos.cantidad,
-							costo_unitario: insumos.costo_unitario,
-							unidad: insumos.unidad
-						})
-						.from(producto_insumos)
-						.innerJoin(insumos, eq(producto_insumos.insumo_id, insumos.id))
-						.where(eq(producto_insumos.producto_id, Number(linea.producto_id)));
+					const { receta } = await getProductoConReceta(Number(linea.producto_id));
 
 					insumos_snapshot = receta.map((material) => ({
-						...material,
-						subtotal: material.cantidad * material.costo_unitario
+						insumo_id: material.insumo_id,
+						codigo: material.codigo,
+						nombre: material.nombre,
+						cantidad: material.cantidad,
+						costo_unitario: material.costo_unitario ?? 0,
+						unidad: material.unidad,
+						subtotal: redondearMoneda((material.cantidad || 0) * (material.costo_unitario ?? 0))
 					}));
-					costo_materiales = receta.reduce(
-						(total, material) => total + material.cantidad * material.costo_unitario,
-						0
+					costo_materiales = redondearMoneda(
+						receta.reduce<number>(
+							(total, material) =>
+								total + (material.cantidad || 0) * (material.costo_unitario ?? 0),
+							0
+						)
 					);
 				} else if (linea.insumo_id) {
 					const [material] = await tx
@@ -557,9 +616,9 @@ export const cotizarCotizacion = command(
 					es_personalizado: linea.es_personalizado ?? !linea.producto_id,
 					descripcion,
 					cantidad: linea.cantidad,
-					precio_unitario: linea.precio_unitario,
-					costo_mano_obra: linea.costo_mano_obra || null,
-					costo_materiales: costo_materiales || null,
+					precio_unitario: redondearMoneda(linea.precio_unitario || 0),
+					costo_mano_obra: redondearMoneda(linea.costo_mano_obra || 0),
+					costo_materiales: redondearMoneda(costo_materiales || 0),
 					insumos_snapshot,
 					orden_linea: i
 				});
@@ -598,19 +657,13 @@ export const cambiarEstadoCotizacion = command(
 
 		if (!cotizacion) throw new Error('Cotización no encontrada');
 
-		const transicion = await db
-			.select()
-			.from(transiciones_estado)
-			.where(
-				and(
-					eq(transiciones_estado.tipo, 'cotizacion'),
-					eq(transiciones_estado.estado_origen_id, cotizacion.estado_id),
-					eq(transiciones_estado.estado_destino_id, estado_destino_id)
-				)
-			)
-			.limit(1);
+		const transicion = await obtenerTransicionPermitida({
+			tipo: 'cotizacion',
+			estadoOrigenId: cotizacion.estado_id,
+			estadoDestinoId: estado_destino_id
+		});
 
-		if (!transicion.length) throw new Error('Transición no permitida');
+		if (!transicion) throw new Error('Transición no permitida');
 
 		const [estadoDestino] = await db
 			.select()
@@ -628,39 +681,30 @@ export const cambiarEstadoCotizacion = command(
 				updates.fecha_envio = now;
 			}
 
-			await tx.update(cotizaciones).set(updates).where(eq(cotizaciones.id, cotizacion_id));
-
-			await tx.insert(logs_cambios_estado).values({
-				entidad_tipo: 'cotizacion',
-				entidad_id: cotizacion_id,
-				usuario_id: user.id,
-				estado_anterior_id: cotizacion.estado_id,
-				estado_nuevo_id: estado_destino_id,
+			await aplicarCambioDeEstado({
+				tx,
+				entidadTipo: 'cotizacion',
+				entidadId: cotizacion_id,
+				usuarioId: user.id,
+				estadoAnteriorId: cotizacion.estado_id,
+				estadoNuevoId: estado_destino_id,
 				comentario: comentario ?? null,
-				created_at: now
+				createdAt: now,
+				actualizarEntidad: async (txActual: typeof tx) => {
+					await txActual
+						.update(cotizaciones)
+						.set(updates)
+						.where(eq(cotizaciones.id, cotizacion_id));
+				}
 			});
 		});
 
-		// Notificaciones según el destino
-		if (estadoDestino?.slug === 'lista_para_enviar') {
-			await notificarUsuariosConPermiso(
-				'cotizaciones',
-				'enviar',
-				'Cotización lista para enviar',
-				`La cotización ${cotizacion.numero_cotizacion} (${cotizacion.cliente_nombre}) está lista para enviar al cliente.`,
-				`/cotizaciones/${cotizacion_id}`
-			);
-		}
-
-		if (estadoDestino?.slug === 'aprobada') {
-			await notificarUsuariosConPermiso(
-				'cotizaciones',
-				'convertir',
-				'Cotización aprobada',
-				`El cliente aprobó la cotización ${cotizacion.numero_cotizacion}. Ya podés generar el pedido.`,
-				`/cotizaciones/${cotizacion_id}`
-			);
-		}
+		await notificarCambioEstadoCotizacion({
+			cotizacionId: cotizacion_id,
+			numeroCotizacion: cotizacion.numero_cotizacion,
+			clienteNombre: cotizacion.cliente_nombre,
+			estadoDestinoSlug: estadoDestino?.slug
+		});
 
 		getCotizaciones({ search: '', page: 1 }).refresh();
 		getCotizacionById(cotizacion_id).refresh();
@@ -689,12 +733,12 @@ export const convertirCotizacionAPedido = command(v.number(), async (cotizacionI
 		throw new Error('Esta cotización ya tiene un pedido generado');
 	}
 
-	if (!cotizacion.cliente_id) {
-		throw new Error('La cotización debe tener un cliente vinculado para generar el pedido');
+	if (!cotizacion.contacto_id) {
+		throw new Error('La cotización debe tener una empresa vinculada para generar el pedido');
 	}
-	const clienteId = cotizacion.cliente_id;
+	const empresaId = cotizacion.contacto_id;
 
-	const estadoAprobada = await getEstadoPorSlug('aprobada');
+	const estadoAprobada = await obtenerEstadoPorSlug('aprobada');
 	if (estadoAprobada && cotizacion.estado_id !== estadoAprobada.id) {
 		throw new Error('La cotización debe estar Aprobada para generar el pedido');
 	}
@@ -713,7 +757,7 @@ export const convertirCotizacionAPedido = command(v.number(), async (cotizacionI
 		.where(eq(estados_pedido.slug, 'pendiente'))
 		.limit(1);
 
-	const precio_total = lineas.reduce((sum, l) => sum + (l.subtotal ?? 0), 0);
+	const precio_total = redondearMoneda(lineas.reduce((sum, l) => sum + (l.subtotal ?? 0), 0));
 
 	// Variable para guardar el ID del pedido creado
 	let pedidoId: number;
@@ -723,7 +767,8 @@ export const convertirCotizacionAPedido = command(v.number(), async (cotizacionI
 			.insert(pedidos)
 			.values({
 				numero_pedido: await generarNumeroPedido(),
-				cliente_id: clienteId,
+				contacto_id: empresaId,
+				contacto_distribuidor_id: cotizacion.contacto_distribuidor_id ?? null,
 				fecha_pedido: now,
 				estado_id: estadoPendiente?.id ?? 1,
 				precio_total,
@@ -735,13 +780,33 @@ export const convertirCotizacionAPedido = command(v.number(), async (cotizacionI
 		pedidoId = pedido.id; // Asignar dentro de la transacción
 
 		for (const linea of lineas) {
+			if (!linea.producto_id && linea.insumo_id) {
+				const [insumo] = await tx
+					.select({ unidad: insumos.unidad, costo_unitario: insumos.costo_unitario })
+					.from(insumos)
+					.where(eq(insumos.id, linea.insumo_id))
+					.limit(1);
+				if (!insumo) throw new Error('Insumo de cotización no encontrado');
+
+				await tx.insert(pedido_insumos).values({
+					pedido_id: pedido.id,
+					insumo_id: linea.insumo_id,
+					cantidad: linea.cantidad,
+					unidad: insumo.unidad,
+					costo_unitario: linea.precio_unitario,
+					cotizacion_linea_id: linea.id,
+					observaciones: `Insumo agregado desde la cotización ${cotizacion.numero_cotizacion}`
+				});
+				continue;
+			}
+
 			await tx.insert(lineas_pedido).values({
 				pedido_id: pedido.id,
 				producto_id: linea.producto_id,
 				es_personalizado: linea.es_personalizado,
 				descripcion_personalizada: linea.es_personalizado ? linea.descripcion : null,
 				cantidad: linea.cantidad,
-				precio_unitario: linea.precio_unitario,
+				precio_unitario: redondearMoneda(linea.precio_unitario || 0),
 				insumos_snapshot: linea.insumos_snapshot,
 				orden_linea: linea.orden_linea
 			});

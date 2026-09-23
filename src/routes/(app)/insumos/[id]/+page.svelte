@@ -1,10 +1,11 @@
 <script lang="ts">
 	import { goto } from '$app/navigation';
 	import { resolve } from '$app/paths';
-	import { Can, FormActions, FormFieldWrapper, PageLayout } from '$lib/components/ui';
+	import { Can, FormActions, FormErrors, FormFieldWrapper, PageLayout } from '$lib/components/ui';
 	import {
 		actualizarInsumo,
 		getCategoriasInsumo,
+		obtenerProveedores,
 		getTiposInsumo,
 		getUnidadesInsumo
 	} from '$lib/remote/insumos.remote';
@@ -76,15 +77,38 @@
 							{/each}</select
 						></FormFieldWrapper
 					>
+					<FormFieldWrapper label="Proveedor" id="proveedor_id">
+						<select
+							class="select"
+							{...form.fields.proveedor_id.as('select', data.insumo.proveedor_id?.toString() ?? '')}
+						>
+							<option value="">Sin proveedor</option>
+							{#each await obtenerProveedores() as proveedor (proveedor.id)}
+								<option value={String(proveedor.id)}>{proveedor.nombre}</option>
+							{/each}
+						</select>
+					</FormFieldWrapper>
 					<FormFieldWrapper label="Costo unitario" id="costo_unitario" required
 						><input
 							class="remove-arrow input"
 							min="0"
 							step="0.01"
-							{...form.fields.costo_unitario.as('number', data.insumo.costo_unitario)}
+							{...form.fields.costo_unitario.as(
+								'number',
+								data.insumo.costo_unitario / (1 + (data.insumo.flete_porcentaje ?? 0) / 100)
+							)}
 						/></FormFieldWrapper
 					>
+					<FormFieldWrapper label="Flete (%)" id="flete_porcentaje">
+						<input
+							class="remove-arrow input"
+							min="0"
+							step="0.01"
+							{...form.fields.flete_porcentaje.as('number', data.insumo.flete_porcentaje ?? 0)}
+						/>
+					</FormFieldWrapper>
 				</div>
+				<FormErrors {form} />
 				<FormActions cancelHref="/insumos" pending={!!form.pending} submitText="Guardar cambios" />
 			</div>
 		</form>

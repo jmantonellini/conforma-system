@@ -1,8 +1,17 @@
 <script lang="ts">
 	import { goto, invalidateAll } from '$app/navigation';
 	import { resolve } from '$app/paths';
-	import { Can, FormFieldWrapper, Modal, PageLayout, Table } from '$lib/components/ui';
+	import {
+		Can,
+		FormFieldWrapper,
+		Modal,
+		PageLayout,
+		NavegacionProceso,
+		Table
+	} from '$lib/components/ui';
 	import { toast } from '$lib/stores/toast.svelte';
+	import { getProductoConReceta } from '$lib/remote/productos.remote';
+	import { SearchSelect } from '$lib/components/ui';
 	import {
 		asignarCotizacion,
 		cambiarEstadoCotizacion,
@@ -11,7 +20,6 @@
 		eliminarAdjunto,
 		eliminarCotizacion
 	} from '$lib/remote/cotizaciones.remote';
-	import { getProductoInsumos } from '$lib/remote/productos.remote';
 	import { formatearFecha } from '$lib/utils/fechas';
 	import type { PageProps } from './$types';
 	import { Paths } from '$lib/types';
@@ -63,31 +71,41 @@
 	// ── Cotización (líneas y precios) ──
 	let productos = $derived(data.productos);
 	let validezDias = $derived(cotizacion.validez_dias ?? 15);
-	let lineas = $derived(
-		data.lineas.map((l: any) => ({
+	let lineas = $state<any[]>([]);
+
+	$effect(() => {
+		lineas = (data.lineas ?? []).map((l: any) => ({
 			idx: l.id,
+			tipo: l.producto_id ? 'producto' : l.insumo_id ? 'insumo' : 'personalizado',
 			producto_id: l.producto_id ? String(l.producto_id) : '',
 			insumo_id: l.insumo_id ?? undefined,
+			unidad: l.insumo_unidad ?? '',
 			insumos_snapshot: l.insumos_snapshot ?? [],
 			descripcion: l.descripcion,
 			cantidad: l.cantidad,
 			precio_unitario: l.precio_unitario,
 			costo_mano_obra: l.costo_mano_obra ?? 0,
 			costo_materiales: l.costo_materiales ?? 0
-		}))
-	);
+		}));
+	});
 
 	let total = $derived(
-		lineas.reduce((s: number, l: any) => s + (l.cantidad || 0) * (l.precio_unitario || 0), 0)
+		Number(
+			lineas
+				.reduce((s: number, l: any) => s + (l.cantidad || 0) * (l.precio_unitario || 0), 0)
+				.toFixed(2)
+		)
 	);
 
-	function agregarLinea() {
+	function agregarProductoLinea() {
 		lineas = [
 			...lineas,
 			{
 				idx: Date.now(),
+				tipo: 'producto',
 				producto_id: '',
 				insumo_id: undefined,
+				unidad: '',
 				insumos_snapshot: [],
 				descripcion: '',
 				cantidad: 1,
@@ -102,8 +120,10 @@
 			...lineas,
 			{
 				idx: Date.now(),
+				tipo: 'insumo',
 				producto_id: '',
 				insumo_id: undefined,
+				unidad: '',
 				insumos_snapshot: [],
 				descripcion: '',
 				cantidad: 1,
@@ -113,49 +133,117 @@
 			}
 		];
 	}
+
 	function eliminarLinea(idx: number) {
 		if (lineas.length > 1) lineas = lineas.filter((l: any) => l.idx !== idx);
 	}
-	async function onProductoChange(l: any) {
-		l.insumo_id = undefined;
-		if (l.producto_id) {
-			const p = productos.find((p: any) => p.id.toString() === l.producto_id);
-			const receta = await getProductoInsumos(Number(l.producto_id));
-			l.insumos_snapshot = receta.map((insumo) => ({
+
+	async function onProductoChange(lineaId: number, value: string) {
+		if (!value) {
+			console.log('NO VALUE');
+
+			lineas = lineas.map((linea: any) =>
+				linea.idx === lineaId
+					? {
+							...linea,
+							tipo: 'producto',
+							producto_id: '',
+							insumo_id: undefined,
+							unidad: '',
+							descripcion: '',
+							costo_materiales: 0,
+							precio_unitario: 0,
+							insumos_snapshot: []
+						}
+					: linea
+			);
+			return;
+		}
+		try {
+			const { producto, receta } = await getProductoConReceta(Number(value));
+			console.log('PRODUCTO', producto);
+			console.log('RECETA', receta);
+
+			const insumosSnapshot = receta.map((insumo) => ({
 				insumo_id: insumo.insumo_id,
 				codigo: insumo.codigo,
 				nombre: insumo.nombre,
 				cantidad: insumo.cantidad,
-				costo_unitario: insumo.costo_unitario,
+				costo_unitario: Number((insumo.costo_unitario ?? 0).toFixed(2)),
 				unidad: insumo.unidad,
-				subtotal: insumo.cantidad * insumo.costo_unitario
+				subtotal: Number(((insumo.cantidad || 0) * (insumo.costo_unitario ?? 0)).toFixed(2))
 			}));
-			l.costo_materiales = receta.reduce(
-				(total, insumo) => total + insumo.cantidad * insumo.costo_unitario,
-				0
+			const costoMateriales = Number(
+				receta
+					.reduce(
+						(total, insumo) => total + (insumo.cantidad || 0) * (insumo.costo_unitario ?? 0),
+						0
+					)
+					.toFixed(2)
 			);
-			l.descripcion = p?.nombre ?? l.descripcion;
-			l.precio_unitario = (p?.precio_base ?? 0) + l.costo_materiales;
+			lineas = lineas.map((linea: any) =>
+				linea.idx === lineaId
+					? {
+							...linea,
+							tipo: 'producto',
+							producto_id: value,
+							insumo_id: undefined,
+							unidad: '',
+							descripcion: producto.nombre,
+							costo_materiales: costoMateriales,
+							precio_unitario: Number(producto.precio_base ?? 0) + costoMateriales,
+							insumos_snapshot: insumosSnapshot
+						}
+					: linea
+			);
+		} catch {
+			toast.error('No se pudo cargar la receta del producto');
 		}
 	}
-	function onInsumoChange(l: any) {
-		l.producto_id = '';
-		const insumo = data.insumos.find((item: any) => item.id === Number(l.insumo_id));
-		if (!insumo) return;
-		l.descripcion = insumo.nombre;
-		l.costo_materiales = insumo.costo_unitario;
-		l.precio_unitario = insumo.costo_unitario;
-		l.insumos_snapshot = [
-			{
-				insumo_id: insumo.id,
-				codigo: insumo.codigo,
-				nombre: insumo.nombre,
-				cantidad: 1,
-				costo_unitario: insumo.costo_unitario,
-				unidad: insumo.unidad,
-				subtotal: insumo.costo_unitario
-			}
-		];
+
+	function onInsumoChange(lineaId: number, value: string) {
+		const insumo = data.insumos.find((item: any) => Number(item.id) === Number(value));
+		if (!value || !insumo) {
+			lineas = lineas.map((linea: any) =>
+				linea.idx === lineaId
+					? {
+							...linea,
+							insumo_id: '',
+							producto_id: '',
+							unidad: '',
+							descripcion: '',
+							precio_unitario: 0,
+							insumos_snapshot: []
+						}
+					: linea
+			);
+			return;
+		}
+		lineas = lineas.map((linea: any) =>
+			linea.idx === lineaId
+				? {
+						...linea,
+						tipo: 'insumo',
+						insumo_id: value,
+						producto_id: '',
+						descripcion: insumo.nombre,
+						unidad: insumo.unidad,
+						precio_unitario: insumo.costo_unitario,
+						costo_materiales: insumo.costo_unitario,
+						insumos_snapshot: [
+							{
+								insumo_id: insumo.id,
+								codigo: insumo.codigo,
+								nombre: insumo.nombre,
+								cantidad: 1,
+								costo_unitario: insumo.costo_unitario,
+								unidad: insumo.unidad,
+								subtotal: insumo.costo_unitario
+							}
+						]
+					}
+				: linea
+		);
 	}
 
 	async function guardarCotizacion() {
@@ -166,8 +254,13 @@
 				lineas: lineas.map((l: any) => ({
 					producto_id: l.producto_id || undefined,
 					insumo_id: l.insumo_id ? Number(l.insumo_id) : undefined,
-					es_personalizado: !l.producto_id,
-					descripcion: l.descripcion,
+					es_personalizado: l.tipo === 'personalizado',
+					descripcion:
+						l.descripcion ||
+						(l.insumo_id
+							? data.insumos.find((insumo: any) => insumo.id === Number(l.insumo_id))?.nombre
+							: '') ||
+						'',
 					cantidad: Number(l.cantidad) || 1,
 					precio_unitario: Number(l.precio_unitario) || 0,
 					costo_mano_obra: Number(l.costo_mano_obra) || 0,
@@ -206,10 +299,9 @@
 
 	async function generarPedido() {
 		try {
-			await convertirCotizacionAPedido(cotizacion.id).then((pedidoId) => {
-				toast.success('Pedido generado');
-				goto(resolve(`/pedidos/${pedidoId}`));
-			});
+			const { pedidoId } = await convertirCotizacionAPedido(cotizacion.id);
+			toast.success('Pedido generado');
+			goto(resolve(`/pedidos/${pedidoId}`));
 		} catch (e: any) {
 			toast.error(e?.message ?? 'No se pudo generar el pedido');
 		}
@@ -235,6 +327,7 @@
 		try {
 			await eliminarCotizacion(cotizacion.id);
 			toast.success('Cotización eliminada');
+			await invalidateAll();
 			goto(resolve(Paths.COTIZACIONES));
 		} catch (e) {
 			console.log(e);
@@ -247,22 +340,43 @@
 
 <PageLayout>
 	<div class="flex flex-col gap-4">
-		<div class="flex items-center justify-between">
+		<div class="grid items-center gap-3 lg:grid-cols-[auto_1fr_auto]">
 			<button onclick={() => history.back()} class="btn btn-ghost btn-sm">← Volver</button>
+			<div class="flex justify-center">
+				<NavegacionProceso
+					currentKey="cotizacion"
+					steps={[
+						{ key: 'cotizacion', label: 'Cotización', status: cotizacion.estado.nombre },
+						...(cotizacion.navegacion.pedido_id
+							? [
+									{
+										key: 'pedido',
+										label: 'Pedido',
+										href: `/pedidos/${cotizacion.navegacion.pedido_id}`
+									}
+								]
+							: []),
+						...(cotizacion.navegacion.orden_fabricacion_id
+							? [
+									{
+										key: 'fabricacion',
+										label: 'Fabricación',
+										href: `/fabricacion/${cotizacion.navegacion.orden_fabricacion_id}`
+									}
+								]
+							: [])
+					]}
+				/>
+			</div>
 
-			{#if cotizacion.estado.slug === 'aprobada' && !cotizacion.pedido_id}
-				<Can modulo="cotizaciones" accion="convertir">
-					<button class="btn btn-outline btn-sm btn-success" onclick={generarPedido}
-						>Generar Pedido</button
-					>
-				</Can>
-			{/if}
-			{#if cotizacion.pedido_id}
-				<a class="btn btn-outline btn-sm" href={resolve(`/pedidos/${cotizacion.pedido_id}`)}>
-					Ver pedido #{cotizacion.pedido_id}
-				</a>
-			{/if}
 			<div class="flex items-center gap-2">
+				{#if cotizacion.estado.slug === 'aprobada' && !cotizacion.pedido_id}
+					<Can modulo="cotizaciones" accion="convertir">
+						<button class="btn btn-outline btn-sm btn-success" onclick={generarPedido}
+							>Generar Pedido</button
+						>
+					</Can>
+				{/if}
 				<a
 					class="btn btn-outline btn-sm"
 					href={resolve(`/cotizaciones/${cotizacion.id}/pdf`)}
@@ -290,9 +404,13 @@
 							</p>
 						</FormFieldWrapper>
 					{:else}
-						<p class="font-medium">{cotizacion.cliente_nombre}</p>
-						<p>{cotizacion.cliente_telefono ?? ''}</p>
-						<p class="text-base-content/50">Contacto no cargado como cliente</p>
+						<p class="flex flex-col gap-1">
+							<span class="font-medium">{cotizacion.cliente_nombre}</span>
+							{#if cotizacion.cliente_telefono}
+								<span>{cotizacion.cliente_telefono ?? ''}</span>
+							{/if}
+							<span class="text-base-content/50">No cargado como contacto</span>
+						</p>
 					{/if}
 					<FormFieldWrapper label="Fecha" id="fecha">
 						<p>{formatearFecha(cotizacion.created_at)}</p>
@@ -341,18 +459,13 @@
 							<button class="btn btn-primary btn-sm" onclick={asignar}>Asignar</button>
 						</FormFieldWrapper>
 					</Can>
+					<FormFieldWrapper label="Descripción" id="descripcion" class="col-span-4">
+						<p class="whitespace-pre-wrap">{cotizacion.descripcion}</p>
+						{#if cotizacion.observaciones}
+							<p class="mt-2 text-sm text-base-content/60">📝 {cotizacion.observaciones}</p>
+						{/if}
+					</FormFieldWrapper>
 				</div>
-			</div>
-		</div>
-
-		<!-- Consulta del cliente -->
-		<div class="card bg-base-100 shadow">
-			<div class="card-body">
-				<h2 class="card-title">Petición</h2>
-				<p class="whitespace-pre-wrap">{cotizacion.descripcion}</p>
-				{#if cotizacion.observaciones}
-					<p class="mt-2 text-sm text-base-content/60">📝 {cotizacion.observaciones}</p>
-				{/if}
 			</div>
 		</div>
 
@@ -362,100 +475,104 @@
 				<div class="card-body gap-4">
 					<h2 class="card-title">Detalles y precios</h2>
 					<div class="flex flex-wrap justify-end gap-2">
-						<button type="button" onclick={agregarLinea} class="btn btn-outline btn-sm"
-							>+ Línea personalizada</button
+						<button type="button" onclick={agregarProductoLinea} class="btn btn-outline btn-sm"
+							>+ Producto</button
 						>
 						<button type="button" onclick={agregarInsumoLinea} class="btn btn-outline btn-sm"
 							>+ Insumo</button
 						>
 					</div>
 					{#each lineas as linea (linea.idx)}
-						<div class="card relative border border-base-300 bg-base-100 p-4">
+						<div class="card relative gap-1 border border-base-300 bg-base-100 p-3">
 							<button
 								type="button"
 								onclick={() => eliminarLinea(linea.idx)}
 								class="btn absolute top-1 right-1 btn-circle btn-ghost btn-xs"
 								class:hidden={lineas.length === 1}>✕</button
 							>
-							<div class="grid gap-3 lg:grid-cols-12">
-								<FormFieldWrapper class="lg:col-span-3" label="Producto" id="producto_id">
-									<select
-										class="select w-full"
-										id="product_id"
-										bind:value={linea.producto_id}
-										onchange={() => onProductoChange(linea)}
-									>
-										<option value="">📝 Personalizado</option>
-										{#each productos as p (p.id)}
-											<option value={p.id.toString()}>{p.nombre}</option>
-										{/each}
-									</select>
-								</FormFieldWrapper>
-								<FormFieldWrapper class="lg:col-span-3" label="Insumo independiente" id="insumo_id">
-									<select
-										class="select w-full"
-										bind:value={linea.insumo_id}
-										onchange={() => onInsumoChange(linea)}
-									>
-										<option value={undefined}>No corresponde</option>
-										{#each data.insumos as insumo (insumo.id)}
-											<option value={insumo.id}>{insumo.codigo} - {insumo.nombre}</option>
-										{/each}
-									</select>
-								</FormFieldWrapper>
-								<FormFieldWrapper class="lg:col-span-4" label="Descripción" id="descripcion">
-									<input
-										class="input"
-										placeholder="Descripción del trabajo"
-										bind:value={linea.descripcion}
-									/>
-								</FormFieldWrapper>
+							<div class="grid gap-2 sm:grid-cols-2 lg:grid-cols-10">
+								{#if linea.tipo === 'producto'}
+									<div class="min-w-0 lg:col-span-5">
+										<SearchSelect
+											label="Producto"
+											id={`producto-${linea.idx}`}
+											placeholder="Buscar producto..."
+											field={{
+												value: () => linea.producto_id || '',
+												set: (value: string) => {
+													lineas = lineas.map((l: any) =>
+														l.idx === linea.idx
+															? { ...l, producto_id: value, insumo_id: undefined }
+															: l
+													);
+												}
+											}}
+											options={productos.map((p) => ({
+												value: p.id.toString(),
+												label: p.nombre
+											}))}
+											onChange={(value: string) => onProductoChange(linea.idx, value)}
+										/>
+									</div>
+								{:else if linea.tipo === 'insumo'}
+									<div class="min-w-0 lg:col-span-5">
+										<SearchSelect
+											label="Insumo"
+											id={`insumo-${linea.idx}`}
+											placeholder="Buscar insumo..."
+											field={{
+												value: () => String(linea.insumo_id ?? ''),
+												set: (value: string) => {
+													lineas = lineas.map((l: any) =>
+														l.idx === linea.idx ? { ...l, insumo_id: value } : l
+													);
+												}
+											}}
+											options={data.insumos.map((insumo) => ({
+												value: String(insumo.id),
+												label: `${insumo.codigo} - ${insumo.nombre}`
+											}))}
+											onChange={(value: string) => onInsumoChange(linea.idx, value)}
+										/>
+									</div>
+								{/if}
+								{#if linea.tipo === 'insumo'}
+									<FormFieldWrapper label="Unidad" id="unidad">
+										<div class="input flex items-center bg-base-200">{linea.unidad || '-'}</div>
+									</FormFieldWrapper>
+								{/if}
 								<FormFieldWrapper label="Cantidad" id="cantidad">
 									<input
-										class="remove-arrow input md:col-span-1"
+										class="remove-arrow input"
 										type="number"
 										min="1"
 										bind:value={linea.cantidad}
 									/>
 								</FormFieldWrapper>
-								<FormFieldWrapper class="lg:col-span-2" label="Precio unit." id="precio_unitario">
-									<input
-										class="remove-arrow input"
-										type="number"
-										min="0"
-										step="0.01"
-										placeholder="Precio unit."
-										bind:value={linea.precio_unitario}
-									/>
+								<FormFieldWrapper label="Precio U." id="precio_unitario">
+									<div class="input flex items-center bg-base-200">
+										${linea.precio_unitario.toLocaleString('es-AR', { minimumFractionDigits: 2 })}
+									</div>
 								</FormFieldWrapper>
-								<FormFieldWrapper label="M.O." id="costo_mano_obra">
-									<input
-										class="remove-arrow input"
-										type="number"
-										min="0"
-										step="0.01"
-										placeholder="M.O."
-										title="Costo mano de obra"
-										bind:value={linea.costo_mano_obra}
-									/>
-								</FormFieldWrapper>
-								<FormFieldWrapper label="Materiales" id="costo_materiales">
-									<input
-										class="remove-arrow input lg:col-span-1"
-										type="number"
-										min="0"
-										step="0.01"
-										placeholder="Mat."
-										title="Costo materiales"
-										bind:value={linea.costo_materiales}
-									/>
+								<FormFieldWrapper label="Subtotal" id="subtotal">
+									<div class="input flex items-center bg-base-200 font-semibold">
+										${((linea.cantidad || 0) * (linea.precio_unitario || 0)).toLocaleString(
+											'es-AR',
+											{
+												minimumFractionDigits: 2
+											}
+										)}
+									</div>
 								</FormFieldWrapper>
 							</div>
-							{#if linea.insumos_snapshot?.length}
-								<div class="mt-3 rounded-box bg-base-200 p-3 text-sm">
-									<p class="font-semibold">Insumos incluidos en el costo</p>
-									<ul class="mt-1 grid gap-1 sm:grid-cols-2">
-										{#each linea.insumos_snapshot as material}
+							{#if linea.tipo === 'producto' && linea.insumos_snapshot?.length}
+								<div class="collapse-arrow collapse bg-base-200 p-0 text-sm">
+									<input type="checkbox" />
+									<div class="collapse-title ps-12 pe-4 after:inset-s-5 after:inset-e-auto">
+										Insumos del producto
+									</div>
+									<ul class="collapse-content z-1 flex flex-col gap-1 text-sm">
+										{#each linea.insumos_snapshot as material, materialIndex (`${material.insumo_id}-${materialIndex}`)}
 											<li class="flex justify-between gap-3">
 												<span>{material.cantidad} {material.unidad} · {material.nombre}</span>
 												<span
@@ -484,7 +601,9 @@
 						<p class="grow-0 text-2xl font-bold">
 							${total.toLocaleString('es-AR', { minimumFractionDigits: 2 })}
 						</p>
-						<button class="btn btn-primary" onclick={guardarCotizacion}>Guardar cotización</button>
+						<button class="btn btn-primary btn-sm" onclick={guardarCotizacion}
+							>Guardar cotización</button
+						>
 					</div>
 				</div>
 			</div>

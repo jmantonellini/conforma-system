@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { goto } from '$app/navigation';
 	import { resolve } from '$app/paths';
-	import { FormFieldWrapper } from '$lib/components/ui';
+	import { FormErrors, FormFieldWrapper } from '$lib/components/ui';
 	import { register } from '$lib/remote/auth.remote';
 	import { toast } from '$lib/stores/toast.svelte';
 
@@ -51,6 +51,7 @@
 					<p class="text-sm text-error">{issue.message}</p>
 				{/each}
 			</FormFieldWrapper>
+			<FormErrors {form} />
 
 			<button class="btn mt-4 btn-neutral" type="submit" disabled={!!form.pending}>
 				{form.pending ? 'Registrando...' : 'Registrar'}

@@ -14,8 +14,6 @@ const RegistrarPagoSchema = v.object({
 	observaciones: v.optional(v.string())
 });
 
-// QUERIES
-
 export const getPagosByPedido = query(v.number(), async (pedidoId) => {
 	const [pagosRows, pedidoRow] = await Promise.all([
 		db.select().from(pagos).where(eq(pagos.pedido_id, pedidoId)).orderBy(desc(pagos.created_at)),
@@ -43,8 +41,6 @@ export const getPagosByPedido = query(v.number(), async (pedidoId) => {
 
 	return { pagos: pagosRows, totalPagado, saldo, estado };
 });
-
-// FORMS
 
 export const registrarPago = form(RegistrarPagoSchema, async (data) => {
 	await requirePermission('pedidos', 'edit');

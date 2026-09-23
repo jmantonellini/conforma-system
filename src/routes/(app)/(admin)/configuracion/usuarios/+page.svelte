@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { FormFieldWrapper, Modal, PageLayout, Table } from '$lib/components/ui';
+	import { FormErrors, FormFieldWrapper, Modal, PageLayout, Table } from '$lib/components/ui';
 	import { Delete, Edit } from '$lib/components/ui/icons';
 	import { getEmpleadosSinUsuario } from '$lib/remote/empleados.remote';
 	import { getRoles } from '$lib/remote/roles.remote';
@@ -32,7 +32,7 @@
 		<button onclick={() => history.back()} class="btn btn-ghost btn-sm">← Volver</button>
 
 		<button
-			class="btn btn-primary"
+			class="btn btn-sm btn-primary"
 			onclick={() => {
 				showModal = true;
 				editingUsuario = null;
@@ -159,9 +159,7 @@
 			</div>
 		</fieldset>
 	</form>
-	{#each activeForm.fields?.allIssues?.() as issue (issue)}
-		<p class="mt-1 text-sm text-error">{issue.message}</p>
-	{/each}
+	<FormErrors form={activeForm} />
 	{#snippet actions()}
 		<button
 			class="btn"

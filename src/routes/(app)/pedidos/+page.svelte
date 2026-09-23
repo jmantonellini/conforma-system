@@ -11,9 +11,15 @@
 
 	let { data }: PageProps = $props();
 
-	let search = $derived(data.search);
-	let estadoFilter = $derived(data.estadoFilter);
-	let currentPage = $derived(data.currentPage);
+	let search = $state('');
+	let estadoFilter = $state('');
+	let currentPage = $state(1);
+
+	$effect(() => {
+		search = data.search ?? '';
+		estadoFilter = data.estadoFilter ?? '';
+		currentPage = data.currentPage ?? 1;
+	});
 
 	function handleSearchChange() {
 		const params = new SvelteURLSearchParams();
@@ -28,9 +34,23 @@
 	<div class="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
 		<div class="flex flex-1 flex-wrap gap-4">
 			<div class="w-full sm:w-80">
-				<SearchBar autofocus bind:search oninput={() => debounce(handleSearchChange)} />
+				<SearchBar
+					autofocus
+					bind:search
+					oninput={() => {
+						currentPage = 1;
+						debounce(handleSearchChange);
+					}}
+				/>
 			</div>
-			<select bind:value={estadoFilter} class="select w-48" onchange={handleSearchChange}>
+			<select
+				bind:value={estadoFilter}
+				class="select select-sm w-48"
+				onchange={() => {
+					currentPage = 1;
+					handleSearchChange();
+				}}
+			>
 				<option value="">Todos los estados</option>
 				{#each data.estados as est (est.id)}
 					<option value={String(est.id)}>{est.nombre}</option>
@@ -38,7 +58,7 @@
 			</select>
 		</div>
 		<Can modulo="pedidos" accion="create">
-			<a class="btn btn-primary" href={resolve('/pedidos/crear')}>+ Nuevo Pedido</a>
+			<a class="btn btn-sm btn-primary" href={resolve('/pedidos/crear')}>+ Nuevo Pedido</a>
 		</Can>
 	</div>
 

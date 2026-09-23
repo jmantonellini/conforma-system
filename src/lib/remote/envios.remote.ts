@@ -1,7 +1,7 @@
 import * as v from 'valibot';
 import { query, form, command } from '$app/server';
 import { db } from '$lib/server/db';
-import { envios, transportistas, pedidos, clientes } from '$lib/server/db/schema';
+import { envios, transportistas, pedidos, contactos } from '$lib/server/db/schema';
 import { eq, desc, count } from 'drizzle-orm';
 import { requirePermission } from '$lib/server/auth/permissions';
 
@@ -30,12 +30,12 @@ export const getEnvios = query(
 				cantidad_bultos: envios.cantidad_bultos,
 				transportista: transportistas.nombre,
 				pedido_numero: pedidos.numero_pedido,
-				cliente_nombre: clientes.nombre
+				cliente_nombre: contactos.razon_social
 			})
 			.from(envios)
 			.innerJoin(transportistas, eq(envios.transportista_id, transportistas.id))
 			.innerJoin(pedidos, eq(envios.pedido_id, pedidos.id))
-			.leftJoin(clientes, eq(pedidos.cliente_id, clientes.id))
+			.leftJoin(contactos, eq(pedidos.contacto_id, contactos.id))
 			.where(where)
 			.orderBy(desc(envios.created_at))
 			.limit(limit)
@@ -73,6 +73,13 @@ const EnvioSchema = v.object({
 	observaciones: v.optional(v.string())
 });
 
+const refrescarCachesEnvio = async (pedidoId?: number) => {
+	await Promise.all([
+		getEnvios({ page: 1 }).refresh(),
+		...(pedidoId ? [getEnviosByPedido(pedidoId).refresh()] : [])
+	]);
+};
+
 export const crearEnvio = form(EnvioSchema, async (data) => {
 	await requirePermission('pedidos', 'edit');
 	await db.insert(envios).values({
@@ -84,8 +91,7 @@ export const crearEnvio = form(EnvioSchema, async (data) => {
 		estado: 'despachado'
 	});
 
-	getEnviosByPedido(data.pedido_id).refresh();
-	getEnvios({ page: 1 }).refresh();
+	await refrescarCachesEnvio(data.pedido_id);
 
 	return { success: true };
 });
@@ -94,12 +100,18 @@ export const marcarEntregado = command(
 	v.pipe(v.string(), v.transform(Number), v.number()),
 	async (envioId) => {
 		await requirePermission('pedidos', 'edit');
+		const [envio] = await db
+			.select({ pedido_id: envios.pedido_id })
+			.from(envios)
+			.where(eq(envios.id, envioId))
+			.limit(1);
+
 		await db
 			.update(envios)
 			.set({ estado: 'entregado', fecha_entrega: new Date() })
 			.where(eq(envios.id, envioId));
 
-		Promise.all([getEnvios({ page: 1 }).refresh(), getEnviosByPedido(envioId).refresh()]);
+		await refrescarCachesEnvio(envio?.pedido_id);
 		return { success: true };
 	}
 );

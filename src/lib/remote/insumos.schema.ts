@@ -6,8 +6,10 @@ export const InsumoSchema = v.object({
 	tipo: v.pipe(v.string(), v.nonEmpty('Tipo requerido')),
 	unidad: v.pipe(v.string(), v.nonEmpty('Unidad requerida')),
 	costo_unitario: v.pipe(v.number(), v.toMinValue(0)),
+	flete_porcentaje: v.optional(v.pipe(v.number(), v.toMinValue(0)), 0),
 	observaciones: v.optional(v.string()),
-	categoria_id: v.optional(v.pipe(v.string(), v.transform(Number), v.number()))
+	categoria_id: v.optional(v.pipe(v.string(), v.transform(Number), v.number())),
+	proveedor_id: v.optional(v.pipe(v.string(), v.transform(Number), v.number()))
 });
 
 export const InsumoSchemaUpdate = v.object({
@@ -23,8 +25,12 @@ export const ImportarInsumosSchema = v.pipe(
 			tipo: v.pipe(v.string(), v.nonEmpty('Tipo requerido')),
 			unidad: v.pipe(v.string(), v.nonEmpty('Unidad requerida')),
 			costo_unitario: v.pipe(v.number(), v.toMinValue(0)),
+			flete_porcentaje: v.optional(v.pipe(v.number(), v.toMinValue(0)), 0),
 			observaciones: v.optional(v.string()),
-			categoria_id: v.optional(v.number())
+			categoria_id: v.optional(v.number()),
+			proveedor_id: v.optional(v.number()),
+			categoria: v.optional(v.string()),
+			proveedor: v.optional(v.string())
 		})
 	),
 	v.maxLength(1000, 'El archivo no puede superar 1000 filas')

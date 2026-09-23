@@ -5,7 +5,15 @@
 		actualizarProducto,
 		eliminarProducto
 	} from '$lib/remote/productos.remote';
-	import { Can, PageLayout, FormFieldWrapper, FormActions } from '$lib/components/ui';
+	import {
+		Can,
+		FormErrors,
+		PageLayout,
+		FormFieldWrapper,
+		FormActions,
+		SearchSelect
+	} from '$lib/components/ui';
+	import { Delete } from '$lib/components/ui/icons';
 	import { toast } from '$lib/stores/toast.svelte';
 	import { goto } from '$app/navigation';
 	import { page } from '$app/state';
@@ -35,13 +43,15 @@
 	);
 
 	let showDeleteModal = $state(false);
-	let receta = $derived(
-		data.receta.map((linea) => ({
+	let receta = $state<Array<{ insumo_id: string; producto_id: string; cantidad: number }>>([]);
+
+	$effect(() => {
+		receta = (data.receta ?? []).map((linea) => ({
 			insumo_id: String(linea.insumo_id),
-			cantidad: linea.cantidad,
-			opcional: linea.opcional ?? false
-		}))
-	);
+			producto_id: '',
+			cantidad: linea.cantidad
+		}));
+	});
 	let costoReceta = $derived(
 		receta.reduce((total, linea) => {
 			const insumo = data.insumos.find((item) => item.id === Number(linea.insumo_id));
@@ -54,7 +64,7 @@
 	let precioConInsumos = $derived(precioBaseActual + costoReceta);
 
 	function agregarInsumo() {
-		receta = [...receta, { insumo_id: '', cantidad: 1, opcional: false }];
+		receta = [...receta, { insumo_id: '', producto_id: '', cantidad: 1 }];
 	}
 </script>
 
@@ -109,7 +119,7 @@
 							{/each}
 						</select>
 					</FormFieldWrapper>
-					<FormFieldWrapper label="Precio base (mano de obra / margen)" id="precio_base">
+					<FormFieldWrapper label="Márgen ganancia" id="precio_base">
 						<input
 							class="remove-arrow input"
 							step="0.01"
@@ -117,11 +127,10 @@
 						/>
 					</FormFieldWrapper>
 					<div class="stat rounded-box border border-primary/30 bg-primary/5 p-3">
-						<div class="stat-title">Precio con insumos</div>
+						<div class="stat-title">Precio final</div>
 						<div class="stat-value text-2xl text-primary">
 							${precioConInsumos.toLocaleString('es-AR', { minimumFractionDigits: 2 })}
 						</div>
-						<div class="stat-desc">Base + costo actual de la receta</div>
 					</div>
 				</div>
 			</fieldset>
@@ -282,42 +291,70 @@
 				</div>
 			{/if}
 			<fieldset class="fieldset rounded-box border border-base-300 bg-base-200 p-4">
-				<legend class="fieldset-legend">Receta de insumos</legend>
-				<p class="mb-3 text-sm text-base-content/70">
-					Desglose interno para calcular el costo. Las cotizaciones guardadas conservan los valores
-					usados en ese momento.
-				</p>
+				<legend class="fieldset-legend">Receta del producto</legend>
 				{#each receta as linea, indice (indice)}
-					<div class="mb-2 grid gap-2 md:grid-cols-[1fr_8rem_auto_auto]">
-						<select class="select" bind:value={linea.insumo_id}>
-							<option value="">Seleccionar insumo...</option>
-							{#each data.insumos as insumo (insumo.id)}
-								<option value={String(insumo.id)}>{insumo.codigo} - {insumo.nombre}</option>
-							{/each}
-						</select>
+					<div class="mb-1 grid grid-cols-[1fr_auto_auto_auto] gap-1 sm:items-center">
+						<SearchSelect
+							label=""
+							id={`receta-edit-${indice}`}
+							placeholder="Buscar componente..."
+							field={{
+								value: () =>
+									linea.insumo_id
+										? `insumo:${linea.insumo_id}`
+										: linea.producto_id
+											? `producto:${linea.producto_id}`
+											: '',
+								set: (value: string) => {
+									const [tipo, id] = value.split(':');
+									linea.insumo_id = tipo === 'insumo' ? id : '';
+									linea.producto_id = tipo === 'producto' ? id : '';
+								}
+							}}
+							options={[
+								...data.insumos.map((insumo) => ({
+									value: `insumo:${insumo.id}`,
+									label: `${insumo.codigo} - ${insumo.nombre}`
+								})),
+								...data.productos
+									.filter((producto) => producto.id !== data.producto.id)
+									.map((producto) => ({
+										value: `producto:${producto.id}`,
+										label: `${producto.codigo} - ${producto.nombre}`
+									}))
+							]}
+							onChange={(value: string) => {
+								const [tipo, id] = value.split(':');
+								linea.insumo_id = tipo === 'insumo' ? id : '';
+								linea.producto_id = tipo === 'producto' ? id : '';
+							}}
+						/>
 						<input
-							class="input"
+							class="remove-arrow input w-16"
 							type="number"
-							min="0.0001"
+							min="0"
 							step="0.01"
 							bind:value={linea.cantidad}
 						/>
-						<label class="label gap-2"
-							><input type="checkbox" class="checkbox" bind:checked={linea.opcional} /> Opcional</label
-						>
+						<span class="label whitespace-nowrap"
+							>{data.insumos.find((insumo) => String(insumo.id) === linea.insumo_id)?.unidad ??
+								'-'}s
+						</span>
 						<button
-							class="btn btn-ghost text-error btn-sm"
+							class="btn btn-square btn-ghost text-error btn-sm"
+							title="Quitar componente"
+							aria-label="Quitar componente"
 							type="button"
-							onclick={() => (receta = receta.filter((_, i) => i !== indice))}>Quitar</button
+							onclick={() => (receta = receta.filter((_, i) => i !== indice))}><Delete /></button
 						>
 					</div>
 				{/each}
 				<div class="flex items-center justify-between">
 					<button class="btn btn-outline btn-sm" type="button" onclick={agregarInsumo}
-						>+ Agregar insumo</button
+						>+ Agregar componente</button
 					>
 					<span class="font-semibold"
-						>Costo insumos: ${costoReceta.toLocaleString('es-AR', {
+						>Costo expandido: ${costoReceta.toLocaleString('es-AR', {
 							minimumFractionDigits: 2
 						})}</span
 					>
@@ -337,6 +374,7 @@
 				</FormFieldWrapper>
 			</fieldset>
 
+			<FormErrors {form} />
 			<FormActions
 				cancelHref="/productos"
 				pending={!!form.pending}

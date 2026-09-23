@@ -13,7 +13,8 @@ export const LineaCotizacionSchema = v.object({
 });
 
 export const CotizacionSchema = v.object({
-	cliente_id: v.optional(v.pipe(v.string(), v.transform(Number), v.number())),
+	contacto_id: v.optional(v.pipe(v.string(), v.transform(Number), v.number())),
+	contacto_distribuidor_id: v.optional(v.pipe(v.string(), v.transform(Number), v.number())),
 	cliente_nombre: v.pipe(v.string(), v.nonEmpty('Indicá el nombre del contacto')),
 	cliente_telefono: v.optional(v.string()),
 	cliente_email: v.optional(v.string()),

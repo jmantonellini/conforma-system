@@ -1,7 +1,12 @@
 import * as v from 'valibot';
-import { command, query } from '$app/server';
+import { command, form, query } from '$app/server';
 import { db } from '$lib/server/db';
-import { categorias_productos, estados_fabricacion, estados_pedido } from '$lib/server/db/schema';
+import {
+	categorias_productos,
+	configuracion_empresa,
+	estados_fabricacion,
+	estados_pedido
+} from '$lib/server/db/schema';
 import { asc, eq } from 'drizzle-orm';
 import { requirePermission } from '$lib/server/auth/permissions';
 
@@ -10,6 +15,36 @@ const idSchema = v.object({ id: v.number() });
 export const getCategoriasProductoAdmin = query(async () =>
 	db.select().from(categorias_productos).orderBy(asc(categorias_productos.nombre))
 );
+
+const EmpresaConfigSchema = v.object({
+	razon_social: v.pipe(v.string(), v.trim(), v.nonEmpty()),
+	cuit: v.optional(v.string()),
+	direccion: v.optional(v.string()),
+	telefono: v.optional(v.string()),
+	email: v.optional(v.string())
+});
+
+export const getConfiguracionEmpresa = query(async () => {
+	const [config] = await db
+		.select()
+		.from(configuracion_empresa)
+		.where(eq(configuracion_empresa.id, 1));
+	return config ?? { id: 1, razon_social: 'Conforma', logo_url: null };
+});
+
+export const actualizarConfiguracionEmpresa = form(EmpresaConfigSchema, async (data) => {
+	await requirePermission('configuracion', 'edit');
+	const [config] = await db
+		.insert(configuracion_empresa)
+		.values({ id: 1, ...data, updated_at: new Date() })
+		.onConflictDoUpdate({
+			target: configuracion_empresa.id,
+			set: { ...data, updated_at: new Date() }
+		})
+		.returning();
+	getConfiguracionEmpresa().refresh();
+	return config;
+});
 
 export const crearCategoriaProducto = command(
 	v.object({

@@ -5,19 +5,28 @@
 		eliminarOrdenFabricacion
 	} from '$lib/remote/fabricacion.remote';
 	import { Highlight, Table, PageLayout, Pagination, Modal } from '$lib/components/ui';
-	import { goto } from '$app/navigation';
+	import { goto, invalidateAll } from '$app/navigation';
 	import { SvelteURLSearchParams } from 'svelte/reactivity';
 	import { resolve } from '$app/paths';
 	import { Delete, Eye } from '$lib/components/ui/icons';
 	import { page } from '$app/state';
 	import { toast } from '$lib/stores/toast.svelte';
+	import SearchBar from '$lib/components/ui/SearchBar.svelte';
+	import { debounce } from '$lib/utils/debounce';
 
 	let estados = await getEstadosFabricacion();
 	let showModal = $state(false);
 	let deleteOrdenId = $state('');
-	let estadoFilter = $derived(Number(page.url.searchParams.get('estado')) || 0);
-	let currentPage = $derived(Number(page.url.searchParams.get('page')) || 1);
-	let search = $state(page.url.searchParams.get('search') ?? '');
+	let estadoFilter = $state(0);
+	let currentPage = $state(1);
+	let search = $state('');
+
+	$effect(() => {
+		const params = page.url.searchParams;
+		search = params.get('search') ?? '';
+		estadoFilter = Number(params.get('estado')) || 0;
+		currentPage = Number(params.get('page')) || 1;
+	});
 
 	function closeModal() {
 		showModal = false;
@@ -31,7 +40,7 @@
 		})
 	);
 
-	function handleSearch() {
+	function handleSearchChange() {
 		const params = new SvelteURLSearchParams();
 		if (search) params.set('search', search);
 		if (estadoFilter) params.set('estado', String(estadoFilter));
@@ -44,20 +53,31 @@
 <PageLayout>
 	<div class="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
 		<div class="flex flex-1 flex-wrap gap-4">
-			<input
-				class="input w-72"
-				placeholder="Buscar orden, trabajo, cliente o producto"
-				bind:value={search}
-				oninput={handleSearch}
-			/>
-			<select bind:value={estadoFilter} class="select w-48" onchange={handleSearch}>
+			<div class="w-full sm:w-80">
+				<SearchBar
+					autofocus
+					bind:search
+					oninput={() => {
+						currentPage = 1;
+						debounce(handleSearchChange);
+					}}
+				/>
+			</div>
+			<select
+				bind:value={estadoFilter}
+				class="select select-sm w-48"
+				onchange={() => {
+					currentPage = 1;
+					handleSearchChange();
+				}}
+			>
 				<option value={0}>Todos los estados</option>
 				{#each estados as e (e.id)}
 					<option value={e.id}>{e.nombre}</option>
 				{/each}
 			</select>
 		</div>
-		<a href={resolve('/fabricacion/crear')} class="btn btn-primary">+ Nueva Orden</a>
+		<a href={resolve('/fabricacion/crear')} class="btn btn-sm btn-primary">+ Nueva Orden</a>
 	</div>
 
 	<div class="card bg-base-100 shadow">
@@ -138,7 +158,7 @@
 						totalPages={ordenesData.totalPages}
 						onPageChange={(page) => {
 							currentPage = page;
-							handleSearch();
+							handleSearchChange();
 						}}
 					/>
 				</div>
@@ -147,7 +167,7 @@
 	</div>
 </PageLayout>
 
-<Modal bind:open={showModal} title="Elimnar Orden de Fabricación" onClose={closeModal}>
+<Modal bind:open={showModal} title="Eliminar orden de fabricación" onClose={closeModal}>
 	<div class="py-4">
 		<p>¿Seguro que quieres eliminar esta orden de fabricación?</p>
 	</div>
@@ -159,6 +179,7 @@
 				try {
 					await eliminarOrdenFabricacion(deleteOrdenId);
 					closeModal();
+					await invalidateAll();
 					toast.success('Orden eliminada');
 				} catch (error) {
 					console.log(error);

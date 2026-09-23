@@ -9,7 +9,6 @@
 		Puzzle,
 		Rocket,
 		Settings,
-		Stock,
 		Truck,
 		Users
 	} from '$lib/components/ui/icons';
@@ -31,17 +30,14 @@
 		...(can(data.user, data.permisos, Modulos.FABRICACION)
 			? [{ href: Paths.FABRICACION, label: 'Fabricación', icon: Fabricacion }]
 			: []),
-		...(can(data.user, data.permisos, Modulos.CLIENTES)
-			? [{ href: Paths.CLIENTES, label: 'Clientes', icon: Users }]
+		...(can(data.user, data.permisos, 'clientes')
+			? [{ href: Paths.CONTACTOS, label: 'Contactos', icon: Users }]
 			: []),
 		...(can(data.user, data.permisos, Modulos.PRODUCTOS)
 			? [{ href: Paths.PRODUCTOS, label: 'Productos', icon: Producto }]
 			: []),
 		...(can(data.user, data.permisos, Modulos.INSUMOS)
 			? [{ href: Paths.INSUMOS, label: 'Insumos', icon: Puzzle }]
-			: []),
-		...(can(data.user, data.permisos, Modulos.INVENTARIO)
-			? [{ href: Paths.INVENTARIO, label: 'Inventario', icon: Stock }]
 			: []),
 		...(can(data.user, data.permisos, Modulos.ENVIOS)
 			? [{ href: Paths.ENVIOS, label: 'Envíos', icon: Truck }]
@@ -53,6 +49,7 @@
 						label: 'Configuración',
 						icon: Settings,
 						subtabs: [
+							{ href: `${Paths.CONFIGURACION}/empresa`, label: 'Datos de la empresa' },
 							{ href: Paths.CONFIGURACION_USUARIOS, label: 'Usuarios' },
 							{ href: Paths.CONFIGURACION_EMPLEADOS, label: 'Empleados' },
 							{ href: Paths.CONFIGURACION_ROLES, label: 'Roles' },

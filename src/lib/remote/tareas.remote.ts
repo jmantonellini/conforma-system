@@ -15,7 +15,6 @@ const TareaSchema = v.object({
 	asignado_a: v.optional(v.pipe(v.string(), v.transform(Number), v.number()))
 });
 
-// --- Queries ---
 export const getTareas = query(async () => {
 	const tareasConEmpleado = await db
 		.select({
@@ -41,7 +40,6 @@ export const getTareas = query(async () => {
 	return tareasConEmpleado;
 });
 
-// --- Forms ---
 export const crearTarea = form(TareaSchema, async (data) => {
 	const user = await getCurrentUser();
 
@@ -73,7 +71,6 @@ export const crearTarea = form(TareaSchema, async (data) => {
 	return { success: true, tarea };
 });
 
-// --- Commands ---
 export const actualizarEstadoTarea = command(
 	v.object({
 		id: v.pipe(v.string(), v.transform(Number), v.number()),
@@ -113,7 +110,6 @@ export const eliminarTarea = command(
 	}
 );
 
-// Command: reordenar tareas
 export const reordenarTareas = command(
 	v.object({
 		tareas: v.array(v.object({ id: v.number(), orden: v.number() }))

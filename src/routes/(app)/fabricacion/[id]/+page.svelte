@@ -6,9 +6,9 @@
 		eliminarOrdenFabricacion,
 		getHistorialUnidades
 	} from '$lib/remote/fabricacion.remote';
-	import { PageLayout, Modal, Table } from '$lib/components/ui';
+	import { NavegacionProceso, PageLayout, Modal, Table } from '$lib/components/ui';
 	import { toast } from '$lib/stores/toast.svelte';
-	import { goto } from '$app/navigation';
+	import { goto, invalidateAll } from '$app/navigation';
 	import { resolve } from '$app/paths';
 	import { formatearFecha } from '$lib/utils/fechas.js';
 
@@ -18,6 +18,7 @@
 
 	let isLoading = $state(false);
 	type InsumoRequerido = {
+		insumo_id?: number;
 		codigo: string;
 		nombre: string;
 		cantidad: number;
@@ -25,6 +26,7 @@
 		costo_unitario?: number;
 	};
 	const insumosRequeridos = $derived((orden.insumos_requeridos ?? []) as InsumoRequerido[]);
+	const insumosAdicionales = $derived((orden.insumos_adicionales ?? []) as InsumoRequerido[]);
 
 	let modal = $state({
 		open: false,
@@ -100,6 +102,7 @@
 				await eliminarOrdenFabricacion(String(orden.id));
 				modal.open = false;
 				toast.success('Orden eliminada');
+				await invalidateAll();
 				goto(resolve('/fabricacion'));
 			}
 		};
@@ -113,11 +116,34 @@
 
 <PageLayout>
 	<div class="flex flex-col gap-4">
-		<p class="text-sm text-base-content/70">
-			Pedido: {orden.pedido_numero} · Producto: {orden.producto_nombre || 'Personalizado'}
-		</p>
-		<div class="flex items-center justify-between">
+		<div class="grid grid-cols-[auto_1fr_auto] items-center gap-3">
 			<button onclick={() => history.back()} class="btn btn-ghost btn-sm">← Volver</button>
+			<div class="flex justify-center">
+				<NavegacionProceso
+					currentKey="fabricacion"
+					steps={[
+						...(orden.navegacion.cotizacion_id
+							? [
+									{
+										key: 'cotizacion',
+										label: 'Cotización',
+										href: `/cotizaciones/${orden.navegacion.cotizacion_id}`
+									}
+								]
+							: []),
+						...(orden.navegacion.pedido_id
+							? [
+									{
+										key: 'pedido',
+										label: 'Pedido',
+										href: `/pedidos/${orden.navegacion.pedido_id}`
+									}
+								]
+							: []),
+						{ key: 'fabricacion', label: 'Fabricación', status: orden.estado?.nombre }
+					]}
+				/>
+			</div>
 			<button class="btn btn-outline btn-error btn-sm" onclick={manejarEliminar}> Eliminar </button>
 		</div>
 
@@ -167,9 +193,9 @@
 		<!-- Información técnica para fabricación -->
 		<div class="card bg-base-100 shadow">
 			<div class="card-body gap-6">
+				<h3 class="card-title">Información para fabricar</h3>
 				<div class="flex flex-wrap items-start justify-between gap-3">
 					<div>
-						<h3 class="card-title">Información para fabricar</h3>
 						<p class="text-sm text-base-content/70">
 							{orden.producto?.codigo ? `${orden.producto.codigo} · ` : ''}{orden.producto
 								?.nombre ||
@@ -184,37 +210,34 @@
 					{/if}
 				</div>
 
-				<div class="grid gap-6 lg:grid-cols-2">
+				<div class="flex flex-col gap-3">
 					{#if orden.producto}
-						<div>
-							<h4 class="mb-3 font-semibold">Medidas</h4>
-							<div class="grid gap-3 sm:grid-cols-2">
-								<div class="rounded-box bg-base-200 p-3">
-									<p class="text-sm text-base-content/60">Primario</p>
-									<p>
-										Diámetro: {orden.medidas?.primario_diametro ?? '-'} · Largo:
-										{orden.medidas?.primario_largo ?? '-'}
+						<div class="flex gap-3">
+							<div class="rounded-box bg-base-200 p-3">
+								<p class="text-sm text-base-content/60">Primario</p>
+								<p>
+									Diámetro: {orden.medidas?.primario_diametro ?? '-'} · Largo:
+									{orden.medidas?.primario_largo ?? '-'}
+								</p>
+							</div>
+							<div class="rounded-box bg-base-200 p-3">
+								<p class="text-sm text-base-content/60">Secundario</p>
+								<p>
+									Diámetro: {orden.medidas?.secundario_diametro ?? '-'} · Largo:
+									{orden.medidas?.secundario_largo ?? '-'}
+								</p>
+							</div>
+							<div class="rounded-box bg-base-200 p-3 sm:col-span-2">
+								<p class="text-sm text-base-content/60">Trombón</p>
+								<p>
+									Diámetro inicial: {orden.medidas?.trombon_diametro_inicial ?? '-'} · Largo:
+									{orden.medidas?.trombon_largo ?? '-'}
+								</p>
+								{#if orden.medidas?.trombon_observaciones}
+									<p class="mt-1 text-sm text-base-content/70">
+										{orden.medidas.trombon_observaciones}
 									</p>
-								</div>
-								<div class="rounded-box bg-base-200 p-3">
-									<p class="text-sm text-base-content/60">Secundario</p>
-									<p>
-										Diámetro: {orden.medidas?.secundario_diametro ?? '-'} · Largo:
-										{orden.medidas?.secundario_largo ?? '-'}
-									</p>
-								</div>
-								<div class="rounded-box bg-base-200 p-3 sm:col-span-2">
-									<p class="text-sm text-base-content/60">Trombón</p>
-									<p>
-										Diámetro inicial: {orden.medidas?.trombon_diametro_inicial ?? '-'} · Largo:
-										{orden.medidas?.trombon_largo ?? '-'}
-									</p>
-									{#if orden.medidas?.trombon_observaciones}
-										<p class="mt-1 text-sm text-base-content/70">
-											{orden.medidas.trombon_observaciones}
-										</p>
-									{/if}
-								</div>
+								{/if}
 							</div>
 						</div>
 					{/if}
@@ -223,7 +246,7 @@
 						<h4 class="mb-3 font-semibold">Insumos requeridos</h4>
 						{#if insumosRequeridos.length}
 							<ul class="divide-y divide-base-300 rounded-box border border-base-300">
-								{#each insumosRequeridos as insumo (insumo.codigo + insumo.nombre)}
+								{#each insumosRequeridos as insumo, key (key)}
 									<li class="flex items-center justify-between gap-3 p-3">
 										<span>
 											<span class="font-mono text-sm">{insumo.codigo}</span>
@@ -238,12 +261,28 @@
 						{:else}
 							<p class="text-sm text-base-content/60">No hay una receta de insumos asociada.</p>
 						{/if}
+						{#if insumosAdicionales.length}
+							<h4 class="mt-6 mb-3 font-semibold">Insumos adicionales del pedido</h4>
+							<ul class="divide-y divide-base-300 rounded-box border border-base-300">
+								{#each insumosAdicionales as insumo, key (key)}
+									<li class="flex items-center justify-between gap-3 p-3">
+										<span>
+											<span class="font-mono text-sm">{insumo.codigo}</span>
+											<span class="ml-2">{insumo.nombre}</span>
+										</span>
+										<span class="font-semibold whitespace-nowrap"
+											>{insumo.cantidad} {insumo.unidad}</span
+										>
+									</li>
+								{/each}
+							</ul>
+						{/if}
 					</div>
 				</div>
 
-				<div>
-					<h4 class="mb-3 font-semibold">Planos y referencias visuales</h4>
-					{#if orden.adjuntos?.length}
+				{#if orden.adjuntos?.length}
+					<div>
+						<h4 class="mb-3 font-semibold">Planos y referencias visuales</h4>
 						<div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
 							{#each orden.adjuntos as adjunto (adjunto.id)}
 								<a
@@ -271,12 +310,8 @@
 								</a>
 							{/each}
 						</div>
-					{:else}
-						<p class="text-sm text-base-content/60">
-							No hay planos o referencias adjuntas a la cotización.
-						</p>
-					{/if}
-				</div>
+					</div>
+				{/if}
 			</div>
 		</div>
 

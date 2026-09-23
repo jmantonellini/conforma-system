@@ -24,6 +24,11 @@ const encabezado = (valor: unknown) => {
 		costo: 'costo_unitario',
 		costo_unitario: 'costo_unitario',
 		precio: 'costo_unitario',
+		flete: 'flete_porcentaje',
+		flete_porcentaje: 'flete_porcentaje',
+		categoria: 'categoria',
+		categoria_insumo: 'categoria',
+		proveedor: 'proveedor',
 		observaciones: 'observaciones',
 		notas: 'observaciones'
 	};
@@ -32,7 +37,9 @@ const encabezado = (valor: unknown) => {
 
 const numero = (valor: unknown) => {
 	if (typeof valor === 'number') return valor;
-	const textoOriginal = String(valor ?? '').trim();
+	const textoOriginal = String(valor ?? '')
+		.trim()
+		.replace(/%$/, '');
 	const texto = textoOriginal.includes(',')
 		? textoOriginal.replace(/\./g, '').replace(',', '.')
 		: textoOriginal;
@@ -104,6 +111,7 @@ export async function POST({ request }) {
 				const unidad = unidadCanonica(valor('unidad'));
 				const tipo = normalizar(valor('tipo'));
 				const costo = numero(valor('costo_unitario'));
+				const flete = numero(valor('flete_porcentaje') || 0);
 				const codigo = String(valor('codigo')).trim();
 				const nombre = String(valor('nombre')).trim();
 				if (!codigo) errores.push(`Fila ${indice + 2}: código vacío`);
@@ -112,12 +120,17 @@ export async function POST({ request }) {
 				if (!tipo) errores.push(`Fila ${indice + 2}: tipo vacío`);
 				if (!Number.isFinite(costo) || costo < 0)
 					errores.push(`Fila ${indice + 2}: costo inválido`);
+				if (!Number.isFinite(flete) || flete < 0)
+					errores.push(`Fila ${indice + 2}: flete inválido`);
 				return {
 					codigo,
 					nombre,
 					tipo,
 					unidad,
 					costo_unitario: costo,
+					flete_porcentaje: flete,
+					categoria: String(valor('categoria') ?? '').trim() || undefined,
+					proveedor: String(valor('proveedor') ?? '').trim() || undefined,
 					observaciones: String(valor('observaciones') ?? '').trim() || undefined
 				};
 			});

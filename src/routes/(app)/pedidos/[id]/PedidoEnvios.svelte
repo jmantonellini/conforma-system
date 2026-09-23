@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { Can, Modal, FormFieldWrapper } from '$lib/components/ui';
+	import { Can, FormErrors, Modal, FormFieldWrapper } from '$lib/components/ui';
 	import {
 		crearEnvio,
 		marcarEntregado,
@@ -104,6 +104,7 @@
 				<textarea class="textarea" rows="2" {...form.fields.observaciones.as('text')}></textarea>
 			</FormFieldWrapper>
 		</div>
+		<FormErrors {form} />
 	</form>
 
 	{#snippet actions()}

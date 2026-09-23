@@ -5,9 +5,6 @@ import { empleados, usuarios } from '$lib/server/db/schema';
 import { eq, isNull } from 'drizzle-orm';
 import { EmpleadoSchema } from './empleados.schema';
 
-// Schema de validación
-
-// Query: obtener todos los empleados (con datos completos para listado)
 export const getEmpleados = query(async () => {
 	return await db
 		.select({
@@ -26,7 +23,6 @@ export const getEmpleados = query(async () => {
 		.orderBy(empleados.apellido);
 });
 
-// Query: obtener empleados sin usuario (para el select en usuarios)
 export const getEmpleadosSinUsuario = query(async () => {
 	return await db
 		.select({
@@ -39,7 +35,6 @@ export const getEmpleadosSinUsuario = query(async () => {
 		.where(isNull(usuarios.empleado_id));
 });
 
-// Form: crear empleado
 export const crearEmpleado = form(EmpleadoSchema, async (data) => {
 	const [empleado] = await db
 		.insert(empleados)
@@ -58,7 +53,6 @@ export const crearEmpleado = form(EmpleadoSchema, async (data) => {
 	return { success: true, empleado };
 });
 
-// Form: actualizar empleado
 export const actualizarEmpleado = form(
 	v.object({
 		id: v.pipe(v.string(), v.transform(Number), v.number()),
@@ -86,7 +80,6 @@ export const actualizarEmpleado = form(
 	}
 );
 
-// Command: eliminar empleado (desactivar)
 export const eliminarEmpleado = command(
 	v.pipe(v.string(), v.transform(Number), v.number()),
 	async (id) => {

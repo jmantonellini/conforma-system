@@ -49,7 +49,7 @@
 			try {
 				if (await form.submit()) {
 					closeModal();
-					form.element.reset();
+					form.element?.reset();
 					toast.success('Feedback enviado!');
 				} else {
 					toast.error('Error al enviar el feedback');

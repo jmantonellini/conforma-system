@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { goto } from '$app/navigation';
+	import { goto, invalidateAll } from '$app/navigation';
 	import { resolve } from '$app/paths';
 	import { Can, Highlight, Table, SearchBar, Pagination } from '$lib/components/ui';
 	import PageLayout from '$lib/components/ui/PageLayout.svelte';
@@ -13,23 +13,47 @@
 
 	let { data }: PageProps = $props();
 
-	let search = $derived(data.search);
-	let categoriaFilter = $derived(data.categoriaFilter ?? 0);
-	let currentPage = $derived(data.currentPage);
+	let search = $state('');
+	let categoriaFilter = $state(0);
+	let currentPage = $state(1);
+	let sort = $state<'nombre' | 'codigo' | 'precio_base'>('nombre');
+	let direction = $state<'asc' | 'desc'>('asc');
 	let categorias = page.data.categorias;
+
+	$effect(() => {
+		search = data.search ?? '';
+		categoriaFilter = data.categoriaFilter ?? 0;
+		currentPage = data.currentPage ?? 1;
+		sort = data.sort ?? 'nombre';
+		direction = (data.direction ?? 'asc') as typeof direction;
+	});
 
 	function handleSearchChange() {
 		const params = new SvelteURLSearchParams();
 		if (search) params.set('search', search);
 		if (categoriaFilter) params.set('categoria', String(categoriaFilter));
 		if (currentPage > 1) params.set('page', currentPage.toString());
+		if (sort !== 'nombre') params.set('sort', sort);
+		if (direction !== 'asc') params.set('direction', direction);
 		goto(resolve(`/productos?${params.toString()}`));
+	}
+
+	function handleSort(key: string) {
+		if (!['nombre', 'codigo', 'precio_base'].includes(key)) return;
+		const sortKey = key as typeof sort;
+		if (sort === sortKey) direction = direction === 'asc' ? 'desc' : 'asc';
+		else {
+			sort = sortKey;
+			direction = 'asc';
+		}
+		currentPage = 1;
+		handleSearchChange();
 	}
 
 	async function deleteProducto(id: number) {
 		if (confirm('¿Eliminar este producto?')) {
 			try {
-				await eliminarProducto(id).then(() => handleSearchChange());
+				await eliminarProducto(id);
 				toast.success('Producto eliminado');
 			} catch (error) {
 				console.log(error);
@@ -42,14 +66,22 @@
 <PageLayout>
 	<div class="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
 		<div class="flex flex-1 flex-wrap gap-4">
-			<div class="w-full sm:w-64">
-				<SearchBar autofocus bind:search oninput={() => debounce(handleSearchChange)} />
+			<div class="w-full sm:w-80">
+				<SearchBar
+					autofocus
+					bind:search
+					oninput={() => {
+						currentPage = 1;
+						debounce(handleSearchChange);
+					}}
+				/>
 			</div>
 			<select
 				value={categoriaFilter}
-				class="select w-48"
+				class="select select-sm w-48"
 				onchange={(e) => {
 					categoriaFilter = Number(e.currentTarget.value);
+					currentPage = 1;
 					handleSearchChange();
 				}}
 			>
@@ -60,19 +92,21 @@
 			</select>
 		</div>
 		<Can modulo="productos" accion="create">
-			<a class="btn btn-primary" href={resolve('/productos/crear')}>+ Nuevo Producto</a>
+			<a class="btn btn-sm btn-primary" href={resolve('/productos/crear')}>+ Nuevo Producto</a>
 		</Can>
 	</div>
 
 	<div class="card bg-base-100 shadow">
 		<div class="card-body p-0">
-			{#snippet header()}
-				<th>Código</th>
-				<th>Nombre</th>
+			{#snippet header(onSort: ((key: string) => void) | undefined)}
+				<th><button class="link" onclick={() => onSort?.('codigo')}>Código</button></th>
+				<th><button class="link" onclick={() => onSort?.('nombre')}>Nombre</button></th>
 				<th>Categoría</th>
 				<th>Marca</th>
 				<th>Modelo</th>
-				<th class="text-right">Precio Base</th>
+				<th class="text-right"
+					><button class="link" onclick={() => onSort?.('precio_base')}>Precio Base</button></th
+				>
 				<th class="text-center">Acciones</th>
 			{/snippet}
 
@@ -116,6 +150,7 @@
 				emptyMessage="No hay productos registrados"
 				{header}
 				{row}
+				onSort={handleSort}
 			/>
 
 			{#if data.totalPages > 1}

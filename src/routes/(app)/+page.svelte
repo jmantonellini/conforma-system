@@ -7,7 +7,14 @@
 		reordenarTareas
 	} from '$lib/remote/tareas.remote';
 	import { getEmpleados } from '$lib/remote/empleados.remote';
-	import { PageLayout, Modal, FormFieldWrapper, KanBanBoard, Table } from '$lib/components/ui';
+	import {
+		FormErrors,
+		PageLayout,
+		Modal,
+		FormFieldWrapper,
+		KanBanBoard,
+		Table
+	} from '$lib/components/ui';
 	import { toast } from '$lib/stores/toast.svelte';
 	import type { EstadosTarea } from '$lib/types';
 	import { resolve } from '$app/paths';
@@ -44,7 +51,7 @@
 
 <PageLayout>
 	<div class="mb-6 flex items-center justify-end">
-		<button class="btn btn-primary" onclick={() => (showModal = true)}> + Nueva Tarea </button>
+		<button class="btn btn-sm btn-primary" onclick={() => (showModal = true)}> + Nueva Tarea </button>
 	</div>
 
 	<!-- KANBAN: Tareas accionables -->
@@ -168,6 +175,7 @@
 				</FormFieldWrapper>
 			</div>
 		</div>
+		<FormErrors {form} />
 	</form>
 
 	{#snippet actions()}

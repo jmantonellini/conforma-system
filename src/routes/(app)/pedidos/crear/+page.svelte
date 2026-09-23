@@ -1,17 +1,21 @@
 <script lang="ts">
 	import { crearPedido } from '$lib/remote/pedidos.remote';
-	import { getClientes } from '$lib/remote/clientes.remote';
+	import { obtenerContactosCliente } from '$lib/remote/contactos.remote';
 	import { getProductos } from '$lib/remote/productos.remote';
 	import SearchSelect from '$lib/components/ui/SearchSelect.svelte';
 	import FormFieldWrapper from '$lib/components/ui/FormFieldWrapper.svelte';
-	import { FormActions, PageLayout } from '$lib/components/ui';
+	import { FormActions, FormErrors, PageLayout } from '$lib/components/ui';
 	import { toast } from '$lib/stores/toast.svelte';
 	import { Paths } from '$lib/types';
 
 	let form = crearPedido;
-	let clientes = await getClientes({});
+	let clientes = await obtenerContactosCliente({});
 	let productos = await getProductos({});
 	let producto: (typeof productos.data)[number] | undefined = $state();
+	let usarCreditoDistribuidor = $state(false);
+	let clienteSeleccionadoId = $state('');
+	let distribuidorSeleccionadoId = $state('');
+	let porcentajeComisionDistribuidor = $state(0);
 
 	let lineas = $state([
 		{
@@ -33,11 +37,17 @@
 		clientes.data.length > 0
 			? clientes.data.map((c) => ({
 					value: c.id.toString(),
-					label:
-						c.nombre +
-						(c.apellido ? ` ${c.apellido}` : '') +
-						(c.razon_social ? ` (${c.razon_social})` : '')
+					label: [c.nombre, c.apellido].filter(Boolean).join(' ') || c.razon_social
 				}))
+			: [];
+	const distribuidoresOptions =
+		clientes.data.filter((c) => c.es_distribuidor).length > 0
+			? clientes.data
+					.filter((c) => c.es_distribuidor)
+					.map((c) => ({
+						value: c.id.toString(),
+						label: `${[c.nombre, c.apellido].filter(Boolean).join(' ') || c.razon_social} (distribuidor)`
+					}))
 			: [];
 
 	function agregarLinea() {
@@ -71,6 +81,30 @@
 			}
 		}
 	}
+
+	let clienteSeleccionado = $derived(
+		clientes.data.find((cliente) => cliente.id.toString() === clienteSeleccionadoId)
+	);
+	let distribuidorSeleccionado = $derived(
+		clientes.data.find((cliente) => cliente.id.toString() === distribuidorSeleccionadoId)
+	);
+	let montoComisionDistribuidor = $derived(
+		Number((total * (porcentajeComisionDistribuidor / 100)).toFixed(2))
+	);
+	let saldoLuegoDeEntrega = $derived(
+		Number(
+			(Number(distribuidorSeleccionado?.saldo_disponible ?? 0) - montoComisionDistribuidor).toFixed(
+				2
+			)
+		)
+	);
+
+	function onDistribuidorChange(value: string) {
+		distribuidorSeleccionadoId = value;
+		const distribuidor = clientes.data.find((cliente) => cliente.id.toString() === value);
+		porcentajeComisionDistribuidor = distribuidor?.porcentaje_compensacion ?? 0;
+		form.fields.porcentaje_comision_distribuidor.set(porcentajeComisionDistribuidor);
+	}
 </script>
 
 <PageLayout>
@@ -99,12 +133,64 @@
 			<div class="grid gap-4 md:grid-cols-4">
 				<!-- Cliente -->
 				<SearchSelect
-					id="cliente_id"
+					id="contacto_id"
 					label="Cliente"
 					options={clientesOptions}
 					placeholder="Buscar cliente..."
-					field={form.fields.cliente_id}
+					field={form.fields.contacto_id}
+					onChange={(value) => (clienteSeleccionadoId = value)}
 				/>
+				{#if clienteSeleccionado}
+					<p class="self-end text-sm text-base-content/70">
+						Contacto: {[clienteSeleccionado.nombre, clienteSeleccionado.apellido]
+							.filter(Boolean)
+							.join(' ') || 'Sin nombre cargado'}
+					</p>
+				{/if}
+
+				<!-- Distribuidor -->
+				<SearchSelect
+					id="contacto_distribuidor_id"
+					label="Distribuidor (opcional)"
+					options={distribuidoresOptions}
+					placeholder="Buscar distribuidor..."
+					field={form.fields.contacto_distribuidor_id}
+					onChange={onDistribuidorChange}
+				/>
+				{#if distribuidorSeleccionado}
+					<p class="self-end text-sm text-base-content/70">
+						Saldo disponible: ${Number(
+							distribuidorSeleccionado.saldo_disponible ?? 0
+						).toLocaleString('es-AR', { minimumFractionDigits: 2 })}
+					</p>
+				{/if}
+				{#if distribuidorSeleccionado}
+					<FormFieldWrapper
+						label="Comisión del distribuidor (%)"
+						id="porcentaje_comision_distribuidor"
+					>
+						<input
+							class="remove-arrow input"
+							min="0"
+							max="100"
+							step="0.01"
+							{...form.fields?.porcentaje_comision_distribuidor?.as(
+								'number',
+								porcentajeComisionDistribuidor
+							)}
+						/>
+						<p class="mt-1 text-xs text-base-content/70">
+							Se descontarán ${montoComisionDistribuidor.toLocaleString('es-AR', {
+								minimumFractionDigits: 2
+							})} al entregar. Saldo posterior: ${saldoLuegoDeEntrega.toLocaleString('es-AR', {
+								minimumFractionDigits: 2
+							})}
+						</p>
+						{#if saldoLuegoDeEntrega < 0}
+							<p class="mt-1 text-xs text-error">El saldo no alcanza para cubrir la comisión.</p>
+						{/if}
+					</FormFieldWrapper>
+				{/if}
 
 				<!-- Fecha de entrega -->
 				<FormFieldWrapper label="Fecha de entrega prometida" id="fecha_entrega_prometida">
@@ -125,11 +211,34 @@
 					/>
 				</FormFieldWrapper>
 
-				<!-- Presupuesto-->
-				<FormFieldWrapper label="Presupuesto (opcional)" id="presupuesto">
-					<input class="input" {...form.fields?.presupuesto?.as('text')} />
+				<!-- Uso de saldo del distribuidor -->
+				<FormFieldWrapper label="Usar saldo del distribuidor" id="usar_credito_distribuidor">
+					<label class="label cursor-pointer justify-start gap-3">
+						<input
+							type="checkbox"
+							class="checkbox"
+							checked={usarCreditoDistribuidor}
+							onchange={(e) =>
+								(usarCreditoDistribuidor = (e.currentTarget as HTMLInputElement).checked)}
+						/>
+						<span class="text-sm">Usar crédito/saldo</span>
+					</label>
 				</FormFieldWrapper>
 			</div>
+
+			{#if usarCreditoDistribuidor}
+				<div class="mt-4 max-w-md">
+					<FormFieldWrapper label="Monto a usar del distribuidor" id="monto_credito_distribuidor">
+						<input
+							class="remove-arrow input"
+							placeholder="0.00"
+							min="0"
+							step="0.01"
+							{...form.fields?.monto_credito_distribuidor?.as('number')}
+						/>
+					</FormFieldWrapper>
+				</div>
+			{/if}
 		</fieldset>
 
 		<!-- Productos -->
@@ -231,24 +340,7 @@
 			</FormFieldWrapper>
 		</fieldset>
 
-		<!-- Errores -->
-		{#if form?.fields?.allIssues?.()?.length}
-			<div role="alert" class="alert gap-4 alert-error">
-				<svg class="h-6 w-6 shrink-0 stroke-current" fill="none" viewBox="0 0 24 24">
-					<path
-						stroke-linecap="round"
-						stroke-linejoin="round"
-						stroke-width="2"
-						d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z"
-					/>
-				</svg>
-				<div>
-					{#each form?.fields?.allIssues() as issue (issue)}
-						<p class="text-sm">{issue.message}</p>
-					{/each}
-				</div>
-			</div>
-		{/if}
+		<FormErrors {form} />
 
 		<!-- Actions -->
 		<FormActions

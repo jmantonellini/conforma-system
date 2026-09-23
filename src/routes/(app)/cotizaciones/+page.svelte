@@ -1,6 +1,6 @@
 <!-- src/routes/(app)/cotizaciones/+page.svelte -->
 <script lang="ts">
-	import { goto } from '$app/navigation';
+	import { goto, invalidateAll } from '$app/navigation';
 	import { resolve } from '$app/paths';
 	import { Highlight, Table, SearchBar, Pagination, Can, Modal } from '$lib/components/ui';
 	import PageLayout from '$lib/components/ui/PageLayout.svelte';
@@ -14,10 +14,16 @@
 
 	let { data }: PageProps = $props();
 
-	let search = $derived(data.search);
-	let estadoFilter = $derived(data.estadoFilter);
-	let currentPage = $derived(data.currentPage);
+	let search = $state('');
+	let estadoFilter = $state('');
+	let currentPage = $state(1);
 	let showModal = $state(false);
+
+	$effect(() => {
+		search = data.search ?? '';
+		estadoFilter = data.estadoFilter ?? '';
+		currentPage = data.currentPage ?? 1;
+	});
 	let deleteCotizacionId = $state(0);
 
 	const CANALES: Record<string, string> = {
@@ -45,9 +51,23 @@
 	<div class="mb-6 flex items-center justify-between gap-4">
 		<div class="flex flex-1 flex-wrap gap-4">
 			<div class="w-full sm:w-80">
-				<SearchBar autofocus bind:search oninput={() => debounce(handleSearchChange)} />
+				<SearchBar
+					autofocus
+					bind:search
+					oninput={() => {
+						currentPage = 1;
+						debounce(handleSearchChange);
+					}}
+				/>
 			</div>
-			<select bind:value={estadoFilter} class="select w-48" onchange={handleSearchChange}>
+			<select
+				bind:value={estadoFilter}
+				class="select select-sm w-48"
+				onchange={() => {
+					currentPage = 1;
+					handleSearchChange();
+				}}
+			>
 				<option value="">Todos los estados</option>
 				{#each data.estados as est (est.id)}
 					<option value={String(est.id)}>{est.nombre}</option>
@@ -55,7 +75,7 @@
 			</select>
 		</div>
 		<Can modulo="cotizaciones" accion="create">
-			<a class="btn btn-primary" href={resolve('/cotizaciones/crear')}>+ Nueva Cotización</a>
+			<a class="btn btn-sm btn-primary" href={resolve('/cotizaciones/crear')}>+ Nueva Cotización</a>
 		</Can>
 	</div>
 
@@ -137,7 +157,7 @@
 	</div>
 </PageLayout>
 
-<Modal bind:open={showModal} title="Elimnar Cotización" onClose={closeModal}>
+<Modal bind:open={showModal} title="Eliminar cotización" onClose={closeModal}>
 	<div class="py-4">
 		<p>¿Seguro que quieres eliminar esta cotización?</p>
 	</div>
@@ -149,7 +169,8 @@
 				try {
 					await eliminarCotizacion(deleteCotizacionId);
 					closeModal();
-					toast.success('Orden eliminada');
+					await invalidateAll();
+					toast.success('Cotización eliminada');
 				} catch (error) {
 					console.log(error);
 					toast.error('Error al eliminar');

@@ -7,22 +7,24 @@
 		row,
 		footer,
 		loading = false,
-		emptyMessage = 'No hay datos disponibles'
+		emptyMessage = 'No hay datos disponibles',
+		onSort
 	}: {
 		data: T[];
-		header: Snippet;
+		header: Snippet<[((key: string) => void) | undefined]>;
 		row: Snippet<[T]>;
 		footer?: Snippet;
 		loading?: boolean;
 		emptyMessage?: string;
+		onSort?: (key: string) => void;
 	} = $props();
 </script>
 
 <div class="overflow-x-auto">
-	<table class="table table-zebra">
+	<table class="table table-zebra table-sm">
 		<thead>
 			<tr>
-				{@render header()}
+				{@render header(onSort)}
 			</tr>
 		</thead>
 		<tbody>

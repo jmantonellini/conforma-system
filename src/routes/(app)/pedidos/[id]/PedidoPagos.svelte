@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { Can, Modal, FormFieldWrapper } from '$lib/components/ui';
+	import { Can, FormErrors, Modal, FormFieldWrapper } from '$lib/components/ui';
 	import { getPagosByPedido, registrarPago } from '$lib/remote/facturacion.remote';
 	import { toast } from '$lib/stores/toast.svelte';
 	import { formatearFecha } from '$lib/utils/fechas';
@@ -108,6 +108,7 @@
 				<textarea class="textarea" rows="2" {...form.fields.observaciones.as('text')}></textarea>
 			</FormFieldWrapper>
 		</div>
+		<FormErrors {form} />
 	</form>
 
 	{#snippet actions()}

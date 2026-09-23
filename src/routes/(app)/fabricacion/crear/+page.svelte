@@ -3,7 +3,7 @@
 	import { crearOrdenFabricacion } from '$lib/remote/fabricacion.remote';
 	import { getEmpleados } from '$lib/remote/empleados.remote';
 	import { getLineasPedidoSinOrden } from '$lib/remote/pedidos.remote';
-	import { PageLayout, FormFieldWrapper, FormActions } from '$lib/components/ui';
+	import { PageLayout, FormErrors, FormFieldWrapper, FormActions } from '$lib/components/ui';
 	import { toast } from '$lib/stores/toast.svelte';
 	import { goto } from '$app/navigation';
 	import { resolve } from '$app/paths';
@@ -110,20 +110,17 @@
 					</FormFieldWrapper>
 
 					<FormFieldWrapper class="lg:col-span-3" id="observaciones" label="Observaciones">
-						<textarea class="textarea resize-none w-full" rows="3" {...form.fields.observaciones.as('text')}
+						<textarea
+							class="textarea w-full resize-none"
+							rows="3"
+							{...form.fields.observaciones.as('text')}
 						></textarea>
 					</FormFieldWrapper>
 				</div>
 			</div>
 		</div>
 
+		<FormErrors {form} />
 		<FormActions cancelHref="/fabricacion" pending={!!form.pending} submitText="Crear Orden" />
-		{#if form.fields.allIssues?.()?.length}
-			<div class="space-y-1">
-				{#each form.fields.allIssues?.() as issue (issue)}
-					<p class="text-sm text-error">{issue.message}</p>
-				{/each}
-			</div>
-		{/if}
 	</form>
 </PageLayout>

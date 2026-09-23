@@ -1,7 +1,7 @@
 import * as v from 'valibot';
 
 export const ProductoSchema = v.object({
-	codigo: v.pipe(v.string(), v.nonEmpty('Código requerido')),
+	codigo: v.optional(v.pipe(v.string(), v.trim()), ''),
 	nombre: v.pipe(v.string(), v.nonEmpty('Nombre requerido')),
 	categoria_id: v.optional(v.pipe(v.string(), v.transform(Number), v.number())),
 	precio_base: v.optional(v.number(), 0),
@@ -17,11 +17,13 @@ export const ProductoSchema = v.object({
 	tipo_uso_id: v.optional(v.pipe(v.string(), v.transform(Number), v.number())),
 	categoria_competencia_id: v.optional(v.pipe(v.string(), v.transform(Number), v.number())),
 	marca_id: v.optional(v.pipe(v.string(), v.transform(Number), v.number())),
-	modelo_id: v.optional(v.pipe(v.string(), v.transform(Number), v.number()))
+	modelo_id: v.optional(v.pipe(v.string(), v.transform(Number), v.number())),
+	receta: v.optional(v.string())
 });
 
 export const ProductoSchemaUpdate = v.object({
 	...ProductoSchema.entries,
 	id: v.string(),
+	codigo: v.optional(v.pipe(v.string(), v.trim()), ''),
 	receta: v.optional(v.string())
 });

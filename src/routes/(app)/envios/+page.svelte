@@ -9,10 +9,8 @@
 </script>
 
 <PageLayout>
-	<h1 class="mb-6 text-2xl font-bold">Envíos</h1>
-
 	<div class="card bg-base-100 shadow">
-		<div class="card-body">
+		<div class="card-body p-0">
 			{#snippet header()}
 				<th>Guía</th>
 				<th>Transportista</th>

@@ -1,17 +1,23 @@
 import { generate } from '@pdfme/generator';
 import { image, table, text } from '@pdfme/schemas';
 import { db } from '$lib/server/db';
-import { cotizaciones, lineas_cotizacion, clientes } from '$lib/server/db/schema';
-import { eq } from 'drizzle-orm';
+import {
+	configuracion_empresa,
+	cotizaciones,
+	lineas_cotizacion,
+	contactos
+} from '$lib/server/db/schema';
+import { eq, sql } from 'drizzle-orm';
 import { readFile } from 'fs/promises';
 import path from 'path';
 import logoUrl from '$lib/assets/Logo.png';
 
 const BRAND_RED = '#ed1c24';
 
-async function cargarLogo() {
+async function cargarLogo(configuredUrl?: string | null) {
 	const assetPath = logoUrl.replace(/^\//, '');
 	const candidates = [
+		configuredUrl ? path.resolve('static', configuredUrl.replace(/^\//, '')) : '',
 		path.resolve('src/lib/assets/Logo.png'),
 		path.resolve('.svelte-kit/output/client', assetPath),
 		path.resolve('build/client', assetPath)
@@ -187,15 +193,15 @@ export async function generarPDFCotizacion(cotizacionId: number): Promise<Uint8A
 			validez_dias: cotizaciones.validez_dias,
 			created_at: cotizaciones.created_at,
 			cliente: {
-				nombre: clientes.nombre,
-				apellido: clientes.apellido,
-				razon_social: clientes.razon_social,
-				telefono: clientes.telefono,
-				direccion: clientes.calle
+				nombre: contactos.razon_social,
+				apellido: sql<string | null>`NULL`,
+				razon_social: contactos.razon_social,
+				telefono: contactos.telefono,
+				direccion: contactos.calle
 			}
 		})
 		.from(cotizaciones)
-		.leftJoin(clientes, eq(cotizaciones.cliente_id, clientes.id))
+		.leftJoin(contactos, eq(cotizaciones.contacto_id, contactos.id))
 		.where(eq(cotizaciones.id, cotizacionId))
 		.limit(1);
 
@@ -221,15 +227,29 @@ export async function generarPDFCotizacion(cotizacionId: number): Promise<Uint8A
 	const vencimiento = new Date(cot.created_at ?? Date.now());
 	vencimiento.setDate(vencimiento.getDate() + (cot.validez_dias ?? 15));
 
-	const logo = await cargarLogo();
+	const [businessConfig] = await db
+		.select()
+		.from(configuracion_empresa)
+		.where(eq(configuracion_empresa.id, 1))
+		.limit(1);
+	const logo = await cargarLogo(businessConfig?.logo_url);
+	const businessName = businessConfig?.razon_social || 'Conforma';
+	const businessDetails = [
+		businessName,
+		businessConfig?.cuit ? `CUIT: ${businessConfig.cuit}` : null,
+		businessConfig?.direccion ? `Dirección: ${businessConfig.direccion}` : null,
+		businessConfig?.telefono ? `Tel: ${businessConfig.telefono}` : null,
+		businessConfig?.email ? `Email: ${businessConfig.email}` : null
+	]
+		.filter(Boolean)
+		.join('\n');
 
 	const inputs = [
 		{
 			logo,
 			titulo: 'COTIZACIÓN',
 			numero: cot.numero,
-			empresa:
-				'Conforma SRL\nCUIT: XX-XXXXXXXX-X\nDirección: Av. Ejemplo 1234\nTel: (011) 5555-5555\nEmail: ventas@conforma.com',
+			empresa: businessDetails,
 			clienteTitulo: 'CLIENTE',
 			cliente: `${clienteNombre}\n${cot.cliente?.telefono ?? cot.cliente_telefono ?? ''}\n${cot.cliente?.direccion ?? ''}`,
 			table: lineas.map((l) => [

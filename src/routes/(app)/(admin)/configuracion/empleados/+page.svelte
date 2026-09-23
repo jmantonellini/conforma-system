@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { FormFieldWrapper, Modal, PageLayout, Table } from '$lib/components/ui';
+	import { FormErrors, FormFieldWrapper, Modal, PageLayout, Table } from '$lib/components/ui';
 	import FormDireccion from '$lib/components/ui/FormDireccion.svelte';
 	import { Delete, Edit } from '$lib/components/ui/icons';
 	import {
@@ -54,7 +54,7 @@
 <PageLayout>
 	<div class="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
 		<button onclick={() => history.back()} class="btn btn-ghost btn-sm">← Volver</button>
-		<button class="btn btn-primary" onclick={abrirCrear}> + Nuevo Empleado </button>
+		<button class="btn btn-sm btn-primary" onclick={abrirCrear}> + Nuevo Empleado </button>
 	</div>
 
 	<div>
@@ -170,9 +170,7 @@
 			<FormDireccion form={activeForm} initialData={modal.empleado || undefined} />
 		</form>
 
-		{#each activeForm.fields?.allIssues?.() as issue (issue)}
-			<p class="mt-1 text-sm text-error">{issue.message}</p>
-		{/each}
+		<FormErrors form={activeForm} />
 	{/if}
 	{#snippet actions()}
 		{#if modal.tipo === 'eliminar'}

@@ -15,8 +15,8 @@
 </script>
 
 <div class="flex justify-end gap-3">
-	<a href={resolve(cancelHref)} class="btn btn-outline">Cancelar</a>
-	<button type="submit" class="btn btn-primary" disabled={pending}>
+	<a href={resolve(cancelHref)} class="btn btn-sm btn-outline">Cancelar</a>
+	<button type="submit" class="btn btn-sm btn-primary" disabled={pending}>
 		{pending ? pendingText : submitText}
 	</button>
 </div>

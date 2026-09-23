@@ -12,12 +12,11 @@ export enum EstadosTarea {
 
 export enum Modulos {
 	PRODUCTOS = 'productos',
-	CLIENTES = 'clientes',
+	CONTACTOS = 'contactos',
 	COTIZACIONES = 'cotizaciones',
 	PEDIDOS = 'pedidos',
 	FABRICACION = 'fabricacion',
 	CONFIGURACION = 'configuracion',
-	INVENTARIO = 'inventario',
 	INSUMOS = 'insumos',
 	ENVIOS = 'envios'
 }
@@ -26,11 +25,10 @@ export enum Paths {
 	TAREAS = '/',
 	LOGIN = '/login',
 	PRODUCTOS = '/' + Modulos.PRODUCTOS,
-	CLIENTES = '/' + Modulos.CLIENTES,
+	CONTACTOS = '/' + Modulos.CONTACTOS,
 	COTIZACIONES = '/' + Modulos.COTIZACIONES,
 	PEDIDOS = '/' + Modulos.PEDIDOS,
 	FABRICACION = '/' + Modulos.FABRICACION,
-	INVENTARIO = '/' + Modulos.INVENTARIO,
 	INSUMOS = '/' + Modulos.INSUMOS,
 	ENVIOS = '/' + Modulos.ENVIOS,
 	CONFIGURACION = '/' + Modulos.CONFIGURACION,

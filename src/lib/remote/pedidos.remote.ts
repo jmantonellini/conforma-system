@@ -1,62 +1,55 @@
 import * as v from 'valibot';
 import { command, form, query, requested } from '$app/server';
 import { db } from '$lib/server/db';
-import {
-	pedidos,
-	lineas_pedido,
-	clientes,
-	estados_pedido,
-	productos,
-	ordenes_fabricacion,
-	unidades_fabricacion,
-	estados_fabricacion,
-	logs_cambios_estado,
-	transiciones_estado,
-	empleados,
-	usuarios
-} from '$lib/server/db/schema';
+import { pedidos, lineas_pedido, estados_pedido } from '$lib/server/db/schema';
 import { redirect } from '@sveltejs/kit';
-import { generarNumeroPedido } from '../server/utils/pedidos';
 import { resolve } from '$app/paths';
-import {
-	aliasedTable,
-	and,
-	count,
-	desc,
-	eq,
-	exists,
-	gte,
-	inArray,
-	ilike,
-	lte,
-	not,
-	or,
-	sql,
-	SQL
-} from 'drizzle-orm';
-import { getCurrentUser } from './usuarios.remote';
+import { eq } from 'drizzle-orm';
 import { requirePermission } from '$lib/server/auth/permissions';
-import { PEDIDO_SLUG } from '$lib/types';
+import {
+	PedidoSchema,
+	crearPedidoServicio,
+	cambiarEstadoPedidoServicio,
+	getEstadosPedidoServicio,
+	getHistorialPedidoServicio,
+	getLineasPedidoSinOrdenServicio,
+	getPedidosActivosServicio,
+	getPedidosListado,
+	obtenerPedidoDetalle
+} from '$lib/server/services/pedidos.service';
 
-const LineaSchema = v.object({
-	producto_id: v.string(),
-	cantidad: v.pipe(v.number(), v.toMinValue(1)),
-	precio: v.pipe(v.number(), v.toMinValue(0)),
-	descripcion: v.optional(v.string())
+const toNumberOrUndefined = (value: string | number | null | undefined) => {
+	if (value === null || value === undefined || value === '') return undefined;
+	const parsed = Number(value);
+	return Number.isFinite(parsed) ? parsed : undefined;
+};
+
+const normalizarPedidoPayload = <T extends Record<string, unknown>>(data: T) => ({
+	...data,
+	contacto_id: Number(data.contacto_id),
+	contacto_distribuidor_id:
+		toNumberOrUndefined(data.contacto_distribuidor_id as string | number | null | undefined) ??
+		null,
+	usar_credito_distribuidor: Boolean(data.usar_credito_distribuidor ?? false),
+	monto_credito_distribuidor: Number(data.monto_credito_distribuidor ?? 0),
+	porcentaje_comision_distribuidor: Number(data.porcentaje_comision_distribuidor ?? 0),
+	anticipo: Number(data.anticipo ?? 0),
+	lineas: Array.isArray(data.lineas)
+		? data.lineas.map((linea) => ({
+				...linea,
+				producto_id: String((linea as { producto_id?: string | number }).producto_id ?? ''),
+				cantidad: Number((linea as { cantidad?: number }).cantidad ?? 0),
+				precio: Number((linea as { precio?: number }).precio ?? 0),
+				descripcion: (linea as { descripcion?: string | null }).descripcion ?? undefined
+			}))
+		: []
 });
 
-const PedidoSchema = v.object({
-	cliente_id: v.pipe(v.string(), v.toNumber()),
-	lineas: v.pipe(v.array(LineaSchema), v.minLength(1)),
-	fecha_entrega_prometida: v.optional(v.string()),
-	anticipo: v.optional(v.pipe(v.number(), v.toMinValue(0)), 0),
-	presupuesto: v.optional(v.string()),
-	observaciones: v.optional(v.string())
-});
-
-// ============================================================
-// QUERIES
-// ============================================================
+const refrescarCachesPedido = () => {
+	getPedidos({ search: '', page: 1 }).refresh();
+	getPedidosActivos({}).refresh();
+	requested(getPedidos, 1).refreshAll();
+};
 
 export const getPedidos = query(
 	v.object({
@@ -65,292 +58,41 @@ export const getPedidos = query(
 		page: v.optional(v.pipe(v.number(), v.toMinValue(1)), 1),
 		limit: v.optional(v.pipe(v.number(), v.minValue(1), v.maxValue(100)), 10)
 	}),
-	async ({
-		search,
-		estadoId,
-		page = 1,
-		limit = 10
-	}: {
-		search?: string;
-		estadoId?: number;
-		page?: number;
-		limit?: number;
-	}) => {
-		const offset = (page - 1) * limit;
-
-		let where = undefined;
-		if (search && estadoId) {
-			where = and(ilike(pedidos.numero_pedido, `%${search}%`), eq(pedidos.estado_id, estadoId));
-		} else if (search) {
-			where = ilike(pedidos.numero_pedido, `%${search}%`);
-		} else if (estadoId) {
-			where = eq(pedidos.estado_id, estadoId);
-		}
-
-		const data = await db
-			.select({
-				id: pedidos.id,
-				numero_pedido: pedidos.numero_pedido,
-				cliente_nombre: clientes.nombre,
-				fecha_pedido: pedidos.fecha_pedido,
-				fecha_entrega: pedidos.fecha_entrega_prometida,
-				total: pedidos.precio_total,
-				estado_id: pedidos.estado_id,
-				estado_nombre: estados_pedido.nombre,
-				estado_color: estados_pedido.color
-			})
-			.from(pedidos)
-			.leftJoin(clientes, eq(pedidos.cliente_id, clientes.id))
-			.leftJoin(estados_pedido, eq(pedidos.estado_id, estados_pedido.id))
-			.where(where)
-			.orderBy(desc(pedidos.id))
-			.limit(limit)
-			.offset(offset);
-
-		const [totalResult] = await db.select({ count: count() }).from(pedidos).where(where);
-
-		return {
-			data,
-			total: totalResult?.count || 0,
-			totalPages: Math.ceil((totalResult?.count || 0) / limit),
-			currentPage: page
-		};
+	async ({ search, estadoId, page = 1, limit = 10 }) => {
+		return getPedidosListado({ search, estadoId, page, limit });
 	}
 );
 
 export const getPedidoById = query(v.number(), async (id) => {
-	const [pedido] = await db
-		.select({
-			id: pedidos.id,
-			presupuesto: pedidos.presupuesto,
-			numero_pedido: pedidos.numero_pedido,
-			cliente: {
-				id: clientes.id,
-				nombre: clientes.nombre,
-				apellido: clientes.apellido,
-				razon_social: clientes.razon_social
-			},
-			fecha: pedidos.fecha_pedido,
-			observaciones: pedidos.observaciones,
-			anticipo: pedidos.anticipo,
-			total: pedidos.precio_total,
-			estado: {
-				id: pedidos.estado_id,
-				nombre: estados_pedido.nombre,
-				color: estados_pedido.color
-			}
-		})
-		.from(pedidos)
-		.leftJoin(clientes, eq(pedidos.cliente_id, clientes.id))
-		.leftJoin(estados_pedido, eq(pedidos.estado_id, estados_pedido.id))
-		.where(eq(pedidos.id, id))
-		.limit(1);
-
-	if (!pedido) throw new Error('Pedido no encontrado');
-
-	const transiciones = await db
-		.select({
-			id: transiciones_estado.id,
-			estado_destino_id: transiciones_estado.estado_destino_id,
-			requiere_rol: transiciones_estado.requiere_rol,
-			destino_nombre: estados_pedido.nombre,
-			destino_slug: estados_pedido.slug,
-			destino_color: estados_pedido.color
-		})
-		.from(transiciones_estado)
-		.innerJoin(estados_pedido, eq(transiciones_estado.estado_destino_id, estados_pedido.id))
-		.where(
-			and(
-				eq(transiciones_estado.tipo, 'pedido'),
-				eq(transiciones_estado.estado_origen_id, pedido.estado.id)
-			)
-		);
-
-	const lineas = await db
-		.select({
-			id: lineas_pedido.id,
-			cantidad: lineas_pedido.cantidad,
-			precio_unitario: lineas_pedido.precio_unitario,
-			subtotal: lineas_pedido.subtotal,
-			es_personalizado: lineas_pedido.es_personalizado,
-			descripcion_personalizada: lineas_pedido.descripcion_personalizada,
-			producto_id: lineas_pedido.producto_id,
-			producto_codigo: productos.codigo,
-			producto_nombre: productos.nombre,
-			orden_id: ordenes_fabricacion.id
-		})
-		.from(lineas_pedido)
-		.leftJoin(productos, eq(lineas_pedido.producto_id, productos.id))
-		.leftJoin(ordenes_fabricacion, eq(lineas_pedido.id, ordenes_fabricacion.linea_pedido_id))
-		.where(eq(lineas_pedido.pedido_id, id));
-
-	// Para cada línea con orden, calcular estado de producción
-	const lineasConProduccion = await Promise.all(
-		lineas.map(async (linea) => {
-			if (!linea.orden_id) return { ...linea, produccion: null };
-
-			const [unidades, estadosFab] = await Promise.all([
-				db
-					.select({ estado_id: unidades_fabricacion.estado_id })
-					.from(unidades_fabricacion)
-					.where(eq(unidades_fabricacion.orden_fabricacion_id, linea.orden_id)),
-				db.select().from(estados_fabricacion)
-			]);
-
-			const terminadas = unidades.filter(
-				(u) => estadosFab.find((e) => e.id === u.estado_id)?.es_final
-			).length;
-			const total = unidades.length;
-
-			return {
-				...linea,
-				produccion: {
-					orden_id: linea.orden_id,
-					terminadas,
-					total,
-					es_final: terminadas === total && total > 0
-				}
-			};
-		})
-	);
-
-	return { pedido: { ...pedido, transiciones }, lineas: lineasConProduccion };
+	return obtenerPedidoDetalle(id);
 });
 
 export const getEstadosPedido = query(async () => {
-	return await db.select().from(estados_pedido).orderBy(estados_pedido.nombre);
+	return getEstadosPedidoServicio();
 });
 
-// Función simplificada para líneas sin orden (para el formulario de nueva orden)
 export const getLineasPedidoSinOrden = query(
 	v.object({
 		pedido_id: v.optional(v.pipe(v.string(), v.transform(Number), v.number())),
 		limit: v.optional(v.pipe(v.number(), v.minValue(1), v.maxValue(100)), 50)
 	}),
 	async ({ pedido_id, limit }) => {
-		const conditions = [];
-
-		if (pedido_id) {
-			conditions.push(eq(lineas_pedido.pedido_id, pedido_id));
-		}
-
-		return await db
-			.select({
-				id: lineas_pedido.id,
-				pedido_numero: pedidos.numero_pedido,
-				producto_nombre: productos.nombre,
-				cantidad: lineas_pedido.cantidad,
-				descripcion: lineas_pedido.descripcion_personalizada,
-				es_personalizado: lineas_pedido.es_personalizado
-			})
-			.from(lineas_pedido)
-			.leftJoin(pedidos, eq(lineas_pedido.pedido_id, pedidos.id))
-			.leftJoin(productos, eq(lineas_pedido.producto_id, productos.id))
-			.where(
-				and(
-					not(
-						exists(
-							db
-								.select()
-								.from(ordenes_fabricacion)
-								.where(eq(ordenes_fabricacion.linea_pedido_id, lineas_pedido.id))
-						)
-					),
-					...conditions
-				)
-			)
-			.limit(limit);
+		return getLineasPedidoSinOrdenServicio({ pedido_id, limit });
 	}
 );
 
 export const getHistorialPedido = query(v.number(), async (pedidoId) => {
-	const estadoAnterior = aliasedTable(estados_pedido, 'estado_anterior');
-	const estadoNuevo = aliasedTable(estados_pedido, 'estado_nuevo');
-
-	return await db
-		.select({
-			id: logs_cambios_estado.id,
-			estado_anterior: {
-				nombre: estadoAnterior.nombre,
-				color: estadoAnterior.color
-			},
-			estado_nuevo: {
-				nombre: estadoNuevo.nombre,
-				color: estadoNuevo.color
-			},
-			comentario: logs_cambios_estado.comentario,
-			fecha: logs_cambios_estado.created_at,
-			empleado: empleados.nombre
-		})
-		.from(logs_cambios_estado)
-		.leftJoin(usuarios, eq(logs_cambios_estado.usuario_id, usuarios.id))
-		.leftJoin(empleados, eq(usuarios.empleado_id, empleados.id))
-		.leftJoin(estadoAnterior, eq(logs_cambios_estado.estado_anterior_id, estadoAnterior.id))
-		.leftJoin(estadoNuevo, eq(logs_cambios_estado.estado_nuevo_id, estadoNuevo.id))
-		.where(
-			and(
-				eq(logs_cambios_estado.entidad_tipo, 'pedido'),
-				eq(logs_cambios_estado.entidad_id, pedidoId)
-			)
-		)
-		.orderBy(desc(logs_cambios_estado.created_at));
+	return getHistorialPedidoServicio(pedidoId);
 });
 
 export const getPedidosActivos = query(
 	v.object({
-		semana: v.optional(v.boolean()) // true = solo los de esta semana
+		semana: v.optional(v.boolean())
 	}),
 	async ({ semana }) => {
-		const estadosFinales = await db
-			.select({ id: estados_pedido.id })
-			.from(estados_pedido)
-			.where(or(eq(estados_pedido.grupo, 'final'), eq(estados_pedido.grupo, 'excepcion')));
-
-		const idsFinales = estadosFinales.map((e) => e.id);
-
-		let where: SQL<unknown> | undefined = sql`true;`;
-
-		if (idsFinales.length > 0) {
-			where = not(inArray(pedidos.estado_id, idsFinales));
-		}
-
-		if (semana) {
-			const hoy = new Date();
-			const inicioSemana = new Date(hoy);
-			inicioSemana.setDate(hoy.getDate() - hoy.getDay()); // domingo
-			inicioSemana.setHours(0, 0, 0, 0);
-			const finSemana = new Date(inicioSemana);
-			finSemana.setDate(inicioSemana.getDate() + 6);
-			finSemana.setHours(23, 59, 59, 999);
-
-			where = and(
-				where,
-				gte(pedidos.fecha_entrega_prometida, inicioSemana),
-				lte(pedidos.fecha_entrega_prometida, finSemana)
-			);
-		}
-
-		return db
-			.select({
-				id: pedidos.id,
-				numero_pedido: pedidos.numero_pedido,
-				cliente_nombre: clientes.nombre,
-				estado_nombre: estados_pedido.nombre,
-				estado_color: estados_pedido.color,
-				fecha_entrega_prometida: pedidos.fecha_entrega_prometida,
-				total: pedidos.precio_total,
-				saldo_pendiente: pedidos.saldo_pendiente
-			})
-			.from(pedidos)
-			.leftJoin(clientes, eq(pedidos.cliente_id, clientes.id))
-			.leftJoin(estados_pedido, eq(pedidos.estado_id, estados_pedido.id))
-			.where(where);
+		return getPedidosActivosServicio({ semana });
 	}
 );
-
-// ============================================================
-// COMMANDS
-// ============================================================
 
 export const cambiarEstadoPedido = command(
 	v.object({
@@ -359,76 +101,16 @@ export const cambiarEstadoPedido = command(
 		comentario: v.optional(v.string())
 	}),
 	async ({ pedido_id, estado_destino_id, comentario }) => {
-		await requirePermission('pedidos', 'edit');
-		const user = await getCurrentUser();
-		if (!user) throw new Error('No autorizado');
-
-		const now = new Date();
-
-		const pedido = await db
-			.select()
-			.from(pedidos)
-			.where(eq(pedidos.id, pedido_id))
-			.then((rows) => rows[0]);
-
-		if (!pedido) throw new Error('Pedido no encontrado');
-
-		// Validar que la transición existe
-		const transicion = await db
-			.select()
-			.from(transiciones_estado)
-			.where(
-				and(
-					eq(transiciones_estado.tipo, 'pedido'),
-					eq(transiciones_estado.estado_origen_id, pedido.estado_id),
-					eq(transiciones_estado.estado_destino_id, estado_destino_id)
-				)
-			)
-			.then((rows) => rows[0]);
-
-		if (!transicion) {
-			throw new Error('Transición no permitida');
-		}
-
-		await db.transaction(async (tx) => {
-			await tx
-				.update(pedidos)
-				.set({ estado_id: estado_destino_id, updated_at: now })
-				.where(eq(pedidos.id, pedido_id));
-
-			await tx.insert(logs_cambios_estado).values({
-				entidad_tipo: 'pedido',
-				entidad_id: pedido_id,
-				usuario_id: user.id,
-				estado_anterior_id: pedido.estado_id,
-				estado_nuevo_id: estado_destino_id,
-				comentario: comentario ?? null,
-				created_at: now
-			});
-
-			const estadoDestino = await tx
-				.select({ slug: estados_pedido.slug })
-				.from(estados_pedido)
-				.where(eq(estados_pedido.id, estado_destino_id))
-				.then((r) => r[0]);
-
-			const updates: Partial<typeof pedidos.$inferSelect> = {
-				estado_id: estado_destino_id,
-				updated_at: now
-			};
-
-			if (estadoDestino?.slug === PEDIDO_SLUG.ENTREGADO) {
-				updates.fecha_entrega_real = now;
-			}
-
-			await tx.update(pedidos).set(updates).where(eq(pedidos.id, pedido_id));
+		const result = await cambiarEstadoPedidoServicio({
+			pedido_id,
+			estado_destino_id,
+			comentario
 		});
 
-		getPedidos({ search: '', page: 1 }).refresh();
+		refrescarCachesPedido();
 		getPedidoById(pedido_id).refresh();
 		getHistorialPedido(pedido_id).refresh();
-
-		return { success: true };
+		return result;
 	}
 );
 
@@ -437,7 +119,7 @@ export const eliminarPedido = command(v.number(), async (pedidoId) => {
 	await db.delete(pedidos).where(eq(pedidos.id, pedidoId));
 	await db.delete(lineas_pedido).where(eq(lineas_pedido.pedido_id, pedidoId));
 
-	requested(getPedidos, 1).refreshAll();
+	refrescarCachesPedido();
 	return { success: true };
 });
 
@@ -447,49 +129,9 @@ export const eliminarEstadoPedido = command(v.number(), async (id) => {
 	return { success: true };
 });
 
-// ============================================================
-// FORMS
-// ============================================================
-
 export const crearPedido = form(PedidoSchema, async (data) => {
-	await requirePermission('pedidos', 'create');
-	const user = await getCurrentUser();
-	if (!user) {
-		throw new Error('Usuario no autenticado');
-	}
-
-	const numero_pedido = await generarNumeroPedido();
-
-	const precio_total = data.lineas.reduce((sum, l) => sum + l.cantidad * l.precio, 0);
-	const saldo_pendiente = precio_total - data.anticipo;
-
-	const [pedido] = await db
-		.insert(pedidos)
-		.values({
-			cliente_id: data.cliente_id,
-			numero_pedido,
-			fecha_pedido: new Date(),
-			fecha_entrega_prometida: data.fecha_entrega_prometida
-				? new Date(data.fecha_entrega_prometida)
-				: null,
-			estado_id: 1, // Asumiendo que 1 es el estado "Pendiente"
-			precio_total,
-			anticipo: data.anticipo,
-			saldo_pendiente,
-			observaciones: data.observaciones
-		})
-		.returning();
-
-	for (const linea of data.lineas) {
-		await db.insert(lineas_pedido).values({
-			pedido_id: pedido.id,
-			producto_id: linea.producto_id === 'personalizado' ? null : parseInt(linea.producto_id),
-			cantidad: linea.cantidad,
-			precio_unitario: linea.precio,
-			es_personalizado: linea.producto_id === 'personalizado',
-			descripcion_personalizada: linea.descripcion
-		});
-	}
+	const pedido = await crearPedidoServicio(normalizarPedidoPayload(data));
+	refrescarCachesPedido();
 
 	redirect(303, resolve(`/pedidos/${pedido.id}`));
 });
@@ -498,13 +140,12 @@ export const crearEstadoPedido = form(
 	v.object({
 		nombre: v.string(),
 		color: v.string(),
-		grupo: v.string(), // TODO: manejar grupo
+		grupo: v.picklist(['inicial', 'proceso', 'final', 'excepcion']),
 		esFinal: v.optional(v.boolean(), false),
 		orden: v.optional(v.number(), 0)
 	}),
 	async (data) => {
 		const slug = data.nombre.toLowerCase().replace(/\s+/g, '-');
-
 		await db.insert(estados_pedido).values({ slug, ...data });
 		getEstadosPedido().refresh();
 		return { success: true };
