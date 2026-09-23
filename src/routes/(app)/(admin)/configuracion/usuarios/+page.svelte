@@ -28,9 +28,8 @@
 </script>
 
 <PageLayout>
-	<div class="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+	<div class="mb-6 flex flex-col gap-4 lg:flex-row items-center lg:justify-between">
 		<button onclick={() => history.back()} class="btn btn-ghost btn-sm">← Volver</button>
-
 		<button
 			class="btn btn-sm btn-primary"
 			onclick={() => {
