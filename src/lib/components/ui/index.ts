@@ -12,6 +12,7 @@ export { default as FormActions } from './FormActions.svelte';
 export { default as FormDireccion } from './FormDireccion.svelte';
 export { default as Toaster } from './Toaster.svelte';
 export { default as Can } from './Can.svelte';
+export { default as ExcelMenu } from './ExcelMenu.svelte';
 export { default as KanBanBoard } from './KanbanBoard.svelte';
 export { default as KanBanColumn } from './KanbanColumn.svelte';
 export { default as NavegacionProceso } from './NavegacionProceso.svelte';

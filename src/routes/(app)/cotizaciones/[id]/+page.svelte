@@ -449,8 +449,8 @@
 						</div>
 					</FormFieldWrapper>
 					<Can modulo="cotizaciones" accion="asignar">
-						<FormFieldWrapper label="Asignar" id="asignar">
-							<select class="select" bind:value={empleadoSeleccionado}>
+						<FormFieldWrapper label="Asignado a" id="asignar">
+							<select class="select select-sm" bind:value={empleadoSeleccionado}>
 								<option value="">Sin asignar</option>
 								{#each data.empleados as emp (emp.id)}
 									<option value={emp.id.toString()}>{emp.nombre} {emp.apellido ?? ''}</option>

@@ -1,12 +1,21 @@
 <script lang="ts">
 	import { goto } from '$app/navigation';
 	import { resolve } from '$app/paths';
-	import { Can, Highlight, PageLayout, Pagination, SearchBar, Table } from '$lib/components/ui';
+	import {
+		Can,
+		ExcelMenu,
+		Highlight,
+		PageLayout,
+		Pagination,
+		SearchBar,
+		Table
+	} from '$lib/components/ui';
 	import { debounce } from '$lib/utils/debounce';
 	import { SvelteURLSearchParams } from 'svelte/reactivity';
 	import type { PageProps } from './$types';
 	import { Delete, Edit, Eye } from '$lib/components/ui/icons';
 	import { eliminarContacto } from '$lib/remote/contactos.remote';
+	import { can as tienePermiso } from '$lib/utils/permissions';
 
 	let { data }: PageProps = $props();
 	let search = $state('');
@@ -60,7 +69,7 @@
 				/>
 			</div>
 			<select
-				class="select select-sm w-48"
+				class="select w-48 select-sm"
 				aria-label="Filtrar contactos por rol"
 				bind:value={filtroRol}
 				onchange={() => {
@@ -80,7 +89,12 @@
 		>
 			{filtroRol === 'cliente' ? 'Nuevo cliente' : 'Nuevo contacto'}
 		</a>
-		<a class="btn btn-outline btn-sm" href={resolve('/contactos/importar')}>Excel</a>
+		<ExcelMenu
+			importHref={resolve('/contactos/importar')}
+			exportHref={resolve('/contactos/exportar')}
+			canImport={tienePermiso(data.user, data.permisos, 'contactos', 'create')}
+			canExport={tienePermiso(data.user, data.permisos, 'contactos', 'view')}
+		/>
 	</div>
 	<div class="card bg-base-100 shadow">
 		<div class="card-body p-0">
@@ -116,15 +130,6 @@
 					>
 						<Eye />
 					</button>
-					<Can modulo="contactos" accion="edit">
-						<button
-							class="btn btn-circle btn-ghost btn-sm"
-							title="Editar"
-							onclick={() => goto(resolve(`/contactos/${contacto.id}`))}
-						>
-							<Edit />
-						</button>
-					</Can>
 					<Can modulo="contactos" accion="delete">
 						<button
 							class="btn btn-circle btn-ghost btn-error btn-sm"

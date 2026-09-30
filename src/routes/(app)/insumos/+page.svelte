@@ -1,11 +1,20 @@
 <script lang="ts">
 	import { goto, invalidateAll } from '$app/navigation';
 	import { resolve } from '$app/paths';
-	import { Can, Highlight, PageLayout, Pagination, SearchBar, Table } from '$lib/components/ui';
+	import {
+		Can,
+		ExcelMenu,
+		Highlight,
+		PageLayout,
+		Pagination,
+		SearchBar,
+		Table
+	} from '$lib/components/ui';
 	import { Delete, Edit } from '$lib/components/ui/icons';
 	import { eliminarInsumo } from '$lib/remote/insumos.remote';
 	import { toast } from '$lib/stores/toast.svelte';
 	import { debounce } from '$lib/utils/debounce';
+	import { can as tienePermiso } from '$lib/utils/permissions';
 	import { SvelteURLSearchParams } from 'svelte/reactivity';
 	import type { PageProps } from './$types';
 
@@ -92,11 +101,14 @@
 			</select>
 		</div>
 		<div class="flex gap-3">
-			<Can modulo="insumos" accion="import">
-				<a class="btn btn-sm btn-outline" href={resolve('/insumos/importar')}>Excel</a>
-			</Can>
+			<ExcelMenu
+				importHref={resolve('/insumos/importar')}
+				exportHref={resolve('/insumos/exportar')}
+				canImport={tienePermiso(data.user, data.permisos, 'insumos', 'import')}
+				canExport={tienePermiso(data.user, data.permisos, 'insumos', 'view')}
+			/>
 			<Can modulo="insumos" accion="create">
-				<a class="btn btn-sm btn-primary" href={resolve('/insumos/crear')}>+ Nuevo insumo</a>
+				<a class="btn btn-primary btn-sm" href={resolve('/insumos/crear')}>+ Nuevo insumo</a>
 			</Can>
 		</div>
 	</div>
