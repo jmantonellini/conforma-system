@@ -75,7 +75,7 @@ export const crearProducto = form(ProductoSchema, async (data) => {
 		receta: data.receta
 	});
 
-	getProductos({}).refresh();
+	await requested(getProductos, 1).refreshAll();
 	return result;
 });
 
@@ -85,7 +85,7 @@ export const actualizarProducto = form(ProductoSchemaUpdate, async (data) => {
 		receta: data.receta
 	});
 
-	getProductos({}).refresh();
+	await requested(getProductos, 1).refreshAll();
 	getProductoInsumos(Number(data.id)).refresh();
 	return result;
 });

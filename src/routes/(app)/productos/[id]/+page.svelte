@@ -338,7 +338,7 @@
 						/>
 						<span class="label whitespace-nowrap"
 							>{data.insumos.find((insumo) => String(insumo.id) === linea.insumo_id)?.unidad ??
-								'-'}s
+								(linea.producto_id ? 'Producto' : '-')}
 						</span>
 						<button
 							class="btn btn-square btn-ghost text-error btn-sm"

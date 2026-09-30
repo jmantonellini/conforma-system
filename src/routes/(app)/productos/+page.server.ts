@@ -11,9 +11,8 @@ export const load: PageServerLoad = async ({ url, setHeaders }) => {
 		: 'nombre';
 	const direction = url.searchParams.get('direction') === 'desc' ? 'desc' : 'asc';
 
-	// Cache por 5 minutos
 	setHeaders({
-		'Cache-Control': 'max-age=300'
+		'Cache-Control': 'private, no-store'
 	});
 
 	const productosData = await getProductos({

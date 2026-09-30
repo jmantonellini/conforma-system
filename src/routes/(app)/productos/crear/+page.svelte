@@ -243,57 +243,50 @@
 				<legend class="fieldset-legend">Receta del producto</legend>
 				<div class="space-y-3">
 					{#each receta as linea, indice (indice)}
-						<div class="grid gap-1 sm:grid-cols-[minmax(0,1fr)_8rem_auto_auto] sm:items-center">
-							<div class="fieldset min-w-0">
-								<SearchSelect
-									label="Componente"
-									id={`receta-create-${indice}`}
-									placeholder="Buscar componente..."
-									field={{
-										value: () =>
-											linea.insumo_id
-												? `insumo:${linea.insumo_id}`
-												: linea.producto_id
-													? `producto:${linea.producto_id}`
-													: '',
-										set: (value: string) => {
-											const [tipo, id] = value.split(':');
-											linea.insumo_id = tipo === 'insumo' ? id : '';
-											linea.producto_id = tipo === 'producto' ? id : '';
-										}
-									}}
-									options={[
-										...insumos.map((insumo) => ({
-											value: `insumo:${insumo.id}`,
-											label: `${insumo.codigo} - ${insumo.nombre}`
-										})),
-										...productos.map((producto) => ({
-											value: `producto:${producto.id}`,
-											label: `${producto.codigo} - ${producto.nombre}`
-										}))
-									]}
-									onChange={(value: string) => {
+						<div class="mb-1 grid grid-cols-[1fr_auto_auto_auto] gap-1 sm:items-center">
+							<SearchSelect
+								label=""
+								id={`receta-create-${indice}`}
+								placeholder="Buscar componente..."
+								field={{
+									value: () =>
+										linea.insumo_id
+											? `insumo:${linea.insumo_id}`
+											: linea.producto_id
+												? `producto:${linea.producto_id}`
+												: '',
+									set: (value: string) => {
 										const [tipo, id] = value.split(':');
 										linea.insumo_id = tipo === 'insumo' ? id : '';
 										linea.producto_id = tipo === 'producto' ? id : '';
-									}}
-								/>
-							</div>
-							<div class="fieldset">
-								<span class="label">Cantidad</span>
-								<input
-									class="remove-arrow input"
-									type="number"
-									min="0"
-									step="0.01"
-									bind:value={linea.cantidad}
-								/>
-							</div>
+									}
+								}}
+								options={[
+									...insumos.map((insumo) => ({
+										value: `insumo:${insumo.id}`,
+										label: `${insumo.codigo} - ${insumo.nombre}`
+									})),
+									...productos.map((producto) => ({
+										value: `producto:${producto.id}`,
+										label: `${producto.codigo} - ${producto.nombre}`
+									}))
+								]}
+								onChange={(value: string) => {
+									const [tipo, id] = value.split(':');
+									linea.insumo_id = tipo === 'insumo' ? id : '';
+									linea.producto_id = tipo === 'producto' ? id : '';
+								}}
+							/>
+							<input
+								class="remove-arrow input w-16"
+								type="number"
+								min="0"
+								step="0.01"
+								bind:value={linea.cantidad}
+							/>
 							<span class="label whitespace-nowrap">
-								Unidad: <strong
-									>{insumos.find((insumo) => String(insumo.id) === linea.insumo_id)?.unidad ??
-										(linea.producto_id ? 'Producto' : '-')}</strong
-								>
+								{insumos.find((insumo) => String(insumo.id) === linea.insumo_id)?.unidad ??
+									(linea.producto_id ? 'Producto' : '-')}
 							</span>
 							<button
 								type="button"
