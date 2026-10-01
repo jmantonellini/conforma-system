@@ -1,0 +1,1 @@
+ALTER TABLE "productos" DROP COLUMN IF EXISTS "precio_base";

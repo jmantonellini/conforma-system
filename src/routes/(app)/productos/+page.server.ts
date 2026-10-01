@@ -6,8 +6,8 @@ export const load: PageServerLoad = async ({ url, setHeaders }) => {
 	const categoria = Number(url.searchParams.get('categoria')) || undefined;
 	const page = Number(url.searchParams.get('page')) || undefined;
 	const sortParametro = url.searchParams.get('sort');
-	const sort = ['nombre', 'codigo', 'precio_base'].includes(sortParametro ?? '')
-		? (sortParametro as 'nombre' | 'codigo' | 'precio_base')
+	const sort = ['nombre', 'codigo'].includes(sortParametro ?? '')
+		? (sortParametro as 'nombre' | 'codigo')
 		: 'nombre';
 	const direction = url.searchParams.get('direction') === 'desc' ? 'desc' : 'asc';
 

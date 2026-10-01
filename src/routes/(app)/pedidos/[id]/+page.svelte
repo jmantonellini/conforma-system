@@ -179,7 +179,10 @@
 							<th>Código</th>
 							<th>Producto</th>
 							<th>Cantidad</th>
-							<th>Precio Unit.</th>
+							<th>Costo</th>
+							<th>Precio lista</th>
+							<th>Descuento</th>
+							<th>Precio neto</th>
 							<th>Subtotal</th>
 							<th>Fabricación</th>
 							<th class="text-center">Acciones</th>
@@ -199,6 +202,26 @@
 								{linea.producto_nombre || linea.descripcion_personalizada || '-'}
 							</td>
 							<td class="text-center">{linea.cantidad}</td>
+							<td class="text-right"
+								>${Number(linea.costo_materiales || 0).toLocaleString('es-AR', {
+									minimumFractionDigits: 2
+								})}</td
+							>
+							<td class="text-right"
+								>${Number(linea.precio_lista_unitario || 0).toLocaleString('es-AR', {
+									minimumFractionDigits: 2
+								})}</td
+							>
+							<td class="text-right">
+								{#if linea.descuento_porcentaje > 0}
+									<span class="font-medium">{linea.descuento_porcentaje}%</span>
+									<p class="max-w-48 text-xs whitespace-normal text-base-content/60">
+										{linea.justificacion_descuento}
+									</p>
+								{:else}
+									-
+								{/if}
+							</td>
 							<td class="text-right">${linea.precio_unitario?.toLocaleString() || '0'}</td>
 							<td class="text-right font-semibold">${linea.subtotal?.toLocaleString() || '0'}</td>
 							<td>
@@ -238,7 +261,7 @@
 							</td>
 						{/snippet}
 						{#snippet footer()}
-							<td colspan="6" class="text-right font-bold">Total:</td>
+							<td colspan="9" class="text-right font-bold">Total:</td>
 							<td class="text-right text-lg font-bold text-primary">
 								${pedido.total?.toLocaleString() || '0'}
 							</td>
@@ -255,11 +278,12 @@
 						<div class="overflow-x-auto">
 							<table class="table table-sm">
 								<thead>
-									<tr
-										><th>Código</th><th>Insumo</th><th>Unidad</th><th class="text-right"
-											>Cantidad</th
-										></tr
-									>
+									<tr>
+										<th>Código</th><th>Insumo</th><th>Unidad</th><th class="text-right">Cantidad</th
+										>
+										<th class="text-right">Costo</th><th class="text-right">Precio lista</th>
+										<th class="text-right">Descuento</th><th class="text-right">Precio neto</th>
+									</tr>
 								</thead>
 								<tbody>
 									{#each insumosAdicionales as insumo (insumo.id)}
@@ -268,6 +292,28 @@
 											<td>{insumo.nombre}</td>
 											<td>{insumo.unidad}</td>
 											<td class="text-right">{insumo.cantidad}</td>
+											<td class="text-right"
+												>${Number(insumo.costo_unitario || 0).toLocaleString('es-AR', {
+													minimumFractionDigits: 2
+												})}</td
+											>
+											<td class="text-right"
+												>${Number(insumo.precio_lista_unitario || 0).toLocaleString('es-AR', {
+													minimumFractionDigits: 2
+												})}</td
+											>
+											<td class="text-right">
+												{#if insumo.descuento_porcentaje > 0}
+													{insumo.descuento_porcentaje}% · {insumo.justificacion_descuento}
+												{:else}
+													-
+												{/if}
+											</td>
+											<td class="text-right"
+												>${Number(insumo.precio_unitario || 0).toLocaleString('es-AR', {
+													minimumFractionDigits: 2
+												})}</td
+											>
 										</tr>
 									{/each}
 								</tbody>

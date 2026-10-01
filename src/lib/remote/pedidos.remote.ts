@@ -40,6 +40,12 @@ const normalizarPedidoPayload = <T extends Record<string, unknown>>(data: T) => 
 				producto_id: String((linea as { producto_id?: string | number }).producto_id ?? ''),
 				cantidad: Number((linea as { cantidad?: number }).cantidad ?? 0),
 				precio: Number((linea as { precio?: number }).precio ?? 0),
+				precio_lista: Number((linea as { precio_lista?: number }).precio_lista ?? 0),
+				descuento_porcentaje: Number(
+					(linea as { descuento_porcentaje?: number }).descuento_porcentaje ?? 0
+				),
+				justificacion_descuento: (linea as { justificacion_descuento?: string })
+					.justificacion_descuento,
 				descripcion: (linea as { descripcion?: string | null }).descripcion ?? undefined
 			}))
 		: []

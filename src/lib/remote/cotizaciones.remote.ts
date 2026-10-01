@@ -35,9 +35,10 @@ import { requirePermission } from '$lib/server/auth/permissions';
 import { generarNumeroPedido } from '../server/utils/pedidos';
 import { CotizacionSchema, LineaCotizacionSchema } from './cotizaciones.schema';
 import { getProductoConReceta } from './productos.remote';
+import { obtenerPrecioProducto } from '$lib/server/services/productos.service';
+import { calcularPrecioConDescuento } from '$lib/utils/precios';
 import {
 	aplicarCambioDeEstado,
-	calcularTotalLineas,
 	obtenerTransicionPermitida,
 	redondearMoneda,
 	registrarCambioEstado
@@ -332,6 +333,10 @@ export const getCotizacionById = query(v.number(), async (id) => {
 			descripcion: lineas_cotizacion.descripcion,
 			cantidad: lineas_cotizacion.cantidad,
 			precio_unitario: lineas_cotizacion.precio_unitario,
+			precio_lista_unitario: lineas_cotizacion.precio_lista_unitario,
+			margen_porcentaje: lineas_cotizacion.margen_porcentaje,
+			descuento_porcentaje: lineas_cotizacion.descuento_porcentaje,
+			justificacion_descuento: lineas_cotizacion.justificacion_descuento,
 			subtotal: lineas_cotizacion.subtotal,
 			costo_mano_obra: lineas_cotizacion.costo_mano_obra,
 			costo_materiales: lineas_cotizacion.costo_materiales,
@@ -557,8 +562,19 @@ export const cotizarCotizacion = command(
 		await requirePermission('cotizaciones', 'cotizar');
 		const user = await getCurrentUser();
 		if (!user) throw new Error('No autorizado');
-
-		const precio_total = calcularTotalLineas(lineas);
+		const [cotizacionExistente] = await db
+			.select({ pedido_id: cotizaciones.pedido_id })
+			.from(cotizaciones)
+			.where(eq(cotizaciones.id, cotizacion_id))
+			.limit(1);
+		if (!cotizacionExistente) throw new Error('Cotización no encontrada');
+		if (cotizacionExistente.pedido_id) {
+			throw new Error('No se puede modificar una cotización convertida en pedido');
+		}
+		if (lineas.some((linea) => (linea.descuento_porcentaje ?? 0) > 0)) {
+			await requirePermission('cotizaciones', 'descuento');
+		}
+		let precio_total = 0;
 
 		await db.transaction(async (tx) => {
 			await tx.delete(lineas_cotizacion).where(eq(lineas_cotizacion.cotizacion_id, cotizacion_id));
@@ -566,10 +582,15 @@ export const cotizarCotizacion = command(
 			for (const [i, linea] of lineas.entries()) {
 				let descripcion = linea.descripcion;
 				let costo_materiales = linea.costo_materiales || 0;
+				let margen_porcentaje = 0;
+				let precio_lista_unitario = Number(linea.precio_unitario || 0);
 				let insumos_snapshot: unknown = null;
 
 				if (linea.producto_id) {
-					const { receta } = await getProductoConReceta(Number(linea.producto_id));
+					const [{ receta }, precioProducto] = await Promise.all([
+						getProductoConReceta(Number(linea.producto_id)),
+						obtenerPrecioProducto(Number(linea.producto_id))
+					]);
 
 					insumos_snapshot = receta.map((material) => ({
 						insumo_id: material.insumo_id,
@@ -580,13 +601,16 @@ export const cotizarCotizacion = command(
 						unidad: material.unidad,
 						subtotal: redondearMoneda((material.cantidad || 0) * (material.costo_unitario ?? 0))
 					}));
-					costo_materiales = redondearMoneda(
-						receta.reduce<number>(
-							(total, material) =>
-								total + (material.cantidad || 0) * (material.costo_unitario ?? 0),
-							0
-						)
+					costo_materiales = precioProducto.costo_materiales;
+					margen_porcentaje = precioProducto.margen_porcentaje;
+					precio_lista_unitario = redondearMoneda(
+						linea.precio_lista_unitario ?? precioProducto.precio_venta
 					);
+					if (precio_lista_unitario < precioProducto.precio_venta) {
+						throw new Error(
+							'El precio de lista no puede ser menor al precio del producto; aplicá un descuento justificado'
+						);
+					}
 				} else if (linea.insumo_id) {
 					const [material] = await tx
 						.select()
@@ -596,6 +620,14 @@ export const cotizarCotizacion = command(
 					if (!material) throw new Error('Insumo no encontrado');
 					descripcion = material.nombre;
 					costo_materiales = material.costo_unitario;
+					precio_lista_unitario = redondearMoneda(
+						linea.precio_lista_unitario ?? material.costo_unitario
+					);
+					if (precio_lista_unitario < material.costo_unitario) {
+						throw new Error(
+							'El precio de lista del insumo no puede ser menor al costo; aplicá un descuento justificado'
+						);
+					}
 					insumos_snapshot = [
 						{
 							insumo_id: material.id,
@@ -607,7 +639,18 @@ export const cotizarCotizacion = command(
 							unidad: material.unidad
 						}
 					];
+				} else if (linea.precio_lista_unitario != null) {
+					precio_lista_unitario = redondearMoneda(linea.precio_lista_unitario);
 				}
+				const descuento_porcentaje = Number(linea.descuento_porcentaje ?? 0);
+				const justificacion_descuento =
+					descuento_porcentaje > 0 ? linea.justificacion_descuento?.trim() || null : null;
+				const precio_unitario = calcularPrecioConDescuento(
+					precio_lista_unitario,
+					descuento_porcentaje,
+					justificacion_descuento ?? undefined
+				);
+				precio_total = redondearMoneda(precio_total + linea.cantidad * precio_unitario);
 
 				await tx.insert(lineas_cotizacion).values({
 					cotizacion_id,
@@ -616,7 +659,12 @@ export const cotizarCotizacion = command(
 					es_personalizado: linea.es_personalizado ?? !linea.producto_id,
 					descripcion,
 					cantidad: linea.cantidad,
-					precio_unitario: redondearMoneda(linea.precio_unitario || 0),
+					precio_unitario,
+					precio_lista_unitario,
+					margen_porcentaje,
+					descuento_porcentaje,
+					justificacion_descuento,
+					descuento_usuario_id: descuento_porcentaje > 0 ? user.id : null,
 					costo_mano_obra: redondearMoneda(linea.costo_mano_obra || 0),
 					costo_materiales: redondearMoneda(costo_materiales || 0),
 					insumos_snapshot,
@@ -793,7 +841,12 @@ export const convertirCotizacionAPedido = command(v.number(), async (cotizacionI
 					insumo_id: linea.insumo_id,
 					cantidad: linea.cantidad,
 					unidad: insumo.unidad,
-					costo_unitario: linea.precio_unitario,
+					costo_unitario: linea.costo_materiales,
+					precio_lista_unitario: linea.precio_lista_unitario,
+					precio_unitario: linea.precio_unitario,
+					descuento_porcentaje: linea.descuento_porcentaje,
+					justificacion_descuento: linea.justificacion_descuento,
+					descuento_usuario_id: linea.descuento_usuario_id,
 					cotizacion_linea_id: linea.id,
 					observaciones: `Insumo agregado desde la cotización ${cotizacion.numero_cotizacion}`
 				});
@@ -807,6 +860,12 @@ export const convertirCotizacionAPedido = command(v.number(), async (cotizacionI
 				descripcion_personalizada: linea.es_personalizado ? linea.descripcion : null,
 				cantidad: linea.cantidad,
 				precio_unitario: redondearMoneda(linea.precio_unitario || 0),
+				precio_lista_unitario: linea.precio_lista_unitario,
+				margen_porcentaje: linea.margen_porcentaje,
+				descuento_porcentaje: linea.descuento_porcentaje,
+				justificacion_descuento: linea.justificacion_descuento,
+				descuento_usuario_id: linea.descuento_usuario_id,
+				costo_materiales: linea.costo_materiales,
 				insumos_snapshot: linea.insumos_snapshot,
 				orden_linea: linea.orden_linea
 			});

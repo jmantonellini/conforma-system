@@ -18,6 +18,7 @@
 	import { goto } from '$app/navigation';
 	import { page } from '$app/state';
 	import { resolve } from '$app/paths';
+	import { calcularPrecioVenta, redondearPrecio } from '$lib/utils/precios';
 	import type { PageProps } from './$types';
 
 	let { data }: PageProps = $props();
@@ -47,21 +48,27 @@
 
 	$effect(() => {
 		receta = (data.receta ?? []).map((linea) => ({
-			insumo_id: String(linea.insumo_id),
-			producto_id: '',
+			insumo_id: linea.insumo_id ? String(linea.insumo_id) : '',
+			producto_id: linea.producto_id ? String(linea.producto_id) : '',
 			cantidad: linea.cantidad
 		}));
 	});
 	let costoReceta = $derived(
-		receta.reduce((total, linea) => {
-			const insumo = data.insumos.find((item) => item.id === Number(linea.insumo_id));
-			return total + (insumo?.costo_unitario ?? 0) * Number(linea.cantidad || 0);
-		}, 0)
+		redondearPrecio(
+			receta.reduce((total, linea) => {
+				const insumo = data.insumos.find((item) => item.id === Number(linea.insumo_id));
+				const producto = data.productos.find((item) => item.id === Number(linea.producto_id));
+				return (
+					total +
+					(insumo?.costo_unitario ?? producto?.costo_materiales ?? 0) * Number(linea.cantidad || 0)
+				);
+			}, 0)
+		)
 	);
-	let precioBaseActual = $derived(
-		Number(form.fields.precio_base.value() ?? data.producto.precio_base ?? 0)
+	let margenPorcentajeActual = $derived(
+		Number(form.fields.margen_porcentaje.value() ?? data.producto.margen_porcentaje ?? 0)
 	);
-	let precioConInsumos = $derived(precioBaseActual + costoReceta);
+	let precioVenta = $derived(calcularPrecioVenta(costoReceta, margenPorcentajeActual));
 
 	function agregarInsumo() {
 		receta = [...receta, { insumo_id: '', producto_id: '', cantidad: 1 }];
@@ -119,17 +126,25 @@
 							{/each}
 						</select>
 					</FormFieldWrapper>
-					<FormFieldWrapper label="Márgen ganancia" id="precio_base">
+					<FormFieldWrapper label="Margen bruto (%)" id="margen_porcentaje">
 						<input
 							class="remove-arrow input"
+							min="0"
+							max="99.99"
 							step="0.01"
-							{...form.fields.precio_base.as('number', data.producto.precio_base ?? 0)}
+							{...form.fields.margen_porcentaje.as('number', data.producto.margen_porcentaje ?? 0)}
 						/>
 					</FormFieldWrapper>
+					<div class="stat rounded-box border border-base-300 bg-base-100 p-3">
+						<div class="stat-title">Costo de receta</div>
+						<div class="stat-value text-xl">
+							${costoReceta.toLocaleString('es-AR', { minimumFractionDigits: 2 })}
+						</div>
+					</div>
 					<div class="stat rounded-box border border-primary/30 bg-primary/5 p-3">
-						<div class="stat-title">Precio final</div>
-						<div class="stat-value text-2xl text-primary">
-							${precioConInsumos.toLocaleString('es-AR', { minimumFractionDigits: 2 })}
+						<div class="stat-title">Precio de lista</div>
+						<div class="stat-value text-xl text-primary">
+							${precioVenta.toLocaleString('es-AR', { minimumFractionDigits: 2 })}
 						</div>
 					</div>
 				</div>

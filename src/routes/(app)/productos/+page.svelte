@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { goto, invalidateAll } from '$app/navigation';
+	import { goto } from '$app/navigation';
 	import { resolve } from '$app/paths';
 	import { Can, Highlight, Table, SearchBar, Pagination } from '$lib/components/ui';
 	import PageLayout from '$lib/components/ui/PageLayout.svelte';
@@ -16,7 +16,7 @@
 	let search = $state('');
 	let categoriaFilter = $state(0);
 	let currentPage = $state(1);
-	let sort = $state<'nombre' | 'codigo' | 'precio_base'>('nombre');
+	let sort = $state<'nombre' | 'codigo'>('nombre');
 	let direction = $state<'asc' | 'desc'>('asc');
 	let categorias = page.data.categorias;
 
@@ -39,7 +39,7 @@
 	}
 
 	function handleSort(key: string) {
-		if (!['nombre', 'codigo', 'precio_base'].includes(key)) return;
+		if (!['nombre', 'codigo'].includes(key)) return;
 		const sortKey = key as typeof sort;
 		if (sort === sortKey) direction = direction === 'asc' ? 'desc' : 'asc';
 		else {
@@ -78,7 +78,7 @@
 			</div>
 			<select
 				value={categoriaFilter}
-				class="select select-sm w-48"
+				class="select w-48 select-sm"
 				onchange={(e) => {
 					categoriaFilter = Number(e.currentTarget.value);
 					currentPage = 1;
@@ -92,7 +92,7 @@
 			</select>
 		</div>
 		<Can modulo="productos" accion="create">
-			<a class="btn btn-sm btn-primary" href={resolve('/productos/crear')}>+ Nuevo Producto</a>
+			<a class="btn btn-primary btn-sm" href={resolve('/productos/crear')}>+ Nuevo Producto</a>
 		</Can>
 	</div>
 
@@ -104,9 +104,11 @@
 				<th>Categoría</th>
 				<th>Marca</th>
 				<th>Modelo</th>
-				<th class="text-right"
-					><button class="link" onclick={() => onSort?.('precio_base')}>Precio Base</button></th
-				>
+				<th class="text-right">Costo de receta</th>
+				<th class="text-right">
+					<button class="link" onclick={() => onSort?.('precio_venta')}>Precio de lista</button>
+				</th>
+				<th class="text-right">Precio de lista</th>
 				<th class="text-center">Acciones</th>
 			{/snippet}
 
@@ -120,7 +122,10 @@
 				<td><Highlight text={producto.marca?.nombre} query={search} /></td>
 				<td><Highlight text={producto.modelo?.nombre} query={search} /></td>
 				<td class="text-right">
-					{producto.precio_base ? `$${producto.precio_base.toLocaleString()}` : '-'}
+					${producto.costo_materiales.toLocaleString('es-AR', { minimumFractionDigits: 2 })}
+				</td>
+				<td class="text-right font-semibold">
+					${producto.precio_venta.toLocaleString('es-AR', { minimumFractionDigits: 2 })}
 				</td>
 				<td class="text-center">
 					<div class="flex justify-center gap-2">

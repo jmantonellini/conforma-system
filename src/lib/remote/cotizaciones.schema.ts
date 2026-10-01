@@ -7,7 +7,9 @@ export const LineaCotizacionSchema = v.object({
 	descripcion: v.pipe(v.string(), v.nonEmpty('La descripción es requerida')),
 	cantidad: v.pipe(v.number(), v.toMinValue(1)),
 	precio_unitario: v.pipe(v.number(), v.toMinValue(0)),
-	// Base para las futuras fórmulas de costos
+	precio_lista_unitario: v.optional(v.pipe(v.number(), v.toMinValue(0))),
+	descuento_porcentaje: v.optional(v.pipe(v.number(), v.minValue(0), v.maxValue(99.99)), 0),
+	justificacion_descuento: v.optional(v.string()),
 	costo_mano_obra: v.optional(v.pipe(v.number(), v.toMinValue(0)), 0),
 	costo_materiales: v.optional(v.pipe(v.number(), v.toMinValue(0)), 0)
 });

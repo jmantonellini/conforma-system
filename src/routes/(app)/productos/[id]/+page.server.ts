@@ -9,5 +9,10 @@ export const load: PageServerLoad = async ({ params }) => {
 		getInsumos({ limit: 100 }),
 		getProductos({ limit: 100 })
 	]);
-	return { producto, receta: recetaData.receta, insumos: insumos.data, productos: productos.data };
+	return {
+		producto,
+		receta: recetaData.recetaDirecta,
+		insumos: insumos.data,
+		productos: productos.data
+	};
 };

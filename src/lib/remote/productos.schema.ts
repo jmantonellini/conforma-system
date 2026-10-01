@@ -4,7 +4,7 @@ export const ProductoSchema = v.object({
 	codigo: v.optional(v.pipe(v.string(), v.trim()), ''),
 	nombre: v.pipe(v.string(), v.nonEmpty('Nombre requerido')),
 	categoria_id: v.optional(v.pipe(v.string(), v.transform(Number), v.number())),
-	precio_base: v.optional(v.number(), 0),
+	margen_porcentaje: v.optional(v.pipe(v.number(), v.minValue(0), v.maxValue(99.99)), 0),
 	medidas_primario_diametro: v.optional(v.number()),
 	medidas_primario_largo: v.optional(v.number()),
 	medidas_secundario_diametro: v.optional(v.number()),

@@ -12,6 +12,7 @@
 	import { page } from '$app/state';
 	import { goto, invalidateAll } from '$app/navigation';
 	import { resolve } from '$app/paths';
+	import { calcularPrecioVenta, redondearPrecio } from '$lib/utils/precios';
 
 	let categorias = page.data.categorias;
 	let marcas = page.data.marcas;
@@ -20,6 +21,17 @@
 	let insumos = (await getInsumos({ limit: 100 })).data;
 	let productos = (await getProductos({ limit: 100 })).data;
 	let receta = $state([{ insumo_id: '', producto_id: '', cantidad: 1 }]);
+	let costoReceta = $derived(
+		redondearPrecio(
+			receta.reduce((total, linea) => {
+				const insumo = insumos.find((item) => String(item.id) === linea.insumo_id);
+				const producto = productos.find((item) => String(item.id) === linea.producto_id);
+				return total + (insumo?.costo_unitario ?? producto?.costo_materiales ?? 0) * linea.cantidad;
+			}, 0)
+		)
+	);
+	let margenPorcentaje = $derived(Number(crearProducto.fields.margen_porcentaje.value() ?? 0));
+	let precioVenta = $derived(calcularPrecioVenta(costoReceta, margenPorcentaje));
 
 	function agregarInsumo() {
 		receta = [...receta, { insumo_id: '', producto_id: '', cantidad: 1 }];
@@ -62,7 +74,7 @@
 			<fieldset class="fieldset rounded-box border border-base-300 bg-base-200 p-4">
 				<legend class="fieldset-legend">Datos básicos</legend>
 
-				<div class="grid grid-cols-1 gap-4 md:grid-cols-4">
+				<div class="grid grid-cols-1 gap-4 md:grid-cols-3 xl:grid-cols-6">
 					<FormFieldWrapper label="Código" id="codigo">
 						<input class="input" {...crearProducto.fields.codigo.as('text')} />
 					</FormFieldWrapper>
@@ -79,9 +91,27 @@
 							{/each}
 						</select>
 					</FormFieldWrapper>
-					<FormFieldWrapper label="Precio Base" id="precio_base">
-						<input class="input" step="0.01" {...crearProducto.fields.precio_base.as('number')} />
+					<FormFieldWrapper label="Margen bruto (%)" id="margen_porcentaje">
+						<input
+							class="input"
+							min="0"
+							max="99.99"
+							step="0.01"
+							{...crearProducto.fields.margen_porcentaje.as('number')}
+						/>
 					</FormFieldWrapper>
+					<div class="stat rounded-box border border-base-300 bg-base-100 p-3">
+						<div class="stat-title">Costo de receta</div>
+						<div class="stat-value text-xl">
+							${costoReceta.toLocaleString('es-AR', { minimumFractionDigits: 2 })}
+						</div>
+					</div>
+					<div class="stat rounded-box border border-primary/30 bg-primary/5 p-3">
+						<div class="stat-title">Precio de lista</div>
+						<div class="stat-value text-xl text-primary">
+							${precioVenta.toLocaleString('es-AR', { minimumFractionDigits: 2 })}
+						</div>
+					</div>
 				</div>
 			</fieldset>
 

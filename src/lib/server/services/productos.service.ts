@@ -20,12 +20,13 @@ import {
 	validarComponentes
 } from '$lib/server/services/productos-receta.service';
 import { generarCodigoProductoUnico } from '$lib/server/services/productos-codigo.service';
+import { calcularPrecioVenta, redondearPrecio } from '$lib/utils/precios';
 
 export const ProductoSchemaService = v.object({
 	codigo: v.optional(v.pipe(v.string(), v.trim()), ''),
 	nombre: v.pipe(v.string(), v.nonEmpty('Nombre requerido')),
 	categoria_id: v.optional(v.pipe(v.string(), v.transform(Number), v.number())),
-	precio_base: v.optional(v.number(), 0),
+	margen_porcentaje: v.optional(v.pipe(v.number(), v.minValue(0), v.maxValue(99.99)), 0),
 	medidas_primario_diametro: v.optional(v.number()),
 	medidas_primario_largo: v.optional(v.number()),
 	medidas_secundario_diametro: v.optional(v.number()),
@@ -49,6 +50,61 @@ export const ProductoSchemaUpdateService = v.object({
 	receta: v.optional(v.string())
 });
 
+export async function calcularCostoMaterialesProducto(
+	productoId: number,
+	productosVisitados = new Set<number>()
+): Promise<number> {
+	if (productosVisitados.has(productoId)) {
+		throw new Error('La receta contiene un ciclo de productos');
+	}
+	const siguientes = new Set(productosVisitados).add(productoId);
+	const [materiales, componentes] = await Promise.all([
+		db
+			.select({ cantidad: producto_insumos.cantidad, costo_unitario: insumos.costo_unitario })
+			.from(producto_insumos)
+			.innerJoin(insumos, eq(producto_insumos.insumo_id, insumos.id))
+			.where(eq(producto_insumos.producto_id, productoId)),
+		db
+			.select({
+				producto_id: producto_componentes.componente_id,
+				cantidad: producto_componentes.cantidad
+			})
+			.from(producto_componentes)
+			.where(eq(producto_componentes.producto_id, productoId))
+	]);
+
+	const costoDirecto = materiales.reduce(
+		(total, material) => total + material.cantidad * (material.costo_unitario ?? 0),
+		0
+	);
+	const costosComponentes = await Promise.all(
+		componentes.map(
+			async (componente) =>
+				(await calcularCostoMaterialesProducto(componente.producto_id, siguientes)) *
+				componente.cantidad
+		)
+	);
+	return redondearPrecio(
+		costoDirecto + costosComponentes.reduce((total, costo) => total + costo, 0)
+	);
+}
+
+export async function obtenerPrecioProducto(productoId: number) {
+	const [producto] = await db
+		.select({ margen_porcentaje: productos.margen_porcentaje })
+		.from(productos)
+		.where(eq(productos.id, productoId))
+		.limit(1);
+	if (!producto) throw new Error('Producto no encontrado');
+	const costo_materiales = await calcularCostoMaterialesProducto(productoId);
+	const margen_porcentaje = Number(producto.margen_porcentaje ?? 0);
+	return {
+		costo_materiales,
+		margen_porcentaje,
+		precio_venta: calcularPrecioVenta(costo_materiales, margen_porcentaje)
+	};
+}
+
 export async function getProductosListado({
 	search,
 	categoriaId,
@@ -61,7 +117,7 @@ export async function getProductosListado({
 	categoriaId?: number;
 	page?: number;
 	limit?: number;
-	sort?: 'nombre' | 'codigo' | 'precio_base';
+	sort?: 'nombre' | 'codigo';
 	direction?: 'asc' | 'desc';
 }) {
 	const offset = (page - 1) * limit;
@@ -84,11 +140,7 @@ export async function getProductosListado({
 	}
 
 	const whereCondition = conditions.length > 0 ? and(...conditions) : undefined;
-	const columnaOrden = {
-		nombre: productos.nombre,
-		codigo: productos.codigo,
-		precio_base: productos.precio_base
-	}[sort];
+	const columnaOrden = sort === 'codigo' ? productos.codigo : productos.nombre;
 	const orden = direction === 'desc' ? desc(columnaOrden) : asc(columnaOrden);
 	const data = await db
 		.select({
@@ -96,7 +148,7 @@ export async function getProductosListado({
 			codigo: productos.codigo,
 			nombre: productos.nombre,
 			categoria_id: productos.categoria_id,
-			precio_base: productos.precio_base,
+			margen_porcentaje: productos.margen_porcentaje,
 			marca: {
 				id: marcas.id,
 				nombre: marcas.nombre
@@ -113,7 +165,16 @@ export async function getProductosListado({
 		.orderBy(orden)
 		.limit(limit)
 		.offset(offset);
-
+	const dataConPrecios = await Promise.all(
+		data.map(async (producto) => {
+			const costo_materiales = await calcularCostoMaterialesProducto(producto.id);
+			return {
+				...producto,
+				costo_materiales,
+				precio_venta: calcularPrecioVenta(costo_materiales, producto.margen_porcentaje ?? 0)
+			};
+		})
+	);
 	const [totalResult] = await db
 		.select({ count: count() })
 		.from(productos)
@@ -122,7 +183,7 @@ export async function getProductosListado({
 		.where(whereCondition);
 
 	return {
-		data,
+		data: dataConPrecios,
 		total: totalResult?.count || 0,
 		totalPages: Math.ceil((totalResult?.count || 0) / limit),
 		currentPage: page
@@ -132,7 +193,12 @@ export async function getProductosListado({
 export async function getProductoByIdService(id: number) {
 	const [producto] = await db.select().from(productos).where(eq(productos.id, id)).limit(1);
 	if (!producto) throw new Error('Producto no encontrado');
-	return producto;
+	const costo_materiales = await calcularCostoMaterialesProducto(id);
+	return {
+		...producto,
+		costo_materiales,
+		precio_venta: calcularPrecioVenta(costo_materiales, producto.margen_porcentaje ?? 0)
+	};
 }
 
 export async function getProductoInsumosService(productoId: number) {
@@ -157,6 +223,7 @@ export async function getProductoInsumosService(productoId: number) {
 export async function getProductoConRecetaService(productoId: number) {
 	const [producto] = await db.select().from(productos).where(eq(productos.id, productoId)).limit(1);
 	if (!producto) throw new Error('Producto no encontrado');
+	const costo_materiales = await calcularCostoMaterialesProducto(productoId);
 
 	const [receta, componentes] = await Promise.all([
 		db
@@ -234,14 +301,38 @@ export async function getProductoConRecetaService(productoId: number) {
 		return resultado;
 	};
 
-	return { producto, receta: await expandir(productoId, 1), componentes };
+	const recetaDirecta = [
+		...receta.map((linea) => ({
+			insumo_id: linea.insumo_id,
+			producto_id: undefined,
+			cantidad: linea.cantidad,
+			orden: linea.orden
+		})),
+		...componentes.map((linea) => ({
+			insumo_id: undefined,
+			producto_id: linea.componente_id,
+			cantidad: linea.cantidad,
+			orden: linea.orden
+		}))
+	].sort((a, b) => a.orden - b.orden);
+
+	return {
+		producto: {
+			...producto,
+			costo_materiales,
+			precio_venta: calcularPrecioVenta(costo_materiales, producto.margen_porcentaje ?? 0)
+		},
+		receta: await expandir(productoId, 1),
+		recetaDirecta,
+		componentes
+	};
 }
 
 export async function crearProductoServicio(data: {
 	codigo?: string;
 	nombre: string;
 	categoria_id?: number;
-	precio_base?: number;
+	margen_porcentaje?: number;
 	medidas_primario_diametro?: number;
 	medidas_primario_largo?: number;
 	medidas_secundario_diametro?: number;
@@ -314,7 +405,7 @@ export async function actualizarProductoServicio(data: {
 	codigo?: string;
 	nombre?: string;
 	categoria_id?: number;
-	precio_base?: number;
+	margen_porcentaje?: number;
 	medidas_primario_diametro?: number;
 	medidas_primario_largo?: number;
 	medidas_secundario_diametro?: number;

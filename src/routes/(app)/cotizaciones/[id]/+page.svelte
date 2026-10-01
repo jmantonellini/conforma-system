@@ -24,6 +24,7 @@
 	import type { PageProps } from './$types';
 	import { Paths } from '$lib/types';
 	import { Document } from '$lib/components/ui/icons';
+	import { redondearPrecio } from '$lib/utils/precios';
 
 	let { data }: PageProps = $props();
 	let cotizacion = $derived(data.cotizacion);
@@ -74,19 +75,33 @@
 	let lineas = $state<any[]>([]);
 
 	$effect(() => {
-		lineas = (data.lineas ?? []).map((l: any) => ({
-			idx: l.id,
-			tipo: l.producto_id ? 'producto' : l.insumo_id ? 'insumo' : 'personalizado',
-			producto_id: l.producto_id ? String(l.producto_id) : '',
-			insumo_id: l.insumo_id ?? undefined,
-			unidad: l.insumo_unidad ?? '',
-			insumos_snapshot: l.insumos_snapshot ?? [],
-			descripcion: l.descripcion,
-			cantidad: l.cantidad,
-			precio_unitario: l.precio_unitario,
-			costo_mano_obra: l.costo_mano_obra ?? 0,
-			costo_materiales: l.costo_materiales ?? 0
-		}));
+		lineas = (data.lineas ?? []).map((l: any) => {
+			const producto = data.productos.find((item: any) => item.id === l.producto_id);
+			const insumo = data.insumos.find((item: any) => item.id === l.insumo_id);
+			const precio_minimo_unitario = producto?.precio_venta ?? insumo?.costo_unitario ?? 0;
+			const precio_lista_unitario = Math.max(
+				l.precio_lista_unitario ?? l.precio_unitario,
+				precio_minimo_unitario
+			);
+			return {
+				idx: l.id,
+				tipo: l.producto_id ? 'producto' : l.insumo_id ? 'insumo' : 'personalizado',
+				producto_id: l.producto_id ? String(l.producto_id) : '',
+				insumo_id: l.insumo_id ?? undefined,
+				unidad: l.insumo_unidad ?? '',
+				insumos_snapshot: l.insumos_snapshot ?? [],
+				descripcion: l.descripcion,
+				cantidad: l.cantidad,
+				precio_unitario: l.precio_unitario,
+				precio_lista_unitario,
+				precio_minimo_unitario,
+				margen_porcentaje: l.margen_porcentaje ?? 0,
+				descuento_porcentaje: l.descuento_porcentaje ?? 0,
+				justificacion_descuento: l.justificacion_descuento ?? '',
+				costo_mano_obra: l.costo_mano_obra ?? 0,
+				costo_materiales: l.costo_materiales ?? 0
+			};
+		});
 	});
 
 	let total = $derived(
@@ -110,6 +125,11 @@
 				descripcion: '',
 				cantidad: 1,
 				precio_unitario: 0,
+				precio_lista_unitario: 0,
+				precio_minimo_unitario: 0,
+				margen_porcentaje: 0,
+				descuento_porcentaje: 0,
+				justificacion_descuento: '',
 				costo_mano_obra: 0,
 				costo_materiales: 0
 			}
@@ -128,6 +148,11 @@
 				descripcion: '',
 				cantidad: 1,
 				precio_unitario: 0,
+				precio_lista_unitario: 0,
+				precio_minimo_unitario: 0,
+				margen_porcentaje: 0,
+				descuento_porcentaje: 0,
+				justificacion_descuento: '',
 				costo_mano_obra: 0,
 				costo_materiales: 0
 			}
@@ -138,10 +163,53 @@
 		if (lineas.length > 1) lineas = lineas.filter((l: any) => l.idx !== idx);
 	}
 
+	function actualizarDescuento(
+		lineaId: number,
+		campo: 'porcentaje' | 'justificacion',
+		valor: string
+	) {
+		lineas = lineas.map((linea: any) => {
+			if (linea.idx !== lineaId) return linea;
+			const descuento_porcentaje =
+				campo === 'porcentaje'
+					? Math.min(Math.max(Number(valor) || 0, 0), 99.99)
+					: Number(linea.descuento_porcentaje || 0);
+			const justificacion_descuento =
+				descuento_porcentaje === 0
+					? ''
+					: campo === 'justificacion'
+						? valor
+						: linea.justificacion_descuento;
+			return {
+				...linea,
+				descuento_porcentaje,
+				justificacion_descuento,
+				precio_unitario: redondearPrecio(
+					Number(linea.precio_lista_unitario || 0) * (1 - descuento_porcentaje / 100)
+				)
+			};
+		});
+	}
+
+	function actualizarPrecioLista(lineaId: number, valor: string) {
+		lineas = lineas.map((linea: any) => {
+			if (linea.idx !== lineaId) return linea;
+			const precio_lista_unitario = Math.max(
+				Number(valor) || 0,
+				Number(linea.precio_minimo_unitario || 0)
+			);
+			return {
+				...linea,
+				precio_lista_unitario,
+				precio_unitario: redondearPrecio(
+					precio_lista_unitario * (1 - Number(linea.descuento_porcentaje || 0) / 100)
+				)
+			};
+		});
+	}
+
 	async function onProductoChange(lineaId: number, value: string) {
 		if (!value) {
-			console.log('NO VALUE');
-
 			lineas = lineas.map((linea: any) =>
 				linea.idx === lineaId
 					? {
@@ -152,6 +220,11 @@
 							unidad: '',
 							descripcion: '',
 							costo_materiales: 0,
+							precio_lista_unitario: 0,
+							precio_minimo_unitario: 0,
+							margen_porcentaje: 0,
+							descuento_porcentaje: 0,
+							justificacion_descuento: '',
 							precio_unitario: 0,
 							insumos_snapshot: []
 						}
@@ -161,8 +234,6 @@
 		}
 		try {
 			const { producto, receta } = await getProductoConReceta(Number(value));
-			console.log('PRODUCTO', producto);
-			console.log('RECETA', receta);
 
 			const insumosSnapshot = receta.map((insumo) => ({
 				insumo_id: insumo.insumo_id,
@@ -173,14 +244,7 @@
 				unidad: insumo.unidad,
 				subtotal: Number(((insumo.cantidad || 0) * (insumo.costo_unitario ?? 0)).toFixed(2))
 			}));
-			const costoMateriales = Number(
-				receta
-					.reduce(
-						(total, insumo) => total + (insumo.cantidad || 0) * (insumo.costo_unitario ?? 0),
-						0
-					)
-					.toFixed(2)
-			);
+			const costoMateriales = producto.costo_materiales ?? 0;
 			lineas = lineas.map((linea: any) =>
 				linea.idx === lineaId
 					? {
@@ -191,7 +255,12 @@
 							unidad: '',
 							descripcion: producto.nombre,
 							costo_materiales: costoMateriales,
-							precio_unitario: Number(producto.precio_base ?? 0) + costoMateriales,
+							margen_porcentaje: producto.margen_porcentaje ?? 0,
+							descuento_porcentaje: 0,
+							justificacion_descuento: '',
+							precio_lista_unitario: producto.precio_venta,
+							precio_minimo_unitario: producto.precio_venta,
+							precio_unitario: producto.precio_venta,
 							insumos_snapshot: insumosSnapshot
 						}
 					: linea
@@ -212,6 +281,12 @@
 							producto_id: '',
 							unidad: '',
 							descripcion: '',
+							costo_materiales: 0,
+							precio_lista_unitario: 0,
+							precio_minimo_unitario: 0,
+							margen_porcentaje: 0,
+							descuento_porcentaje: 0,
+							justificacion_descuento: '',
 							precio_unitario: 0,
 							insumos_snapshot: []
 						}
@@ -230,6 +305,11 @@
 						unidad: insumo.unidad,
 						precio_unitario: insumo.costo_unitario,
 						costo_materiales: insumo.costo_unitario,
+						precio_lista_unitario: insumo.costo_unitario,
+						precio_minimo_unitario: insumo.costo_unitario,
+						margen_porcentaje: 0,
+						descuento_porcentaje: 0,
+						justificacion_descuento: '',
 						insumos_snapshot: [
 							{
 								insumo_id: insumo.id,
@@ -263,14 +343,17 @@
 						'',
 					cantidad: Number(l.cantidad) || 1,
 					precio_unitario: Number(l.precio_unitario) || 0,
+					precio_lista_unitario: Number(l.precio_lista_unitario) || 0,
+					descuento_porcentaje: Number(l.descuento_porcentaje) || 0,
+					justificacion_descuento: l.justificacion_descuento || undefined,
 					costo_mano_obra: Number(l.costo_mano_obra) || 0,
 					costo_materiales: Number(l.costo_materiales) || 0
 				}))
 			});
 			toast.success('Cotización guardada');
 			await invalidateAll();
-		} catch {
-			toast.error('Error al guardar');
+		} catch (error) {
+			toast.error(error instanceof Error ? error.message : 'Error al guardar la cotización');
 		}
 	}
 
@@ -474,29 +557,40 @@
 			<div class="card bg-base-100 shadow lg:col-span-2">
 				<div class="card-body gap-4">
 					<h2 class="card-title">Detalles y precios</h2>
+					{#if cotizacion.pedido_id}
+						<p class="text-sm text-base-content/60">Cotización convertida: precios bloqueados.</p>
+					{/if}
 					<div class="flex flex-wrap justify-end gap-2">
-						<button type="button" onclick={agregarProductoLinea} class="btn btn-outline btn-sm"
-							>+ Producto</button
+						<button
+							type="button"
+							disabled={!!cotizacion.pedido_id}
+							onclick={agregarProductoLinea}
+							class="btn btn-outline btn-sm">+ Producto</button
 						>
-						<button type="button" onclick={agregarInsumoLinea} class="btn btn-outline btn-sm"
-							>+ Insumo</button
+						<button
+							type="button"
+							disabled={!!cotizacion.pedido_id}
+							onclick={agregarInsumoLinea}
+							class="btn btn-outline btn-sm">+ Insumo</button
 						>
 					</div>
 					{#each lineas as linea (linea.idx)}
 						<div class="card relative gap-1 border border-base-300 bg-base-100 p-3">
 							<button
 								type="button"
+								disabled={!!cotizacion.pedido_id}
 								onclick={() => eliminarLinea(linea.idx)}
 								class="btn absolute top-1 right-1 btn-circle btn-ghost btn-xs"
 								class:hidden={lineas.length === 1}>✕</button
 							>
-							<div class="grid gap-2 sm:grid-cols-2 lg:grid-cols-10">
+							<div class="grid gap-2 sm:grid-cols-2 lg:grid-cols-12">
 								{#if linea.tipo === 'producto'}
-									<div class="min-w-0 lg:col-span-5">
+									<div class="min-w-0 lg:col-span-4">
 										<SearchSelect
 											label="Producto"
 											id={`producto-${linea.idx}`}
 											placeholder="Buscar producto..."
+											disabled={!!cotizacion.pedido_id}
 											field={{
 												value: () => linea.producto_id || '',
 												set: (value: string) => {
@@ -515,11 +609,12 @@
 										/>
 									</div>
 								{:else if linea.tipo === 'insumo'}
-									<div class="min-w-0 lg:col-span-5">
+									<div class="min-w-0 lg:col-span-4">
 										<SearchSelect
 											label="Insumo"
 											id={`insumo-${linea.idx}`}
 											placeholder="Buscar insumo..."
+											disabled={!!cotizacion.pedido_id}
 											field={{
 												value: () => String(linea.insumo_id ?? ''),
 												set: (value: string) => {
@@ -546,11 +641,82 @@
 										class="remove-arrow input"
 										type="number"
 										min="1"
+										disabled={!!cotizacion.pedido_id}
 										bind:value={linea.cantidad}
 									/>
 								</FormFieldWrapper>
-								<FormFieldWrapper label="Precio U." id="precio_unitario">
+								<FormFieldWrapper label="Costo" id="costo_materiales">
 									<div class="input flex items-center bg-base-200">
+										${Number(linea.costo_materiales || 0).toLocaleString('es-AR', {
+											minimumFractionDigits: 2
+										})}
+									</div>
+								</FormFieldWrapper>
+								<FormFieldWrapper label="Precio lista" id="precio_lista_unitario">
+									<input
+										id={`precio-lista-${linea.idx}`}
+										class="remove-arrow input"
+										type="number"
+										min={linea.precio_minimo_unitario ?? 0}
+										step="0.01"
+										disabled={!!cotizacion.pedido_id}
+										value={linea.precio_lista_unitario}
+										oninput={(event) =>
+											actualizarPrecioLista(
+												linea.idx,
+												(event.currentTarget as HTMLInputElement).value
+											)}
+									/>
+								</FormFieldWrapper>
+								<Can modulo="cotizaciones" accion="descuento">
+									<FormFieldWrapper label="Descuento (%)" id={`descuento-${linea.idx}`}>
+										<input
+											id={`descuento-${linea.idx}`}
+											class="remove-arrow input"
+											type="number"
+											min="0"
+											max="99.99"
+											step="0.01"
+											disabled={!!cotizacion.pedido_id}
+											value={linea.descuento_porcentaje}
+											oninput={(event) =>
+												actualizarDescuento(
+													linea.idx,
+													'porcentaje',
+													(event.currentTarget as HTMLInputElement).value
+												)}
+										/>
+									</FormFieldWrapper>
+									{#if linea.descuento_porcentaje > 0}
+										<FormFieldWrapper
+											label="Motivo del descuento"
+											id={`motivo-${linea.idx}`}
+											required
+										>
+											<input
+												id={`motivo-${linea.idx}`}
+												class="input"
+												required
+												disabled={!!cotizacion.pedido_id}
+												value={linea.justificacion_descuento}
+												oninput={(event) =>
+													actualizarDescuento(
+														linea.idx,
+														'justificacion',
+														(event.currentTarget as HTMLInputElement).value
+													)}
+											/>
+										</FormFieldWrapper>
+									{/if}
+								</Can>
+								{#if linea.descuento_porcentaje > 0}
+									<div class="self-end text-xs text-base-content/60">
+										Lista × {linea.cantidad} · {linea.descuento_porcentaje}%
+										{linea.justificacion_descuento ? `· ${linea.justificacion_descuento}` : ''}
+									</div>
+								{/if}
+								<FormFieldWrapper label="Precio neto U." id="precio_unitario">
+									<div class="input flex items-center bg-base-200 font-semibold">
 										${linea.precio_unitario.toLocaleString('es-AR', { minimumFractionDigits: 2 })}
 									</div>
 								</FormFieldWrapper>
@@ -601,9 +767,13 @@
 						<p class="grow-0 text-2xl font-bold">
 							${total.toLocaleString('es-AR', { minimumFractionDigits: 2 })}
 						</p>
-						<button class="btn btn-primary btn-sm" onclick={guardarCotizacion}
-							>Guardar cotización</button
+						<button
+							disabled={!!cotizacion.pedido_id}
+							class="btn btn-primary btn-sm"
+							onclick={guardarCotizacion}
 						>
+							{cotizacion.pedido_id ? 'Convertida en pedido' : 'Guardar cotización'}
+						</button>
 					</div>
 				</div>
 			</div>

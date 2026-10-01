@@ -637,14 +637,14 @@ ON CONFLICT (id) DO NOTHING;
 -- PRODUCTOS
 -- ============================================================
 
-INSERT INTO productos (id, codigo, nombre, categoria_id, medidas_primario_diametro, medidas_primario_largo, medidas_secundario_diametro, medidas_secundario_largo, trombon_diametro_inicial, trombon_largo, trombon_observaciones, tipo_vehiculo_id, marca_id, modelo_id, tipo_uso_id, categoria_competencia_id, precio_base, es_personalizable, activo, created_at, updated_at) VALUES
-(14, 'TC001', 'Escape completo Ford Mustang', 1, 44, 600, 63, 350, 65, 750, 'Completo', 1, 1, 1, 2, 2, 2300, false, true, to_timestamp(1782143562), to_timestamp(1782143562)),
-(15, 'TC002', 'Escape completo Chevrolet Camaro TC', 1, 48, 600, 63, 500, 68, 750, '', 1, 2, 34, 2, NULL, 2300, false, true, to_timestamp(1782734277), to_timestamp(1783475361)),
-(16, '4214', 'Escape Ford Mustang 2026', 1, 23, 42, 12, 42, 12, 53, '', 1, 1, 13, 3, NULL, 420, false, true, to_timestamp(1783522037), to_timestamp(1783522037)),
-(17, '2422', 'Escape Completo Amarok', 1, 20, 32, 42, 54, 23, 42, '', 1, 7, 51, 1, NULL, 1200, false, true, to_timestamp(1783943308), to_timestamp(1783943308)),
-(18, '5353', 'Parrilla 40x60', 4, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 500, false, true, to_timestamp(1783943871), to_timestamp(1783943871)),
-(19, '5545', 'Bicicletero 4 lugares', 3, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 600, false, true, to_timestamp(1783943952), to_timestamp(1783943952)),
-(20, '234234', 'Escape completo Mustang', 1, 23, 43, 23, 43, 12, 32, '', 1, 7, 51, 2, 1, 1200, false, true, to_timestamp(1783945058), to_timestamp(1783945058))
+INSERT INTO productos (id, codigo, nombre, categoria_id, medidas_primario_diametro, medidas_primario_largo, medidas_secundario_diametro, medidas_secundario_largo, trombon_diametro_inicial, trombon_largo, trombon_observaciones, tipo_vehiculo_id, marca_id, modelo_id, tipo_uso_id, categoria_competencia_id, es_personalizable, activo, created_at, updated_at) VALUES
+(14, 'TC001', 'Escape completo Ford Mustang', 1, 44, 600, 63, 350, 65, 750, 'Completo', 1, 1, 1, 2, 2, false, true, to_timestamp(1782143562), to_timestamp(1782143562)),
+(15, 'TC002', 'Escape completo Chevrolet Camaro TC', 1, 48, 600, 63, 500, 68, 750, '', 1, 2, 34, 2, NULL, false, true, to_timestamp(1782734277), to_timestamp(1783475361)),
+(16, '4214', 'Escape Ford Mustang 2026', 1, 23, 42, 12, 42, 12, 53, '', 1, 1, 13, 3, NULL, false, true, to_timestamp(1783522037), to_timestamp(1783522037)),
+(17, '2422', 'Escape Completo Amarok', 1, 20, 32, 42, 54, 23, 42, '', 1, 7, 51, 1, NULL, false, true, to_timestamp(1783943308), to_timestamp(1783943308)),
+(18, '5353', 'Parrilla 40x60', 4, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, false, true, to_timestamp(1783943871), to_timestamp(1783943871)),
+(19, '5545', 'Bicicletero 4 lugares', 3, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, false, true, to_timestamp(1783943952), to_timestamp(1783943952)),
+(20, '234234', 'Escape completo Mustang', 1, 23, 43, 23, 43, 12, 32, '', 1, 7, 51, 2, 1, false, true, to_timestamp(1783945058), to_timestamp(1783945058))
 ON CONFLICT (id) DO NOTHING;
 
 

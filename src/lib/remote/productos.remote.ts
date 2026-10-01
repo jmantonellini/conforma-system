@@ -26,7 +26,7 @@ const toOptionalNumber = (value: string | number | null | undefined) => {
 const normalizarProductoPayload = <T extends Record<string, unknown>>(data: T) => ({
 	...data,
 	categoria_id: toOptionalNumber(data.categoria_id as string | number | null | undefined),
-	precio_base: (data.precio_base as number | undefined) ?? 0,
+	margen_porcentaje: Number(data.margen_porcentaje ?? 0),
 	tipo_vehiculo_id: toOptionalNumber(data.tipo_vehiculo_id as string | number | null | undefined),
 	tipo_uso_id: toOptionalNumber(data.tipo_uso_id as string | number | null | undefined),
 	categoria_competencia_id: toOptionalNumber(
@@ -40,7 +40,7 @@ export const getProductos = query(
 	v.object({
 		search: v.optional(v.string()),
 		categoriaId: v.optional(v.number()),
-		sort: v.optional(v.picklist(['nombre', 'codigo', 'precio_base']), 'nombre'),
+		sort: v.optional(v.picklist(['nombre', 'codigo']), 'nombre'),
 		direction: v.optional(v.picklist(['asc', 'desc']), 'asc'),
 		page: v.optional(v.pipe(v.number(), v.toMinValue(1)), 1),
 		limit: v.optional(v.pipe(v.number(), v.minValue(1), v.maxValue(100)), 10)

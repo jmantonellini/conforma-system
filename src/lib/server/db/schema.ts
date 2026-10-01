@@ -5,6 +5,7 @@ import {
 	real,
 	primaryKey,
 	index,
+	check,
 	timestamp,
 	serial,
 	boolean,
@@ -177,15 +178,31 @@ export const lineas_cotizacion = pgTable(
 		cantidad: integer('cantidad').notNull().default(1),
 		precio_unitario: real('precio_unitario').notNull(),
 		subtotal: real('subtotal').generatedAlwaysAs(sql`cantidad * precio_unitario`),
-		// Base para las futuras fórmulas de costos
+		precio_lista_unitario: real('precio_lista_unitario').notNull().default(0),
+		margen_porcentaje: real('margen_porcentaje').notNull().default(0),
+		descuento_porcentaje: real('descuento_porcentaje').notNull().default(0),
+		justificacion_descuento: text('justificacion_descuento'),
+		descuento_usuario_id: integer('descuento_usuario_id').references(() => usuarios.id, {
+			onDelete: 'set null'
+		}),
 		costo_mano_obra: real('costo_mano_obra'),
-		costo_materiales: real('costo_materiales'),
+		costo_materiales: real('costo_materiales').notNull().default(0),
 		insumos_snapshot: jsonb('insumos_snapshot'),
 		orden_linea: integer('orden_linea'),
 		created_at: timestamp('created_at').defaultNow(),
 		updated_at: timestamp('updated_at').$onUpdate(() => new Date())
 	},
-	(table) => [index('idx_lineas_cotizacion').on(table.cotizacion_id)]
+	(table) => [
+		index('idx_lineas_cotizacion').on(table.cotizacion_id),
+		check(
+			'lineas_cotizacion_descuento_range',
+			sql`${table.descuento_porcentaje} >= 0 AND ${table.descuento_porcentaje} < 100`
+		),
+		check(
+			'lineas_cotizacion_descuento_reason',
+			sql`${table.descuento_porcentaje} = 0 OR length(trim(coalesce(${table.justificacion_descuento}, ''))) > 0`
+		)
+	]
 );
 
 export const adjuntos_cotizacion = pgTable(
@@ -367,12 +384,30 @@ export const lineas_pedido = pgTable(
 		cantidad: integer('cantidad').notNull().default(1),
 		precio_unitario: real('precio_unitario').notNull(),
 		subtotal: real('subtotal').generatedAlwaysAs(sql`cantidad * precio_unitario`),
+		precio_lista_unitario: real('precio_lista_unitario').notNull().default(0),
+		margen_porcentaje: real('margen_porcentaje').notNull().default(0),
+		descuento_porcentaje: real('descuento_porcentaje').notNull().default(0),
+		justificacion_descuento: text('justificacion_descuento'),
+		descuento_usuario_id: integer('descuento_usuario_id').references(() => usuarios.id, {
+			onDelete: 'set null'
+		}),
+		costo_materiales: real('costo_materiales').notNull().default(0),
 		insumos_snapshot: jsonb('insumos_snapshot'),
 		orden_linea: integer('orden_linea'),
 		created_at: timestamp('created_at').defaultNow(),
 		updated_at: timestamp('updated_at').$onUpdate(() => new Date())
 	},
-	(table) => [index('idx_lineas_pedido').on(table.pedido_id)]
+	(table) => [
+		index('idx_lineas_pedido').on(table.pedido_id),
+		check(
+			'lineas_pedido_descuento_range',
+			sql`${table.descuento_porcentaje} >= 0 AND ${table.descuento_porcentaje} < 100`
+		),
+		check(
+			'lineas_pedido_descuento_reason',
+			sql`${table.descuento_porcentaje} = 0 OR length(trim(coalesce(${table.justificacion_descuento}, ''))) > 0`
+		)
+	]
 );
 
 export const pedido_insumos = pgTable(
@@ -388,6 +423,13 @@ export const pedido_insumos = pgTable(
 		cantidad: real('cantidad').notNull().default(1),
 		unidad: text('unidad').notNull(),
 		costo_unitario: real('costo_unitario'),
+		precio_lista_unitario: real('precio_lista_unitario').notNull().default(0),
+		precio_unitario: real('precio_unitario').notNull().default(0),
+		descuento_porcentaje: real('descuento_porcentaje').notNull().default(0),
+		justificacion_descuento: text('justificacion_descuento'),
+		descuento_usuario_id: integer('descuento_usuario_id').references(() => usuarios.id, {
+			onDelete: 'set null'
+		}),
 		cotizacion_linea_id: integer('cotizacion_linea_id').references(() => lineas_cotizacion.id, {
 			onDelete: 'set null'
 		}),
@@ -395,7 +437,17 @@ export const pedido_insumos = pgTable(
 		created_at: timestamp('created_at').defaultNow(),
 		updated_at: timestamp('updated_at').$onUpdate(() => new Date())
 	},
-	(table) => [index('idx_pedido_insumos_pedido').on(table.pedido_id)]
+	(table) => [
+		index('idx_pedido_insumos_pedido').on(table.pedido_id),
+		check(
+			'pedido_insumos_descuento_range',
+			sql`${table.descuento_porcentaje} >= 0 AND ${table.descuento_porcentaje} < 100`
+		),
+		check(
+			'pedido_insumos_descuento_reason',
+			sql`${table.descuento_porcentaje} = 0 OR length(trim(coalesce(${table.justificacion_descuento}, ''))) > 0`
+		)
+	]
 );
 
 // ============================================================
@@ -464,33 +516,42 @@ export const categorias_competencia = pgTable('categorias_competencia', {
 	vigente: boolean('vigente').default(true)
 });
 
-export const productos = pgTable('productos', {
-	id: serial('id').primaryKey(),
-	codigo: text('codigo').unique().notNull(),
-	nombre: text('nombre').notNull(),
-	categoria_id: integer('categoria_id').references(() => categorias_productos.id, {
-		onDelete: 'set null'
-	}),
-	medidas_primario_diametro: integer('medidas_primario_diametro'),
-	medidas_primario_largo: integer('medidas_primario_largo'),
-	medidas_secundario_diametro: integer('medidas_secundario_diametro'),
-	medidas_secundario_largo: integer('medidas_secundario_largo'),
-	trombon_diametro_inicial: integer('trombon_diametro_inicial'),
-	trombon_largo: integer('trombon_largo'),
-	trombon_observaciones: text('trombon_observaciones'),
-	tipo_vehiculo_id: integer('tipo_vehiculo_id').references(() => tipos_vehiculo.id),
-	marca_id: integer('marca_id').references(() => marcas.id),
-	modelo_id: integer('modelo_id').references(() => modelos.id),
-	tipo_uso_id: integer('tipo_uso_id').references(() => tipos_uso.id),
-	categoria_competencia_id: integer('categoria_competencia_id').references(
-		() => categorias_competencia.id
-	),
-	precio_base: real('precio_base'),
-	es_personalizable: boolean('es_personalizable').default(true),
-	activo: boolean('activo').default(true),
-	created_at: timestamp('created_at').defaultNow(),
-	updated_at: timestamp('updated_at').$onUpdate(() => new Date())
-});
+export const productos = pgTable(
+	'productos',
+	{
+		id: serial('id').primaryKey(),
+		codigo: text('codigo').unique().notNull(),
+		nombre: text('nombre').notNull(),
+		categoria_id: integer('categoria_id').references(() => categorias_productos.id, {
+			onDelete: 'set null'
+		}),
+		medidas_primario_diametro: integer('medidas_primario_diametro'),
+		medidas_primario_largo: integer('medidas_primario_largo'),
+		medidas_secundario_diametro: integer('medidas_secundario_diametro'),
+		medidas_secundario_largo: integer('medidas_secundario_largo'),
+		trombon_diametro_inicial: integer('trombon_diametro_inicial'),
+		trombon_largo: integer('trombon_largo'),
+		trombon_observaciones: text('trombon_observaciones'),
+		tipo_vehiculo_id: integer('tipo_vehiculo_id').references(() => tipos_vehiculo.id),
+		marca_id: integer('marca_id').references(() => marcas.id),
+		modelo_id: integer('modelo_id').references(() => modelos.id),
+		tipo_uso_id: integer('tipo_uso_id').references(() => tipos_uso.id),
+		categoria_competencia_id: integer('categoria_competencia_id').references(
+			() => categorias_competencia.id
+		),
+		margen_porcentaje: real('margen_porcentaje').notNull().default(0),
+		es_personalizable: boolean('es_personalizable').default(true),
+		activo: boolean('activo').default(true),
+		created_at: timestamp('created_at').defaultNow(),
+		updated_at: timestamp('updated_at').$onUpdate(() => new Date())
+	},
+	(table) => [
+		check(
+			'productos_margen_porcentaje_range',
+			sql`${table.margen_porcentaje} >= 0 AND ${table.margen_porcentaje} < 100`
+		)
+	]
+);
 
 export const producto_insumos = pgTable(
 	'producto_insumos',
