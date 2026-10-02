@@ -18,6 +18,11 @@ Thumbs.db
 !.env.example
 !.env.test
 
+# Private certificates and signing requests
+*.key
+*.pem
+*.csr
+
 # Vite
 vite.config.js.timestamp-*
 vite.config.ts.timestamp-*

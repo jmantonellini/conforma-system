@@ -13,7 +13,7 @@
 	import { debounce } from '$lib/utils/debounce';
 	import { SvelteURLSearchParams } from 'svelte/reactivity';
 	import type { PageProps } from './$types';
-	import { Delete, Edit, Eye } from '$lib/components/ui/icons';
+	import { Delete, Eye } from '$lib/components/ui/icons';
 	import { eliminarContacto } from '$lib/remote/contactos.remote';
 	import { can as tienePermiso } from '$lib/utils/permissions';
 
@@ -83,18 +83,18 @@
 				<option value="ambos">Clientes y proveedores</option>
 			</select>
 		</div>
-		<a
-			class="btn btn-primary btn-sm"
-			href={resolve(filtroRol === 'cliente' ? '/contactos/crear?rol=cliente' : '/contactos/crear')}
-		>
-			{filtroRol === 'cliente' ? 'Nuevo cliente' : 'Nuevo contacto'}
-		</a>
 		<ExcelMenu
 			importHref={resolve('/contactos/importar')}
 			exportHref={resolve('/contactos/exportar')}
 			canImport={tienePermiso(data.user, data.permisos, 'contactos', 'create')}
 			canExport={tienePermiso(data.user, data.permisos, 'contactos', 'view')}
 		/>
+		<a
+			class="btn btn-primary btn-sm"
+			href={resolve(filtroRol === 'cliente' ? '/contactos/crear?rol=cliente' : '/contactos/crear')}
+		>
+			{filtroRol === 'cliente' ? 'Nuevo cliente' : 'Nuevo contacto'}
+		</a>
 	</div>
 	<div class="card bg-base-100 shadow">
 		<div class="card-body p-0">

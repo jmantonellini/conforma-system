@@ -54,6 +54,7 @@
 		"vite": "^8.0.7"
 	},
 	"dependencies": {
+		"@arcasdk/core": "2.0.2",
 		"@pdfme/common": "^6.1.12",
 		"@pdfme/generator": "^6.1.12",
 		"@pdfme/schemas": "^6.1.12",

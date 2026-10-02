@@ -4,15 +4,31 @@ import { and, asc, count, desc, eq, exists, or, sql } from 'drizzle-orm';
 import { db } from '$lib/server/db';
 import { contactos, proveedores, pedidos, estados_pedido } from '$lib/server/db/schema';
 import { requirePermission } from '$lib/server/auth/permissions';
+import { consultarCuitARCA } from '$lib/server/services/arca-padron.service';
+import { esCuitValido } from '$lib/utils/cuit';
 
 const ContactoBaseSchema = {
 	razon_social: v.pipe(v.string(), v.nonEmpty('La razón social es requerida')),
 	nombre: v.optional(v.string()),
 	apellido: v.optional(v.string()),
-	cuit: v.optional(v.string()),
+	cuit: v.optional(
+		v.pipe(
+			v.string(),
+			v.trim(),
+			v.check((cuit) => cuit === '' || esCuitValido(cuit), 'Ingresá un CUIT válido de 11 dígitos')
+		)
+	),
 	email: v.optional(v.string()),
 	telefono: v.optional(v.string())
 };
+
+export const obtenerDatosCuitARCA = query(
+	v.pipe(v.string(), v.check(esCuitValido, 'Ingresá un CUIT válido de 11 dígitos')),
+	async (cuit) => {
+		await requirePermission('contactos', 'create');
+		return consultarCuitARCA(cuit);
+	}
+);
 
 const seleccionContactoBase = {
 	id: contactos.id,
