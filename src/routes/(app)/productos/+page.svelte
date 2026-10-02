@@ -108,7 +108,6 @@
 				<th class="text-right">
 					<button class="link" onclick={() => onSort?.('precio_venta')}>Precio de lista</button>
 				</th>
-				<th class="text-right">Precio de lista</th>
 				<th class="text-center">Acciones</th>
 			{/snippet}
 
