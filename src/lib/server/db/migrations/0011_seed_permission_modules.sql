@@ -1,8 +1,9 @@
 SELECT setval(
 	pg_get_serial_sequence('permisos', 'id'),
-	COALESCE((SELECT MAX(id) FROM permisos), 0),
-	true
-);
+	COALESCE(MAX(id), 1),
+	MAX(id) IS NOT NULL
+)
+FROM permisos;
 
 INSERT INTO permisos (accion, modulo)
 SELECT permiso.accion, permiso.modulo

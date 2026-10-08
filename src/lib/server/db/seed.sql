@@ -674,6 +674,13 @@ INSERT INTO feedback (id, mensaje, created_at) VALUES
 (6, 'que podamos guardar un nuevo producto aunque no le pongamos todas las medidas de diámetros y longitudes', to_timestamp(1782734246))
 ON CONFLICT (id) DO NOTHING;
 
+SELECT setval(
+	pg_get_serial_sequence('public.feedback', 'id'),
+	COALESCE(MAX(id), 1),
+	MAX(id) IS NOT NULL
+)
+FROM public.feedback;
+
 
 -- ============================================================
 -- TAREAS

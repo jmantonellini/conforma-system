@@ -27,6 +27,8 @@ services:
       DATABASE_URL: postgres://${DB_USER}:${DB_PASSWORD}@postgres:5432/${DB_NAME}
     ports:
       - "127.0.0.1:3000:3000"
+    volumes:
+      - cotizacion_uploads:/app/static/uploads/cotizaciones
     depends_on:
       postgres:
         condition: service_healthy
@@ -34,6 +36,7 @@ services:
 
 volumes:
   postgres_data:
+  cotizacion_uploads:
 networks:
   erp_network:
     driver: bridge

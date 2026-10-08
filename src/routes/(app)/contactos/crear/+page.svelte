@@ -1,5 +1,4 @@
 <script lang="ts">
-	import { goto } from '$app/navigation';
 	import { resolve } from '$app/paths';
 	import { FormActions, FormErrors, FormFieldWrapper, PageLayout } from '$lib/components/ui';
 	import FormDireccion from '$lib/components/ui/FormDireccion.svelte';
@@ -12,7 +11,12 @@
 	type CampoTexto = { value: () => string | undefined; set: (value: string) => void };
 
 	const form = crearContacto;
-	let rol = $state(page.url.searchParams.get('rol') === 'cliente' ? 'cliente' : 'ninguno');
+	const rolSolicitado = page.url.searchParams.get('rol');
+	let rol = $state(
+		rolSolicitado === 'ninguno' || rolSolicitado === 'proveedor' || rolSolicitado === 'ambos'
+			? rolSolicitado
+			: 'cliente'
+	);
 	let esDistribuidor = $state(false);
 	let porcentajeCompensacion = $state(0);
 	let cuitFormateado = $state('');
@@ -122,7 +126,6 @@
 			try {
 				if (await instance.submit()) {
 					form.element?.reset();
-					goto(resolve('/contactos'));
 					toast.success('Contacto creado');
 				} else toast.error('Revisá los datos del contacto');
 			} catch {
@@ -149,7 +152,7 @@
 					/>
 				</FormFieldWrapper>
 				<FormFieldWrapper id="razon_social" label="Razón social" required>
-					<input class="input" {...form.fields.razon_social.as('text', '')} />
+					<input id="razon_social" class="input" {...form.fields.razon_social.as('text', '')} />
 				</FormFieldWrapper>
 				<FormFieldWrapper id="email" label="Email">
 					<input class="input" {...form.fields.email.as('email', '')} />
@@ -163,9 +166,10 @@
 				<FormFieldWrapper id="telefono" label="Teléfono">
 					<input class="input" {...form.fields.telefono.as('text', '')} />
 				</FormFieldWrapper>
-				<FormFieldWrapper id="rol" label="Rol comercial">
+				<FormFieldWrapper id="rol" label="Rol comercial" required>
 					<select
 						class="select"
+						required
 						{...form.fields.rol.as('select', rol)}
 						onchange={(event) => (rol = event.currentTarget.value)}
 					>
@@ -174,6 +178,19 @@
 						<option value="proveedor">Proveedor</option>
 						<option value="ambos">Cliente y proveedor</option>
 					</select>
+				</FormFieldWrapper>
+				<FormFieldWrapper id="es_distribuidor" label="Distribuidor">
+					<label class="label cursor-pointer justify-start gap-3">
+						<input
+							type="checkbox"
+							class="checkbox checkbox-primary"
+							name="es_distribuidor"
+							value="true"
+							checked={esDistribuidor}
+							onchange={(event) => (esDistribuidor = event.currentTarget.checked)}
+						/>
+						<span>Es distribuidor</span>
+					</label>
 				</FormFieldWrapper>
 				{#if esDistribuidor}
 					<FormFieldWrapper id="porcentaje_compensacion" label="Comisión (%)">

@@ -6,6 +6,8 @@ import { contactos, proveedores, pedidos, estados_pedido } from '$lib/server/db/
 import { requirePermission } from '$lib/server/auth/permissions';
 import { consultarCuitARCA } from '$lib/server/services/arca-padron.service';
 import { esCuitValido } from '$lib/utils/cuit';
+import { redirect } from '@sveltejs/kit';
+import { resolve } from '$app/paths';
 
 const ContactoBaseSchema = {
 	razon_social: v.pipe(v.string(), v.nonEmpty('La razón social es requerida')),
@@ -21,6 +23,17 @@ const ContactoBaseSchema = {
 	email: v.optional(v.string()),
 	telefono: v.optional(v.string())
 };
+
+const CheckboxBooleanSchema = v.optional(
+	v.union([
+		v.boolean(),
+		v.pipe(
+			v.picklist(['on', 'true']),
+			v.transform(() => true)
+		)
+	]),
+	false
+);
 
 export const obtenerDatosCuitARCA = query(
 	v.pipe(v.string(), v.check(esCuitValido, 'Ingresá un CUIT válido de 11 dígitos')),
@@ -106,8 +119,8 @@ const construirCondicionContactoBase = ({
 
 const ContactoSchema = v.object({
 	...ContactoBaseSchema,
-	rol: v.optional(v.picklist(['ninguno', 'cliente', 'proveedor', 'ambos']), 'ninguno'),
-	es_distribuidor: v.optional(v.boolean(), false),
+	rol: v.picklist(['ninguno', 'cliente', 'proveedor', 'ambos']),
+	es_distribuidor: CheckboxBooleanSchema,
 	porcentaje_compensacion: v.optional(v.pipe(v.number(), v.minValue(0), v.maxValue(100)), 0),
 	saldo_disponible: v.optional(v.pipe(v.number(), v.minValue(0)), 0),
 	codigo: v.optional(v.string()),
@@ -138,7 +151,7 @@ const ContactoUpdateSchema = v.object({
 	...ContactoBaseSchema,
 	rol: v.optional(v.picklist(['ninguno', 'cliente', 'proveedor', 'ambos']), 'ninguno'),
 	es_cliente: v.optional(v.boolean()),
-	es_distribuidor: v.optional(v.boolean(), false),
+	es_distribuidor: CheckboxBooleanSchema,
 	pais: v.optional(v.string()),
 	provincia: v.optional(v.string()),
 	ciudad: v.optional(v.string()),
@@ -267,7 +280,7 @@ export const crearContacto = form(ContactoSchema, async (data) => {
 		condiciones_pago,
 		...empresaData
 	} = data;
-	const empresa = await db.transaction(async (tx) => {
+	await db.transaction(async (tx) => {
 		const [nuevaEmpresa] = await tx
 			.insert(contactos)
 			.values({
@@ -299,12 +312,10 @@ export const crearContacto = form(ContactoSchema, async (data) => {
 				condiciones_pago
 			});
 		}
-
-		return nuevaEmpresa;
 	});
 	obtenerContactos({}).refresh();
 	obtenerProveedores().refresh();
-	return empresa;
+	redirect(303, resolve('/contactos'));
 });
 
 export const crearProveedor = form(ProveedorSchema, async (data) => {

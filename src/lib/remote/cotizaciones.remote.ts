@@ -5,6 +5,7 @@ import {
 	cotizaciones,
 	lineas_cotizacion,
 	adjuntos_cotizacion,
+	notas_cotizacion,
 	estados_cotizacion,
 	contactos,
 	empleados,
@@ -37,6 +38,7 @@ import { CotizacionSchema, LineaCotizacionSchema } from './cotizaciones.schema';
 import { getProductoConReceta } from './productos.remote';
 import { obtenerPrecioProducto } from '$lib/server/services/productos.service';
 import { calcularPrecioConDescuento } from '$lib/utils/precios';
+import { es } from '$lib/i18n/es';
 import {
 	aplicarCambioDeEstado,
 	obtenerTransicionPermitida,
@@ -117,92 +119,116 @@ const crearCondicionBusquedaCotizacion = ({
 	return condiciones.length ? and(...condiciones) : undefined;
 };
 
-async function notificarUsuariosConPermiso(
-	modulo: string,
-	accion: string,
-	titulo: string,
-	mensaje: string,
-	link: string
-) {
-	const destinatarios = await db
-		.select({ usuario_id: usuarios.id })
-		.from(usuarios)
-		.innerJoin(roles, eq(usuarios.rol_id, roles.id))
-		.innerJoin(roles_permisos, eq(roles_permisos.rol_id, roles.id))
-		.innerJoin(
-			permisos,
-			and(
-				eq(permisos.id, roles_permisos.permiso_id),
-				eq(permisos.modulo, modulo),
-				eq(permisos.accion, accion)
+async function notificarActualizacionCotizacion({
+	cotizacionId,
+	titulo,
+	mensaje,
+	permisoAdicional
+}: {
+	cotizacionId: number;
+	titulo: string;
+	mensaje: string;
+	permisoAdicional?: { modulo: string; accion: string };
+}) {
+	const [cotizacion] = await db
+		.select({
+			creada_por: cotizaciones.creada_por,
+			asignada_a: cotizaciones.asignada_a
+		})
+		.from(cotizaciones)
+		.where(eq(cotizaciones.id, cotizacionId))
+		.limit(1);
+	if (!cotizacion) return;
+
+	const condicionesDestinatario = [
+		...(cotizacion.creada_por ? [eq(usuarios.id, cotizacion.creada_por)] : []),
+		...(cotizacion.asignada_a ? [eq(usuarios.empleado_id, cotizacion.asignada_a)] : [])
+	];
+	const destinatarios = new Set<number>();
+
+	if (condicionesDestinatario.length) {
+		const usuariosResponsables = await db
+			.select({ id: usuarios.id })
+			.from(usuarios)
+			.where(or(...condicionesDestinatario));
+		for (const usuario of usuariosResponsables) destinatarios.add(usuario.id);
+	}
+
+	if (permisoAdicional) {
+		const usuariosConPermiso = await db
+			.select({ id: usuarios.id })
+			.from(usuarios)
+			.innerJoin(roles, eq(usuarios.rol_id, roles.id))
+			.innerJoin(roles_permisos, eq(roles_permisos.rol_id, roles.id))
+			.innerJoin(
+				permisos,
+				and(
+					eq(permisos.id, roles_permisos.permiso_id),
+					eq(permisos.modulo, permisoAdicional.modulo),
+					eq(permisos.accion, permisoAdicional.accion)
+				)
 			)
-		)
-		.where(eq(usuarios.activo, true));
+			.where(eq(usuarios.activo, true));
+		for (const usuario of usuariosConPermiso) destinatarios.add(usuario.id);
+	}
 
-	if (destinatarios.length === 0) return;
-
+	if (!destinatarios.size) return;
 	await db.insert(notificaciones).values(
-		destinatarios.map((d) => ({
-			usuario_id: d.usuario_id,
+		Array.from(destinatarios, (usuario_id) => ({
+			usuario_id,
 			titulo,
 			mensaje,
-			link
+			link: `/cotizaciones/${cotizacionId}`
 		}))
 	);
-}
-
-async function notificarEmpleado(
-	empleadoId: number | null,
-	titulo: string,
-	mensaje: string,
-	link: string
-) {
-	if (!empleadoId) return;
-
-	const [usuario] = await db
-		.select({ id: usuarios.id })
-		.from(usuarios)
-		.where(eq(usuarios.empleado_id, empleadoId))
-		.limit(1);
-
-	if (!usuario) return;
-
-	await db.insert(notificaciones).values({ usuario_id: usuario.id, titulo, mensaje, link });
 }
 
 async function notificarCambioEstadoCotizacion({
 	cotizacionId,
 	numeroCotizacion,
 	clienteNombre,
-	estadoDestinoSlug
+	estadoDestino,
+	comentario
 }: {
 	cotizacionId: number;
 	numeroCotizacion: string;
 	clienteNombre: string | null;
-	estadoDestinoSlug?: string | null;
+	estadoDestino?: { slug: string; nombre: string };
+	comentario?: string;
 }) {
-	if (!estadoDestinoSlug) return;
+	if (!estadoDestino) return;
 
-	if (estadoDestinoSlug === 'lista_para_enviar') {
-		await notificarUsuariosConPermiso(
-			'cotizaciones',
-			'enviar',
-			'Cotización lista para enviar',
-			`La cotización ${numeroCotizacion} (${clienteNombre}) está lista para enviar al cliente.`,
-			`/cotizaciones/${cotizacionId}`
-		);
-		return;
+	const esListaParaEnviar = estadoDestino.slug === 'lista_para_enviar';
+	const esAprobada = estadoDestino.slug === 'aprobada';
+	let titulo: string;
+	let mensaje: string;
+	if (esListaParaEnviar) {
+		const plantilla = es.cotizaciones.notificaciones.listaParaEnviar;
+		titulo = plantilla.titulo;
+		mensaje = plantilla.mensaje(numeroCotizacion, clienteNombre ?? '');
+	} else if (esAprobada) {
+		const plantilla = es.cotizaciones.notificaciones.aprobada;
+		titulo = plantilla.titulo;
+		mensaje = plantilla.mensaje(numeroCotizacion);
+	} else {
+		const plantilla = es.cotizaciones.notificaciones.estadoActualizado;
+		titulo = plantilla.titulo;
+		mensaje = plantilla.mensaje(numeroCotizacion, estadoDestino.nombre);
 	}
+	const detalleComentario = comentario?.trim();
 
-	if (estadoDestinoSlug === 'aprobada') {
-		await notificarUsuariosConPermiso(
-			'cotizaciones',
-			'convertir',
-			'Cotización aprobada',
-			`El cliente aprobó la cotización ${numeroCotizacion}. Ya podés generar el pedido.`,
-			`/cotizaciones/${cotizacionId}`
-		);
-	}
+	await notificarActualizacionCotizacion({
+		cotizacionId,
+		titulo,
+		mensaje: detalleComentario
+			? `${mensaje}\n${es.cotizaciones.notificaciones.comentarioEstado(detalleComentario)}`
+			: mensaje,
+		permisoAdicional: esListaParaEnviar
+			? { modulo: 'cotizaciones', accion: 'enviar' }
+			: esAprobada
+				? { modulo: 'cotizaciones', accion: 'convertir' }
+				: undefined
+	});
 }
 
 export const getCotizaciones = query(
@@ -414,6 +440,61 @@ export const getHistorialCotizacion = query(v.number(), async (cotizacionId) => 
 		.orderBy(desc(logs_cambios_estado.created_at));
 });
 
+export const getNotasCotizacion = query(v.number(), async (cotizacionId) => {
+	await requirePermission('cotizaciones', 'view');
+
+	return await db
+		.select({
+			id: notas_cotizacion.id,
+			contenido: notas_cotizacion.contenido,
+			fecha: notas_cotizacion.created_at,
+			autor: sql<string>`coalesce(nullif(concat_ws(' ', ${empleados.nombre}, ${empleados.apellido}), ''), 'Usuario')`
+		})
+		.from(notas_cotizacion)
+		.leftJoin(usuarios, eq(notas_cotizacion.usuario_id, usuarios.id))
+		.leftJoin(empleados, eq(usuarios.empleado_id, empleados.id))
+		.where(eq(notas_cotizacion.cotizacion_id, cotizacionId))
+		.orderBy(desc(notas_cotizacion.created_at));
+});
+
+export const agregarNotaCotizacion = command(
+	v.object({
+		cotizacion_id: v.number(),
+		contenido: v.pipe(
+			v.string(),
+			v.trim(),
+			v.minLength(1, 'Escribí una nota antes de agregarla'),
+			v.maxLength(5000, 'La nota no puede superar los 5000 caracteres')
+		)
+	}),
+	async ({ cotizacion_id, contenido }) => {
+		await requirePermission('cotizaciones', 'edit');
+		const user = await getCurrentUser();
+		if (!user) throw new Error('No autorizado');
+
+		const [cotizacion] = await db
+			.select({ id: cotizaciones.id })
+			.from(cotizaciones)
+			.where(eq(cotizaciones.id, cotizacion_id))
+			.limit(1);
+		if (!cotizacion) throw new Error('Cotización no encontrada');
+
+		await db.insert(notas_cotizacion).values({
+			cotizacion_id,
+			usuario_id: user.id,
+			contenido
+		});
+		const plantillaNota = es.cotizaciones.notificaciones.nuevaNota;
+		await notificarActualizacionCotizacion({
+			cotizacionId: cotizacion_id,
+			titulo: plantillaNota.titulo,
+			mensaje: plantillaNota.mensaje(user.username, contenido)
+		});
+		getNotasCotizacion(cotizacion_id).refresh();
+		return { success: true };
+	}
+);
+
 // ============================================================
 // NOTIFICACIONES
 // ============================================================
@@ -476,8 +557,7 @@ export const crearCotizacion = form(CotizacionSchema, async (data) => {
 		.returning();
 
 	getCotizaciones({ search: '', page: 1 }).refresh();
-
-	redirect(303, resolve(`/cotizaciones/${cotizacion.id}`));
+	return { cotizacionId: cotizacion.id };
 });
 
 // ============================================================
@@ -531,19 +611,19 @@ export const asignarCotizacion = command(
 						usuarioId: user.id,
 						estadoAnteriorId: cotizacion.estado_id,
 						estadoNuevoId: estadoAsignada.id,
-						comentario: 'Cotización asignada',
+						comentario: es.cotizaciones.historial.asignada,
 						createdAt: now
 					});
 				});
 			}
 		}
 
-		await notificarEmpleado(
-			empleado_id,
-			'Nueva cotización asignada',
-			`La cotización ${cotizacion.numero_cotizacion} te fue asignada para revisar.`,
-			`/cotizaciones/${cotizacion_id}`
-		);
+		const plantillaAsignada = es.cotizaciones.notificaciones.asignada;
+		await notificarActualizacionCotizacion({
+			cotizacionId: cotizacion_id,
+			titulo: plantillaAsignada.titulo,
+			mensaje: plantillaAsignada.mensaje(cotizacion.numero_cotizacion)
+		});
 
 		getCotizaciones({ search: '', page: 1 }).refresh();
 		getCotizacionById(cotizacion_id).refresh();
@@ -751,7 +831,10 @@ export const cambiarEstadoCotizacion = command(
 			cotizacionId: cotizacion_id,
 			numeroCotizacion: cotizacion.numero_cotizacion,
 			clienteNombre: cotizacion.cliente_nombre,
-			estadoDestinoSlug: estadoDestino?.slug
+			estadoDestino: estadoDestino
+				? { slug: estadoDestino.slug, nombre: estadoDestino.nombre }
+				: undefined,
+			comentario
 		});
 
 		getCotizaciones({ search: '', page: 1 }).refresh();

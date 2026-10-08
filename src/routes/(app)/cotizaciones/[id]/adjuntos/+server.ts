@@ -49,7 +49,11 @@ async function comprimirImagen(buffer: Buffer): Promise<Buffer> {
 
 export async function POST({ request, params }) {
 	try {
-		await requirePermission('cotizaciones', 'edit');
+		try {
+			await requirePermission('cotizaciones', 'edit');
+		} catch {
+			await requirePermission('cotizaciones', 'create');
+		}
 		const formData = await request.formData();
 		const files = formData
 			.getAll('archivos')

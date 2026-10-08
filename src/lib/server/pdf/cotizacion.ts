@@ -13,26 +13,41 @@ import path from 'path';
 import logoUrl from '$lib/assets/Logo.png';
 
 const BRAND_RED = '#ed1c24';
+const logoCache = new Map<string, Promise<string>>();
 
 async function cargarLogo(configuredUrl?: string | null) {
-	const assetPath = logoUrl.replace(/^\//, '');
-	const candidates = [
-		configuredUrl ? path.resolve('static', configuredUrl.replace(/^\//, '')) : '',
-		path.resolve('src/lib/assets/Logo.png'),
-		path.resolve('.svelte-kit/output/client', assetPath),
-		path.resolve('build/client', assetPath)
-	];
+	const cacheKey = configuredUrl ?? '';
+	let logo = logoCache.get(cacheKey);
+	if (!logo) {
+		logo = (async () => {
+			const assetPath = logoUrl.replace(/^\//, '');
+			const candidates = [
+				configuredUrl ? path.resolve('static', configuredUrl.replace(/^\//, '')) : '',
+				path.resolve('src/lib/assets/Logo.png'),
+				path.resolve('.svelte-kit/output/client', assetPath),
+				path.resolve('build/client', assetPath)
+			];
 
-	for (const candidate of candidates) {
-		try {
-			const content = await readFile(candidate);
-			return `data:image/png;base64,${content.toString('base64')}`;
-		} catch {
-			continue;
-		}
+			for (const candidate of candidates) {
+				try {
+					const content = await readFile(candidate);
+					return `data:image/png;base64,${content.toString('base64')}`;
+				} catch {
+					continue;
+				}
+			}
+
+			throw new Error('No se encontró el logo de Conforma');
+		})();
+		logoCache.set(cacheKey, logo);
 	}
 
-	throw new Error('No se encontró el logo de Conforma');
+	try {
+		return await logo;
+	} catch (error) {
+		logoCache.delete(cacheKey);
+		throw error;
+	}
 }
 
 // Template corregido para v6
@@ -183,40 +198,47 @@ const template = {
 };
 
 export async function generarPDFCotizacion(cotizacionId: number): Promise<Uint8Array> {
-	const [cot] = await db
-		.select({
-			id: cotizaciones.id,
-			numero: cotizaciones.numero_cotizacion,
-			cliente_nombre: cotizaciones.cliente_nombre,
-			cliente_telefono: cotizaciones.cliente_telefono,
-			descripcion: cotizaciones.descripcion,
-			validez_dias: cotizaciones.validez_dias,
-			created_at: cotizaciones.created_at,
-			cliente: {
-				nombre: contactos.razon_social,
-				apellido: sql<string | null>`NULL`,
-				razon_social: contactos.razon_social,
-				telefono: contactos.telefono,
-				direccion: contactos.calle
-			}
-		})
-		.from(cotizaciones)
-		.leftJoin(contactos, eq(cotizaciones.contacto_id, contactos.id))
-		.where(eq(cotizaciones.id, cotizacionId))
-		.limit(1);
+	const businessConfigPromise = Promise.resolve(
+		db.select().from(configuracion_empresa).where(eq(configuracion_empresa.id, 1)).limit(1)
+	);
+	const logoPromise = businessConfigPromise.then(([config]) => cargarLogo(config?.logo_url));
+	const [[cot], [businessConfig], lineas, logo] = await Promise.all([
+		db
+			.select({
+				id: cotizaciones.id,
+				numero: cotizaciones.numero_cotizacion,
+				cliente_nombre: cotizaciones.cliente_nombre,
+				cliente_telefono: cotizaciones.cliente_telefono,
+				descripcion: cotizaciones.descripcion,
+				validez_dias: cotizaciones.validez_dias,
+				created_at: cotizaciones.created_at,
+				cliente: {
+					nombre: contactos.razon_social,
+					apellido: sql<string | null>`NULL`,
+					razon_social: contactos.razon_social,
+					telefono: contactos.telefono,
+					direccion: contactos.calle
+				}
+			})
+			.from(cotizaciones)
+			.leftJoin(contactos, eq(cotizaciones.contacto_id, contactos.id))
+			.where(eq(cotizaciones.id, cotizacionId))
+			.limit(1),
+		businessConfigPromise,
+		db
+			.select({
+				descripcion: lineas_cotizacion.descripcion,
+				cantidad: lineas_cotizacion.cantidad,
+				precio: lineas_cotizacion.precio_unitario,
+				subtotal: lineas_cotizacion.subtotal,
+				descripcion_snapshot: lineas_cotizacion.descripcion
+			})
+			.from(lineas_cotizacion)
+			.where(eq(lineas_cotizacion.cotizacion_id, cotizacionId)),
+		logoPromise
+	]);
 
 	if (!cot) throw new Error('Cotización no encontrada');
-
-	const lineas = await db
-		.select({
-			descripcion: lineas_cotizacion.descripcion,
-			cantidad: lineas_cotizacion.cantidad,
-			precio: lineas_cotizacion.precio_unitario,
-			subtotal: lineas_cotizacion.subtotal,
-			descripcion_snapshot: lineas_cotizacion.descripcion
-		})
-		.from(lineas_cotizacion)
-		.where(eq(lineas_cotizacion.cotizacion_id, cotizacionId));
 
 	const total = lineas.reduce((s, l) => s + (l.subtotal ?? 0), 0);
 	const clienteNombre =
@@ -227,12 +249,6 @@ export async function generarPDFCotizacion(cotizacionId: number): Promise<Uint8A
 	const vencimiento = new Date(cot.created_at ?? Date.now());
 	vencimiento.setDate(vencimiento.getDate() + (cot.validez_dias ?? 15));
 
-	const [businessConfig] = await db
-		.select()
-		.from(configuracion_empresa)
-		.where(eq(configuracion_empresa.id, 1))
-		.limit(1);
-	const logo = await cargarLogo(businessConfig?.logo_url);
 	const businessName = businessConfig?.razon_social || 'Conforma';
 	const businessDetails = [
 		businessName,

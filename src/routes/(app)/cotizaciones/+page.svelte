@@ -9,6 +9,7 @@
 	import { debounce } from '$lib/utils/debounce';
 	import { SvelteURLSearchParams } from 'svelte/reactivity';
 	import { formatearFecha } from '$lib/utils/fechas';
+	import { CANALES_COTIZACION } from '$lib/utils/canales-cotizacion';
 	import { eliminarCotizacion } from '$lib/remote/cotizaciones.remote';
 	import { toast } from '$lib/stores/toast.svelte';
 
@@ -25,14 +26,6 @@
 		currentPage = data.currentPage ?? 1;
 	});
 	let deleteCotizacionId = $state(0);
-
-	const CANALES: Record<string, string> = {
-		whatsapp: 'WhatsApp',
-		llamada: 'Llamada',
-		email: 'Email',
-		presencial: 'Presencial',
-		otro: 'Otro'
-	};
 
 	function handleSearchChange() {
 		const params = new SvelteURLSearchParams();
@@ -62,7 +55,7 @@
 			</div>
 			<select
 				bind:value={estadoFilter}
-				class="select select-sm w-48"
+				class="select w-48 select-sm"
 				onchange={() => {
 					currentPage = 1;
 					handleSearchChange();
@@ -75,7 +68,7 @@
 			</select>
 		</div>
 		<Can modulo="cotizaciones" accion="create">
-			<a class="btn btn-sm btn-primary" href={resolve('/cotizaciones/crear')}>+ Nueva Cotización</a>
+			<a class="btn btn-primary btn-sm" href={resolve('/cotizaciones/crear')}>+ Nueva Cotización</a>
 		</Can>
 	</div>
 
@@ -96,7 +89,9 @@
 				<td class="font-mono text-sm"><Highlight text={cot.numero_cotizacion} query={search} /></td>
 				<td class="font-medium"><Highlight text={cot.cliente_nombre || '-'} query={search} /></td>
 				<td>
-					<span class="badge badge-ghost badge-sm">{CANALES[cot.canal] || cot.canal}</span>
+					<span class="badge badge-ghost badge-sm">
+						{CANALES_COTIZACION[cot.canal] || cot.canal}
+					</span>
 				</td>
 				<td>{cot.created_at ? formatearFecha(new Date(cot.created_at)) : '-'}</td>
 				<td class="text-right font-medium">

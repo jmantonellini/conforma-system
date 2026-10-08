@@ -1,4 +1,8 @@
-import { getCotizacionById, getHistorialCotizacion } from '$lib/remote/cotizaciones.remote';
+import {
+	getCotizacionById,
+	getHistorialCotizacion,
+	getNotasCotizacion
+} from '$lib/remote/cotizaciones.remote';
 import { getProductoConReceta, getProductos } from '$lib/remote/productos.remote';
 import { getInsumos } from '$lib/remote/insumos.remote';
 import type { PageServerLoad } from './$types';
@@ -6,7 +10,10 @@ import type { PageServerLoad } from './$types';
 export const load: PageServerLoad = async ({ params }) => {
 	const id = Number(params.id);
 	const { cotizacion, lineas, adjuntos } = await getCotizacionById(id);
-	const historial = await getHistorialCotizacion(id);
+	const [historial, notas] = await Promise.all([
+		getHistorialCotizacion(id),
+		getNotasCotizacion(id)
+	]);
 	const productos = await getProductos({ limit: 100 });
 	const insumos = await getInsumos({ limit: 100 });
 	const productosConReceta = await Promise.all(
@@ -20,6 +27,7 @@ export const load: PageServerLoad = async ({ params }) => {
 		lineas,
 		adjuntos,
 		historial,
+		notas,
 		productos: productosConReceta,
 		insumos: insumos.data
 	};

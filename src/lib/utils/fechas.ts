@@ -18,3 +18,12 @@ export function formatearFecha(fecha: string | Date | null): string {
 	if (!fecha) return '-';
 	return new Date(fecha).toLocaleDateString('es-AR');
 }
+
+export function formatearFechaHora(fecha: string | Date | null): string {
+	if (!fecha) return '-';
+	return new Date(fecha).toLocaleString('es-AR', {
+		timeZone: 'America/Argentina/Buenos_Aires',
+		dateStyle: 'short',
+		timeStyle: 'short'
+	});
+}

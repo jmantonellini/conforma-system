@@ -221,6 +221,20 @@ export const adjuntos_cotizacion = pgTable(
 	(table) => [index('idx_adjuntos_cotizacion').on(table.cotizacion_id)]
 );
 
+export const notas_cotizacion = pgTable(
+	'notas_cotizacion',
+	{
+		id: serial('id').primaryKey(),
+		cotizacion_id: integer('cotizacion_id')
+			.references(() => cotizaciones.id, { onDelete: 'cascade' })
+			.notNull(),
+		usuario_id: integer('usuario_id').references(() => usuarios.id, { onDelete: 'set null' }),
+		contenido: text('contenido').notNull(),
+		created_at: timestamp('created_at').defaultNow()
+	},
+	(table) => [index('idx_notas_cotizacion').on(table.cotizacion_id)]
+);
+
 // ============================================================
 // CLIENTES Y PEDIDOS
 // ============================================================
@@ -795,6 +809,7 @@ export type EstadoCotizacion = typeof estados_cotizacion.$inferSelect;
 export type Cotizacion = typeof cotizaciones.$inferSelect;
 export type LineaCotizacion = typeof lineas_cotizacion.$inferSelect;
 export type AdjuntoCotizacion = typeof adjuntos_cotizacion.$inferSelect;
+export type NotaCotizacion = typeof notas_cotizacion.$inferSelect;
 export type Notificacion = typeof notificaciones.$inferSelect;
 export type TransicionEstado = typeof transiciones_estado.$inferSelect;
 export type LogCambioEstado = typeof logs_cambios_estado.$inferSelect;

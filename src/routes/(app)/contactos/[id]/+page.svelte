@@ -139,6 +139,7 @@
 							type="checkbox"
 							class="checkbox checkbox-primary"
 							name="es_distribuidor"
+							value="true"
 							disabled={!editando}
 							checked={esDistribuidor}
 							onchange={(event) => (distribuidorEditado = event.currentTarget.checked)}

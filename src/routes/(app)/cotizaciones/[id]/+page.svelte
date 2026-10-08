@@ -16,11 +16,12 @@
 		asignarCotizacion,
 		cambiarEstadoCotizacion,
 		cotizarCotizacion,
+		agregarNotaCotizacion,
 		convertirCotizacionAPedido,
 		eliminarAdjunto,
 		eliminarCotizacion
 	} from '$lib/remote/cotizaciones.remote';
-	import { formatearFecha } from '$lib/utils/fechas';
+	import { formatearFecha, formatearFechaHora } from '$lib/utils/fechas';
 	import type { PageProps } from './$types';
 	import { Paths } from '$lib/types';
 	import { Document } from '$lib/components/ui/icons';
@@ -73,6 +74,8 @@
 	let productos = $derived(data.productos);
 	let validezDias = $derived(cotizacion.validez_dias ?? 15);
 	let lineas = $state<any[]>([]);
+	let notaEnRedaccion = $state('');
+	let guardandoNota = $state(false);
 
 	$effect(() => {
 		lineas = (data.lineas ?? []).map((l: any) => {
@@ -141,6 +144,30 @@
 			{
 				idx: Date.now(),
 				tipo: 'insumo',
+				producto_id: '',
+				insumo_id: undefined,
+				unidad: '',
+				insumos_snapshot: [],
+				descripcion: '',
+				cantidad: 1,
+				precio_unitario: 0,
+				precio_lista_unitario: 0,
+				precio_minimo_unitario: 0,
+				margen_porcentaje: 0,
+				descuento_porcentaje: 0,
+				justificacion_descuento: '',
+				costo_mano_obra: 0,
+				costo_materiales: 0
+			}
+		];
+	}
+
+	function agregarLineaPersonalizada() {
+		lineas = [
+			...lineas,
+			{
+				idx: Date.now(),
+				tipo: 'personalizado',
 				producto_id: '',
 				insumo_id: undefined,
 				unidad: '',
@@ -380,6 +407,23 @@
 		subiendo = false;
 	}
 
+	async function guardarNota() {
+		const contenido = notaEnRedaccion.trim();
+		if (!contenido) return;
+
+		guardandoNota = true;
+		try {
+			await agregarNotaCotizacion({ cotizacion_id: cotizacion.id, contenido });
+			notaEnRedaccion = '';
+			toast.success('Nota agregada');
+			await invalidateAll();
+		} catch (error) {
+			toast.error(error instanceof Error ? error.message : 'No se pudo agregar la nota');
+		} finally {
+			guardandoNota = false;
+		}
+	}
+
 	async function generarPedido() {
 		try {
 			const { pedidoId } = await convertirCotizacionAPedido(cotizacion.id);
@@ -392,8 +436,8 @@
 
 	const esImagen = (m: string | null) => m?.startsWith('image/');
 	const esAudio = (m: string | null) => m?.startsWith('audio/');
-	const urlAdjunto = (url: string) =>
-		url.startsWith('static/') ? `/${url.slice('static/'.length)}` : url;
+	const urlAdjunto = (adjuntoId: number) =>
+		resolve(`/cotizaciones/${cotizacion.id}/adjuntos/${adjuntoId}`);
 
 	let showEliminar = $state(false);
 
@@ -573,6 +617,12 @@
 							onclick={agregarInsumoLinea}
 							class="btn btn-outline btn-sm">+ Insumo</button
 						>
+						<button
+							type="button"
+							disabled={!!cotizacion.pedido_id}
+							onclick={agregarLineaPersonalizada}
+							class="btn btn-outline btn-sm">+ Línea personalizada</button
+						>
 					</div>
 					{#each lineas as linea (linea.idx)}
 						<div class="card relative gap-1 border border-base-300 bg-base-100 p-3">
@@ -630,6 +680,19 @@
 											onChange={(value: string) => onInsumoChange(linea.idx, value)}
 										/>
 									</div>
+								{:else}
+									<FormFieldWrapper
+										label="Concepto para el cliente"
+										id={`descripcion-${linea.idx}`}
+									>
+										<input
+											class="input"
+											required
+											disabled={!!cotizacion.pedido_id}
+											bind:value={linea.descripcion}
+											placeholder="Descripción visible en la cotización"
+										/>
+									</FormFieldWrapper>
 								{/if}
 								{#if linea.tipo === 'insumo'}
 									<FormFieldWrapper label="Unidad" id="unidad">
@@ -796,13 +859,13 @@
 						<div class="card bg-base-100">
 							{#if esImagen(adj.mime_type)}
 								<img
-									src={urlAdjunto(adj.archivo_url)}
+									src={urlAdjunto(adj.id)}
 									alt={adj.nombre_original}
 									class="h-40 w-full rounded-t-xl object-cover"
 								/>
 							{:else if esAudio(adj.mime_type)}
 								<div class="p-3">
-									<audio controls src={urlAdjunto(adj.archivo_url)} class="w-full"></audio>
+									<audio controls src={urlAdjunto(adj.id)} class="w-full"></audio>
 								</div>
 							{/if}
 							<div class="flex items-center justify-between p-2 text-xs">
@@ -822,6 +885,51 @@
 						<p class="text-sm text-base-content/50">Sin archivos adjuntos.</p>
 					{/each}
 				</div>
+			</div>
+		</div>
+
+		<!-- Seguimiento interno -->
+		<div class="card bg-base-100 shadow lg:col-span-2">
+			<div class="card-body gap-4">
+				<h2 class="card-title">Seguimiento interno</h2>
+				<Can modulo="cotizaciones" accion="edit">
+					<textarea
+						class="textarea w-full"
+						rows="3"
+						maxlength="5000"
+						placeholder="Novedades del cliente, acuerdos o cambios solicitados..."
+						bind:value={notaEnRedaccion}
+					></textarea>
+					<div class="flex justify-end">
+						<button
+							type="button"
+							class="btn btn-primary btn-sm"
+							disabled={guardandoNota || !notaEnRedaccion.trim()}
+							onclick={guardarNota}
+						>
+							{guardandoNota ? 'Agregando...' : 'Agregar nota'}
+						</button>
+					</div>
+				</Can>
+				{#if data.notas.length}
+					<ol class="flex flex-col gap-4 border-s border-base-300 ps-4">
+						{#each data.notas as nota (nota.id)}
+							<li class="relative">
+								<span class="absolute inset-s-[-1.32rem] top-1.5 size-2 rounded-full bg-primary"
+								></span>
+								<p class="text-sm font-medium">
+									{nota.autor} <span class="font-normal text-base-content/60">·</span>
+									<span class="font-normal text-base-content/60">
+										{formatearFechaHora(nota.fecha)}
+									</span>
+								</p>
+								<p class="mt-1 text-sm whitespace-pre-wrap">{nota.contenido}</p>
+							</li>
+						{/each}
+					</ol>
+				{:else}
+					<p class="text-sm text-base-content/60">Todavía no hay notas.</p>
+				{/if}
 			</div>
 		</div>
 
