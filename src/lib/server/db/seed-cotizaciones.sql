@@ -9,7 +9,13 @@ INSERT INTO "estados_cotizacion" ("nombre", "slug", "grupo", "orden", "color", "
 	('Lista p/ enviar', 'lista_para_enviar', 'respuesta', 4, 'accent',    false),
 	('Enviada',         'enviada',           'respuesta', 5, 'primary',   false),
 	('Aprobada',        'aprobada',          'final',     6, 'success',   true),
-	('Rechazada',       'rechazada',         'final',     7, 'error',     true);
+	('Rechazada',       'rechazada',         'final',     7, 'error',     true)
+ON CONFLICT (slug) DO UPDATE SET
+	 nombre = EXCLUDED.nombre,
+	 grupo = EXCLUDED.grupo,
+	 orden = EXCLUDED.orden,
+	 color = EXCLUDED.color,
+	 es_final = EXCLUDED.es_final;
 
 -- ============ TRANSICIONES (state machine, tipo 'cotizacion') ============
 -- Se reutiliza la tabla transiciones_estado existente.
@@ -24,19 +30,27 @@ WHERE (o.slug = 'ingresada'      AND d.slug = 'asignada')
    OR (o.slug = 'lista_para_enviar' AND d.slug = 'enviada')
    OR (o.slug = 'lista_para_enviar' AND d.slug = 'rechazada')
    OR (o.slug = 'enviada'        AND d.slug = 'aprobada')
-   OR (o.slug = 'enviada'        AND d.slug = 'rechazada');
+	OR (o.slug = 'enviada'        AND d.slug = 'rechazada')
+ON CONFLICT (tipo, estado_origen_id, estado_destino_id) DO NOTHING;
 
 -- ============ PERMISOS ============
-INSERT INTO "permisos" ("accion", "modulo") VALUES
-	('view',      'cotizaciones'),
-	('create',    'cotizaciones'),
-	('edit',      'cotizaciones'),
-	('delete',    'cotizaciones'),
-	('asignar',   'cotizaciones'),  -- asignar a alguien de Oficina Técnica
-	('cotizar',   'cotizaciones'),  -- cargar líneas y precios (Oficina Técnica)
-	('enviar',    'cotizaciones'),  -- marcar enviada / imprimir PDF (Atención al Cliente)
-	('aprobar',   'cotizaciones'),  -- registrar aprobación del cliente
-	('convertir', 'cotizaciones');  -- generar pedido desde cotización
+INSERT INTO "permisos" ("accion", "modulo")
+SELECT acciones.accion, 'cotizaciones'
+FROM (VALUES
+	('view'),
+	('create'),
+	('edit'),
+	('delete'),
+	('asignar'),
+	('cotizar'),
+	('enviar'),
+	('aprobar'),
+	('convertir')
+) AS acciones(accion)
+WHERE NOT EXISTS (
+	SELECT 1 FROM "permisos" existente
+	WHERE existente."modulo" = 'cotizaciones' AND existente."accion" = acciones.accion
+);
 -- (admin tiene bypass en can(); no necesita filas)
 
 -- ============ PERMISOS POR ROL (ajustá a tus roles reales) ============
@@ -45,14 +59,22 @@ INSERT INTO "roles_permisos" ("rol_id", "permiso_id")
 SELECT r.id, p.id FROM "roles" r, "permisos" p
 WHERE r.nombre = 'ventas'
   AND p.modulo = 'cotizaciones'
-  AND p.accion IN ('view', 'create', 'edit', 'enviar', 'aprobar', 'convertir');
+	AND p.accion IN ('view', 'create', 'edit', 'enviar', 'aprobar', 'convertir')
+	AND NOT EXISTS (
+	  SELECT 1 FROM roles_permisos existente
+	  WHERE existente.rol_id = r.id AND existente.permiso_id = p.id
+	);
 
 -- Oficina Técnica (tecnico): ve, cotiza
 INSERT INTO "roles_permisos" ("rol_id", "permiso_id")
 SELECT r.id, p.id FROM "roles" r, "permisos" p
 WHERE r.nombre = 'tecnico'
   AND p.modulo = 'cotizaciones'
-  AND p.accion IN ('view', 'cotizar', 'asignar');
+	AND p.accion IN ('view', 'cotizar', 'asignar')
+	AND NOT EXISTS (
+	  SELECT 1 FROM roles_permisos existente
+	  WHERE existente.rol_id = r.id AND existente.permiso_id = p.id
+	);
 
 -- Gerente (admin): ya tiene todo por bypass de can().
 -- Si tenés un rol 'gerente' distinto de admin, descomentá:

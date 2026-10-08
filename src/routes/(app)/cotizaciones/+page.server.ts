@@ -1,4 +1,4 @@
-import { getCotizaciones, getEstadosCotizacion } from '$lib/remote/cotizaciones.remote';
+import { getCotizaciones, getEstadosCotizacion } from '$lib/remote/cotizaciones-consultas.remote';
 import type { PageServerLoad } from './$types';
 
 export const load: PageServerLoad = async ({ url, setHeaders }) => {

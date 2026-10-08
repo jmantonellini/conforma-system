@@ -1,7 +1,12 @@
 import { describe, expect, it } from 'vitest';
-import { calcularPrecioConDescuento, calcularPrecioVenta } from './precios';
+import { calcularIva21, calcularPrecioConDescuento, calcularPrecioVenta } from './precios';
 
 describe('quotation pricing', () => {
+	it('calculates 21% VAT rounded to cents', () => {
+		expect(calcularIva21(100)).toBe(21);
+		expect(calcularIva21(12.34)).toBe(2.59);
+	});
+
 	it('calculates the sale price from cost and margin', () => {
 		expect(calcularPrecioVenta(100, 25)).toBe(133.33);
 	});

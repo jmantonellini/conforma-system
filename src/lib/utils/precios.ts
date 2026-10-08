@@ -4,6 +4,10 @@ export function redondearPrecio(valor: number) {
 	return Number(valor.toFixed(2));
 }
 
+export function calcularIva21(base: number) {
+	return redondearPrecio(base * 0.21);
+}
+
 export function calcularPrecioVenta(costo: number, margenPorcentaje: number) {
 	if (!Number.isFinite(costo) || costo < 0) throw new Error('El costo debe ser un número positivo');
 	if (

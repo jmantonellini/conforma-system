@@ -11,6 +11,14 @@
 		return href && page.url.pathname.startsWith(href);
 	}
 
+	function hasActiveSubtab(tab: { subtabs?: { href: string }[] }) {
+		return tab.subtabs?.some((subtab) => isActive(subtab.href)) ?? false;
+	}
+
+	function isTabActive(tab: { href: string; subtabs?: { href: string }[] }) {
+		return isActive(tab.href) || hasActiveSubtab(tab);
+	}
+
 	function handleTabClick(tab: { subtabs?: unknown[] }) {
 		if (!drawerOpen && tab.subtabs && tab.subtabs.length > 0) {
 			drawerOpen = true;
@@ -52,8 +60,8 @@
 						href={tab.href}
 						onclick={() => handleTabClick(tab)}
 						class="flex w-full items-center gap-4 rounded px-4 py-2 text-sm whitespace-nowrap hover:bg-gray-200"
-						class:bg-gray-300={isActive(tab.href)}
-						class:text-primary={isActive(tab.href)}
+						class:bg-gray-300={isTabActive(tab)}
+						class:text-primary={isTabActive(tab)}
 					>
 						{#if tab.icon && typeof tab.icon !== 'string'}
 							{@const Icon = tab.icon}
@@ -64,7 +72,7 @@
 						</span>
 					</a>
 
-					{#if tab.subtabs && tab.href && page.url.pathname.startsWith(tab.href) && drawerOpen}
+					{#if tab.subtabs && isTabActive(tab) && drawerOpen}
 						<div class="ml-4 flex flex-col gap-1">
 							{#each tab.subtabs as subtab (subtab.href)}
 								<a

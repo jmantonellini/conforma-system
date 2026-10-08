@@ -649,16 +649,19 @@ ON CONFLICT (id) DO NOTHING;
 
 
 -- ============================================================
--- CLIENTES
+-- CONTACTOS DE MUESTRA
 -- ============================================================
 
-INSERT INTO clientes (id, nombre, apellido, razon_social, cuit, email, telefono, pais, provincia, ciudad, codigo_postal, calle, numero, piso, departamento, activo, created_at, updated_at) VALUES
-(7, 'Jorge', NULL, 'asdasd', '34234', 'asdasd@asda.com', '12312312', 'Argentina', 'Córdoba', 'Almafuerte', '3434', '', '', '', '', true, to_timestamp(1781642537), to_timestamp(1781642537)),
-(8, 'Pablo ', NULL, 'Collazo', '20134987554', 'to3007to@gmail.com', '2966628269', 'Argentina', 'CABA', 'Venado Tuerto', '2600', 'Ismael Iraola', '1270', '', '', true, to_timestamp(1782136460), to_timestamp(1782136460)),
-(9, 'INMAC', NULL, 'Ingenieria y Arquitectura', '30715420526', 'to3007to@gmail.com', '3462320642', 'Argentina', 'CABA', 'CABA', '1106', 'Av. Bouchard ', '547', '13', '', true, to_timestamp(1782488007), to_timestamp(1782488007)),
-(10, 'Collino', NULL, 'Collino SRL', '42342424', 'collino@gmail.com', '', 'Argentina', '', '', '', '', '', '', '', true, to_timestamp(1784312464), to_timestamp(1784312464)),
-(11, 'Peyte', NULL, 'PEty laboratorios', '4234234', 'asdas@gmail.com', '34234234', 'Argentina', '', '', '', '', '', '', '', true, to_timestamp(1784312952), to_timestamp(1784312952))
-ON CONFLICT (id) DO NOTHING;
+INSERT INTO contactos (
+	id, razon_social, nombre, apellido, cuit, email, telefono, pais, provincia, ciudad,
+	codigo_postal, calle, numero, piso, departamento, es_cliente, activo, created_at, updated_at
+) VALUES
+	(7, 'asdasd', 'Jorge', NULL, '34234', 'asdasd@asda.com', '12312312', 'Argentina', 'Córdoba', 'Almafuerte', '3434', '', '', '', '', true, true, to_timestamp(1781642537), to_timestamp(1781642537)),
+	(8, 'Collazo', 'Pablo ', NULL, '20134987554', 'to3007to@gmail.com', '2966628269', 'Argentina', 'CABA', 'Venado Tuerto', '2600', 'Ismael Iraola', '1270', '', '', true, true, to_timestamp(1782136460), to_timestamp(1782136460)),
+	(9, 'Ingenieria y Arquitectura', 'INMAC', NULL, '30715420526', 'to3007to@gmail.com', '3462320642', 'Argentina', 'CABA', 'CABA', '1106', 'Av. Bouchard ', '547', '13', '', true, true, to_timestamp(1782488007), to_timestamp(1782488007)),
+	(10, 'Collino SRL', 'Collino', NULL, '42342424', 'collino@gmail.com', '', 'Argentina', '', '', '', '', '', '', '', true, true, to_timestamp(1784312464), to_timestamp(1784312464)),
+	(11, 'PEty laboratorios', 'Peyte', NULL, '4234234', 'asdas@gmail.com', '34234234', 'Argentina', '', '', '', '', '', '', '', true, true, to_timestamp(1784312954), to_timestamp(1784312954))
+ON CONFLICT DO NOTHING;
 
 
 -- ============================================================
@@ -692,3 +695,25 @@ INSERT INTO tareas (id, titulo, descripcion, estado, orden, prioridad, fecha_ent
 - Lentes de trabajo', 'pendiente', 0, 'media', to_timestamp(1784419200), 5, to_timestamp(1783943647), to_timestamp(1783943647)),
 (5, 'Reelevamiento en laboratorio', 'Visitar el laboratorio y resolver dudas de requerimientos del cliente', 'pendiente', 1, 'media', to_timestamp(1784246400), 1, to_timestamp(1783944046), to_timestamp(1783944046))
 ON CONFLICT (id) DO NOTHING;
+
+DO $$
+DECLARE
+	sequence_row record;
+BEGIN
+	FOR sequence_row IN
+		SELECT table_schema, table_name, column_name
+		FROM information_schema.columns
+		WHERE table_schema = 'public'
+			AND column_default LIKE 'nextval(%'
+	LOOP
+		EXECUTE format(
+			'SELECT setval(pg_get_serial_sequence(%L, %L), COALESCE(MAX(%I), 1), MAX(%I) IS NOT NULL) FROM %I.%I',
+			format('%I.%I', sequence_row.table_schema, sequence_row.table_name),
+			sequence_row.column_name,
+			sequence_row.column_name,
+			sequence_row.column_name,
+			sequence_row.table_schema,
+			sequence_row.table_name
+		);
+	END LOOP;
+END $$;

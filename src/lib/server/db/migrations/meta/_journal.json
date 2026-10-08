@@ -225,6 +225,20 @@
 			"when": 1791419731325,
 			"tag": "0031_add_quotation_notes",
 			"breakpoints": true
+		},
+		{
+			"idx": 32,
+			"version": "7",
+			"when": 1791431904422,
+			"tag": "0032_add_trombon_diametro_final",
+			"breakpoints": true
+		},
+		{
+			"idx": 33,
+			"version": "7",
+			"when": 1791482035150,
+			"tag": "0033_add_quotation_vat_terms",
+			"breakpoints": true
 		}
 	]
 }

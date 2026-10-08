@@ -196,8 +196,10 @@
 					<fieldset class="fieldset rounded-box border border-base-300 bg-base-200 p-4">
 						<legend class="fieldset-legend">Aspectos técnicos</legend>
 
-						<div class="grid grid-cols-3 gap-4">
-							<fieldset class="fieldset rounded-box border border-base-300 bg-base-200 p-4">
+						<div class="flex flex-col gap-4 lg:flex-row">
+							<fieldset
+								class="fieldset rounded-box border border-base-300 bg-base-200 p-4 lg:w-1/3"
+							>
 								<legend class="fieldset-legend">Medidas Primario</legend>
 
 								<div class="grid grid-cols-2 gap-4">
@@ -211,12 +213,14 @@
 										<input
 											class="remove-arrow input"
 											{...crearProducto.fields.medidas_primario_largo.as('number')}
-										/></FormFieldWrapper
-									>
+										/>
+									</FormFieldWrapper>
 								</div>
 							</fieldset>
 
-							<fieldset class="fieldset rounded-box border border-base-300 bg-base-200 p-4">
+							<fieldset
+								class="fieldset rounded-box border border-base-300 bg-base-200 p-4 lg:w-1/3"
+							>
 								<legend class="fieldset-legend">Medidas Secundario</legend>
 								<div class="grid grid-cols-2 gap-4">
 									<FormFieldWrapper label="Diámetro" id="medidas_secundario_diametro">
@@ -225,8 +229,8 @@
 											{...crearProducto.fields.medidas_secundario_diametro.as('number')}
 										/>
 									</FormFieldWrapper>
-									<FormFieldWrapper label="Largo" id="medidas_secundario_largo"
-										><input
+									<FormFieldWrapper label="Largo" id="medidas_secundario_largo">
+										<input
 											class="remove-arrow input"
 											{...crearProducto.fields.medidas_secundario_largo.as('number')}
 										/>
@@ -234,13 +238,21 @@
 								</div>
 							</fieldset>
 
-							<fieldset class="fieldset rounded-box border border-base-300 bg-base-200 p-4">
+							<fieldset
+								class="fieldset rounded-box border border-base-300 bg-base-200 p-4 lg:w-1/3"
+							>
 								<legend class="fieldset-legend">Trombon</legend>
 								<div class="grid grid-cols-2 gap-4">
 									<FormFieldWrapper label="Diámetro Inicial" id="trombon_diametro_inicial">
 										<input
 											class="remove-arrow input"
 											{...crearProducto.fields.trombon_diametro_inicial.as('number')}
+										/>
+									</FormFieldWrapper>
+									<FormFieldWrapper label="Diámetro Final" id="trombon_diametro_final">
+										<input
+											class="remove-arrow input"
+											{...crearProducto.fields.trombon_diametro_final.as('number')}
 										/>
 									</FormFieldWrapper>
 									<FormFieldWrapper label="Largo" id="trombon_largo">
@@ -251,20 +263,19 @@
 									</FormFieldWrapper>
 								</div>
 							</fieldset>
-							<fieldset
-								class="fieldset rounded-box border border-base-300 bg-base-200 p-4 lg:col-span-3"
-							>
-								<legend class="fieldset-legend">Observaciones</legend>
-								<FormFieldWrapper id="trombon_observaciones">
-									<textarea
-										class="textarea w-full resize-none"
-										rows={3}
-										{...crearProducto.fields.trombon_observaciones.as('text')}
-									>
-									</textarea>
-								</FormFieldWrapper>
-							</fieldset>
 						</div>
+
+						<fieldset class="fieldset rounded-box border border-base-300 bg-base-200 p-4">
+							<legend class="fieldset-legend">Observaciones</legend>
+							<FormFieldWrapper id="trombon_observaciones">
+								<textarea
+									class="textarea w-full resize-none"
+									rows={3}
+									{...crearProducto.fields.trombon_observaciones.as('text')}
+								>
+								</textarea>
+							</FormFieldWrapper>
+						</fieldset>
 					</fieldset>
 				{/if}
 			{/if}

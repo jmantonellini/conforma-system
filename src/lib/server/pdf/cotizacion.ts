@@ -7,7 +7,8 @@ import {
 	lineas_cotizacion,
 	contactos
 } from '$lib/server/db/schema';
-import { eq, sql } from 'drizzle-orm';
+import { and, eq, isNull, sql } from 'drizzle-orm';
+import { calcularIva21, redondearPrecio } from '$lib/utils/precios';
 import { readFile } from 'fs/promises';
 import path from 'path';
 import logoUrl from '$lib/assets/Logo.png';
@@ -207,6 +208,9 @@ export async function generarPDFCotizacion(cotizacionId: number): Promise<Uint8A
 			.select({
 				id: cotizaciones.id,
 				numero: cotizaciones.numero_cotizacion,
+				precio_total: cotizaciones.precio_total,
+				incluir_iva: cotizaciones.incluir_iva,
+				condiciones_pago: cotizaciones.condiciones_pago,
 				cliente_nombre: cotizaciones.cliente_nombre,
 				cliente_telefono: cotizaciones.cliente_telefono,
 				descripcion: cotizaciones.descripcion,
@@ -234,13 +238,25 @@ export async function generarPDFCotizacion(cotizacionId: number): Promise<Uint8A
 				descripcion_snapshot: lineas_cotizacion.descripcion
 			})
 			.from(lineas_cotizacion)
-			.where(eq(lineas_cotizacion.cotizacion_id, cotizacionId)),
+			.where(
+				and(eq(lineas_cotizacion.cotizacion_id, cotizacionId), isNull(lineas_cotizacion.insumo_id))
+			),
 		logoPromise
 	]);
 
 	if (!cot) throw new Error('Cotización no encontrada');
 
-	const total = lineas.reduce((s, l) => s + (l.subtotal ?? 0), 0);
+	const totalBase = redondearPrecio(lineas.reduce((sum, linea) => sum + (linea.subtotal ?? 0), 0));
+	const importeIva = cot.incluir_iva ? calcularIva21(totalBase) : 0;
+	const totalCalculado = Number((totalBase + importeIva).toFixed(2));
+	const total = cot.precio_total ?? totalCalculado;
+	const ajusteComercial = Number((total - totalCalculado).toFixed(2));
+	const condicionesPago =
+		cot.condiciones_pago === null
+			? '50% de anticipo al aprobar, saldo contra entrega.'
+			: cot.condiciones_pago.trim();
+	const formatearImporte = (importe: number) =>
+		`${importe < 0 ? '-$' : '$'}${Math.abs(importe).toLocaleString('es-AR', { minimumFractionDigits: 2 })}`;
 	const clienteNombre =
 		cot.cliente?.razon_social ||
 		`${cot.cliente?.nombre ?? ''} ${cot.cliente?.apellido ?? ''}`.trim() ||
@@ -268,17 +284,30 @@ export async function generarPDFCotizacion(cotizacionId: number): Promise<Uint8A
 			empresa: businessDetails,
 			clienteTitulo: 'CLIENTE',
 			cliente: `${clienteNombre}\n${cot.cliente?.telefono ?? cot.cliente_telefono ?? ''}\n${cot.cliente?.direccion ?? ''}`,
-			table: lineas.map((l) => [
-				l.descripcion_snapshot,
-				String(l.cantidad),
-				`$${l.precio?.toLocaleString('es-AR')}`,
-				`$${l.subtotal?.toLocaleString('es-AR')}`
-			]),
+			table: [
+				...lineas.map((l) => [
+					l.descripcion_snapshot,
+					String(l.cantidad),
+					`$${l.precio?.toLocaleString('es-AR')}`,
+					`$${l.subtotal?.toLocaleString('es-AR')}`
+				]),
+				...(cot.incluir_iva ? [['IVA (21%)', '', '', formatearImporte(importeIva)]] : []),
+				...(ajusteComercial !== 0
+					? [
+							[
+								'Ajuste comercial',
+								'1',
+								formatearImporte(ajusteComercial),
+								formatearImporte(ajusteComercial)
+							]
+						]
+					: [])
+			],
 			totalLabel: 'TOTAL:',
-			total: `$${total.toLocaleString('es-AR', { minimumFractionDigits: 2 })}`,
+			total: formatearImporte(total),
 			footer:
 				`Precios expresados en pesos argentinos. Cotización válida hasta el ${vencimiento.toLocaleDateString('es-AR')}.\n` +
-				`Condiciones de pago: 50% de anticipo al aprobar, saldo contra entrega.\n` +
+				(condicionesPago ? `Condiciones de pago: ${condicionesPago}\n` : '') +
 				`Gracias por consultar.`
 		}
 	];

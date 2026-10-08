@@ -19,7 +19,7 @@
 	import type { EstadosTarea } from '$lib/types';
 	import { resolve } from '$app/paths';
 	import { estaVencido, formatearFecha } from '$lib/utils/fechas';
-	import { getOrdenesFabricacion } from '$lib/remote/fabricacion.remote';
+	import { getOrdenesFabricacion } from '$lib/remote/fabricacion-consultas.remote';
 
 	let tareas = $derived(await getTareas());
 	let empleados = $derived(await getEmpleados());
@@ -51,7 +51,9 @@
 
 <PageLayout>
 	<div class="mb-6 flex items-center justify-end">
-		<button class="btn btn-sm btn-primary" onclick={() => (showModal = true)}> + Nueva Tarea </button>
+		<button class="btn btn-primary btn-sm" onclick={() => (showModal = true)}>
+			+ Nueva Tarea
+		</button>
 	</div>
 
 	<!-- KANBAN: Tareas accionables -->

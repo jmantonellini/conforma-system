@@ -1,11 +1,13 @@
 <script lang="ts">
 	import {
-		getOrdenFabricacion,
 		cambiarEstadoUnidad,
 		reanudarUnidad,
-		eliminarOrdenFabricacion,
-		getHistorialUnidades
+		eliminarOrdenFabricacion
 	} from '$lib/remote/fabricacion.remote';
+	import {
+		getOrdenFabricacion,
+		getHistorialUnidades
+	} from '$lib/remote/fabricacion-consultas.remote';
 	import { NavegacionProceso, PageLayout, Modal, Table } from '$lib/components/ui';
 	import { toast } from '$lib/stores/toast.svelte';
 	import { goto, invalidateAll } from '$app/navigation';
@@ -285,6 +287,7 @@
 						<h4 class="mb-3 font-semibold">Planos y referencias visuales</h4>
 						<div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
 							{#each orden.adjuntos as adjunto (adjunto.id)}
+								<!-- eslint-disable svelte/no-navigation-without-resolve -->
 								<a
 									href={adjunto.archivo_url}
 									target="_blank"
@@ -308,6 +311,7 @@
 										{adjunto.nombre_original}
 									</div>
 								</a>
+								<!-- eslint-enable svelte/no-navigation-without-resolve -->
 							{/each}
 						</div>
 					</div>

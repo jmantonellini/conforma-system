@@ -10,6 +10,7 @@ export const ProductoSchema = v.object({
 	medidas_secundario_diametro: v.optional(v.number()),
 	medidas_secundario_largo: v.optional(v.number()),
 	trombon_diametro_inicial: v.optional(v.number()),
+	trombon_diametro_final: v.optional(v.number()),
 	trombon_largo: v.optional(v.number()),
 	trombon_observaciones: v.optional(v.string()),
 	es_personalizable: v.optional(v.boolean(), false),

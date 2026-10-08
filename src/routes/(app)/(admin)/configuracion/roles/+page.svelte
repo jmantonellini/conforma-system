@@ -6,8 +6,9 @@
 	import { SvelteSet } from 'svelte/reactivity';
 	import { page } from '$app/state';
 
-	let roles = page.data.todosRoles;
+	let roles = page.data.roles;
 	let todosPermisos = page.data.todosPermisos;
+	type Permiso = (typeof todosPermisos)[number];
 
 	let rolSeleccionado = $state(roles[0]);
 
@@ -38,8 +39,8 @@
 		}
 	}
 
-	function agruparPorModulo(permisos: any[]) {
-		const grouped: Record<string, any[]> = {};
+	function agruparPorModulo(permisos: Permiso[]) {
+		const grouped: Record<string, Permiso[]> = {};
 		for (const p of permisos) {
 			if (!grouped[p.modulo]) grouped[p.modulo] = [];
 			grouped[p.modulo].push(p);

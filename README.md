@@ -1,43 +1,66 @@
-# sv
+# Conforma System
 
-Everything you need to build a Svelte project, powered by [`sv`](https://github.com/sveltejs/cli).
+Sistema ERP full-stack para cotizaciones, contactos, productos, insumos, pedidos y fabricación. Está construido con SvelteKit 2, Svelte 5, TypeScript, PostgreSQL y Drizzle ORM. La aplicación de producción usa el adapter Node.
 
-## Creating a project
+## Requisitos
 
-If you're seeing this, you've probably already done this step. Congrats!
+- Node.js 22+
+- pnpm 10+
+- Docker y Docker Compose para PostgreSQL local
 
-```sh
-# create a new project
-npx sv create my-app
-```
+## Desarrollo
 
-To recreate this project with the same configuration:
-
-```sh
-# recreate this project
-pnpm dlx sv@0.15.3 create --template minimal --types ts --add prettier eslint drizzle="database:sqlite+sqlite:libsql" mcp="ide:vscode+setup:remote" tailwindcss="plugins:typography,forms" --install pnpm conforma-system
-```
-
-## Developing
-
-Once you've created a project and installed dependencies with `npm install` (or `pnpm install` or `yarn`), start a development server:
+1. Copiá `.env.example` a `.env` y ajustá las credenciales locales.
+2. Instalá las dependencias y levantá PostgreSQL:
 
 ```sh
-npm run dev
-
-# or start the server and open the app in a new browser tab
-npm run dev -- --open
+pnpm install
+docker compose -f docker-compose.dev.yml up -d
 ```
 
-## Building
-
-To create a production version of your app:
+3. Aplicá migraciones y datos iniciales:
 
 ```sh
-npm run build
+pnpm db:migrate
+pnpm db:seed
 ```
 
-You can preview the production build with `npm run preview`.
+4. Iniciá la aplicación:
 
-> To deploy your app, you may need to install an [adapter](https://svelte.dev/docs/kit/adapters) for your target environment.
-# conforma-system
+```sh
+pnpm dev
+```
+
+La aplicación queda disponible en `http://localhost:5173`.
+
+## Base de datos
+
+`DATABASE_URL` es usado por Drizzle Kit. La aplicación Node se conecta usando `DB_HOST`, `DB_PORT`, `DB_USER`, `DB_PASSWORD` y `DB_NAME`. Las migraciones SQL están en `src/lib/server/db/migrations`; `pnpm db:seed` carga los datos base y los del módulo de cotizaciones.
+
+Para crear y aplicar cambios de esquema:
+
+```sh
+pnpm db:generate
+pnpm db:migrate
+```
+
+## Calidad y pruebas
+
+```sh
+pnpm check
+pnpm lint
+pnpm exec vitest run
+pnpm test:db
+pnpm test:e2e
+```
+
+Las pruebas de base de datos y E2E usan `TEST_DATABASE_URL`. Debe apuntar a una base local dedicada cuyo nombre incluya `test`; el setup E2E rechaza hosts que no sean loopback.
+
+## Producción
+
+```sh
+pnpm build
+pnpm preview
+```
+
+La imagen Docker ejecuta las migraciones y luego inicia el servidor Node en el puerto 3000.

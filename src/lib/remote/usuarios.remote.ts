@@ -6,6 +6,7 @@ import { eq } from 'drizzle-orm';
 import * as v from 'valibot';
 import { ActualizarUsuarioSchema, CrearUsuarioSchema } from './usuarios.schema';
 import { getEmpleados } from './empleados.remote';
+import { requirePermission } from '$lib/server/auth/permissions';
 
 export const getCurrentUser = query(async () => {
 	const event = getRequestEvent();
@@ -41,6 +42,7 @@ export const getCurrentUser = query(async () => {
 });
 
 export const getUsuarios = query(async () => {
+	await requirePermission('configuracion', 'view');
 	return await db
 		.select({
 			id: usuarios.id,
@@ -62,12 +64,14 @@ export const getUsuarios = query(async () => {
 });
 
 export const deleteUsuario = command(v.number(), async (id) => {
+	await requirePermission('configuracion', 'edit');
 	await db.delete(usuarios).where(eq(usuarios.id, id));
 	getUsuarios().refresh();
 	return { success: true };
 });
 
 export const crearUsuario = form(CrearUsuarioSchema, async (data) => {
+	await requirePermission('configuracion', 'edit');
 	const [usuario] = await db
 		.insert(usuarios)
 		.values({
@@ -84,6 +88,7 @@ export const crearUsuario = form(CrearUsuarioSchema, async (data) => {
 });
 
 export const actualizarUsuario = form(ActualizarUsuarioSchema, async (data) => {
+	await requirePermission('configuracion', 'edit');
 	const { id, ...updateData } = data;
 
 	if (data.password_hash) {

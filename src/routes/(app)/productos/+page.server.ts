@@ -1,4 +1,4 @@
-import { getProductos } from '$lib/remote/productos.remote';
+import { getCategorias, getProductos } from '$lib/remote/productos.remote';
 import type { PageServerLoad } from './$types';
 
 export const load: PageServerLoad = async ({ url, setHeaders }) => {
@@ -15,15 +15,19 @@ export const load: PageServerLoad = async ({ url, setHeaders }) => {
 		'Cache-Control': 'private, no-store'
 	});
 
-	const productosData = await getProductos({
-		search,
-		categoriaId: categoria,
-		sort,
-		direction,
-		page
-	});
+	const [productosData, categorias] = await Promise.all([
+		getProductos({
+			search,
+			categoriaId: categoria,
+			sort,
+			direction,
+			page
+		}),
+		getCategorias()
+	]);
 	return {
 		productos: productosData.data,
+		categorias,
 		totalPages: productosData.totalPages,
 		currentPage: productosData.currentPage,
 		search,

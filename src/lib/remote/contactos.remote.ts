@@ -180,6 +180,14 @@ const ImportarContactosSchema = v.pipe(
 			cuit: v.optional(v.string()),
 			email: v.optional(v.string()),
 			telefono: v.optional(v.string()),
+			pais: v.optional(v.string()),
+			provincia: v.optional(v.string()),
+			ciudad: v.optional(v.string()),
+			codigo_postal: v.optional(v.string()),
+			calle: v.optional(v.string()),
+			numero: v.optional(v.string()),
+			piso: v.optional(v.string()),
+			departamento: v.optional(v.string()),
 			rol: v.optional(v.picklist(['ninguno', 'cliente', 'proveedor', 'ambos']), 'ninguno'),
 			es_distribuidor: v.optional(v.boolean(), false),
 			porcentaje_compensacion: v.optional(v.pipe(v.number(), v.minValue(0), v.maxValue(100)), 0),
@@ -189,7 +197,7 @@ const ImportarContactosSchema = v.pipe(
 			condiciones_pago: v.optional(v.string())
 		})
 	),
-	v.maxLength(1000, 'El archivo no puede superar 1000 filas')
+	v.maxLength(5000, 'El archivo no puede superar 5000 filas')
 );
 
 export const obtenerContactos = query(
@@ -336,6 +344,14 @@ export const importarContactos = command(ImportarContactosSchema, async (filas) 
 				cuit: fila.cuit || null,
 				email: fila.email || null,
 				telefono: fila.telefono || null,
+				pais: fila.pais || null,
+				provincia: fila.provincia || null,
+				ciudad: fila.ciudad || null,
+				codigo_postal: fila.codigo_postal || null,
+				calle: fila.calle || null,
+				numero: fila.numero || null,
+				piso: fila.piso || null,
+				departamento: fila.departamento || null,
 				es_cliente: esCliente,
 				es_distribuidor: fila.es_distribuidor,
 				porcentaje_compensacion: fila.porcentaje_compensacion,

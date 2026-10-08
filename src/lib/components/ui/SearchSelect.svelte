@@ -49,13 +49,15 @@
 		onChange('');
 	}
 
-	function openOptions(event: FocusEvent) {
+	function openOptions(event?: Event) {
 		isOpen = true;
 		hasTyped = false;
 		searchTerm = selectedLabel;
 		const selectedIndex = options.findIndex((option) => option.value === field?.value?.());
 		activeIndex = selectedIndex >= 0 ? selectedIndex : 0;
-		(event.currentTarget as HTMLInputElement).select();
+		if (event?.currentTarget instanceof HTMLInputElement) {
+			(event.currentTarget as HTMLInputElement).select();
+		}
 	}
 
 	function handleInput(event: Event) {
@@ -103,7 +105,7 @@
 	}
 </script>
 
-<div class="relative {className || ''}">
+<div class="relative {className || ''}" class:z-50={isOpen}>
 	<FormFieldWrapper {label} {id}>
 		<div class="relative">
 			<input
@@ -153,7 +155,7 @@
 		<div
 			id={listboxId}
 			role="listbox"
-			class="absolute z-10 mt-1 max-h-60 w-full overflow-auto rounded-md border border-base-300 bg-base-100 shadow-lg"
+			class="absolute z-50 mt-1 max-h-60 w-full overflow-auto rounded-md border border-base-300 bg-base-100 shadow-lg"
 		>
 			{#each filteredOptions as opt, index (opt.value)}
 				<button
@@ -174,7 +176,7 @@
 	{:else if isOpen && !filteredOptions.length}
 		<div
 			role="status"
-			class="absolute z-10 mt-1 w-full rounded-md border border-base-300 bg-base-100 px-3 py-2 text-sm text-base-content/70 shadow-lg"
+			class="absolute z-50 mt-1 w-full rounded-md border border-base-300 bg-base-100 px-3 py-2 text-sm text-base-content/70 shadow-lg"
 		>
 			No hay resultados
 		</div>

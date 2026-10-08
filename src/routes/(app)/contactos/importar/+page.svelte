@@ -53,12 +53,18 @@
 	}
 
 	async function confirmarImportacion() {
+		importando = true;
+		errores = [];
 		try {
 			const resultado = await importarContactos(filas);
 			toast.success(`${resultado.cantidad} contactos importados`);
 			goto(resolve('/contactos'));
-		} catch {
-			toast.error('No se pudo importar el listado');
+		} catch (error) {
+			const mensaje = error instanceof Error ? error.message : 'No se pudo importar el listado';
+			errores = [mensaje];
+			toast.error(mensaje);
+		} finally {
+			importando = false;
 		}
 	}
 </script>
@@ -116,8 +122,8 @@
 					</div>
 					<div class="flex items-center justify-between gap-3">
 						<span class="text-sm">{filas.length} filas válidas. Se muestran las primeras 10.</span>
-						<button class="btn btn-primary" onclick={confirmarImportacion}
-							>Confirmar importación</button
+						<button class="btn btn-primary" onclick={confirmarImportacion} disabled={importando}
+							>{importando ? 'Importando...' : 'Confirmar importación'}</button
 						>
 					</div>
 				{/if}

@@ -45,15 +45,15 @@
 		...(can(data.user, data.permisos, Modulos.CONFIGURACION)
 			? [
 					{
-						href: Paths.CONFIGURACION,
+						href: Paths.CONFIGURACION_ESTADOS,
 						label: 'Configuración',
 						icon: Settings,
 						subtabs: [
-							{ href: `${Paths.CONFIGURACION}/empresa`, label: 'Datos de la empresa' },
+							{ href: Paths.CONFIGURACION_EMPRESA, label: 'Datos de la empresa' },
 							{ href: Paths.CONFIGURACION_USUARIOS, label: 'Usuarios' },
 							{ href: Paths.CONFIGURACION_EMPLEADOS, label: 'Empleados' },
 							{ href: Paths.CONFIGURACION_ROLES, label: 'Roles' },
-							{ href: Paths.CONFIGURACION, label: 'Catálogos y estados' }
+							{ href: Paths.CONFIGURACION_ESTADOS, label: 'Catálogos y estados' }
 							// { href: Paths.CONFIGURACION_TIPOS_MATERIA_PRIMA, label: 'Tipos de Materiales' }
 						]
 					}

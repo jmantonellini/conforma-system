@@ -32,6 +32,8 @@ export enum Paths {
 	INSUMOS = '/' + Modulos.INSUMOS,
 	ENVIOS = '/' + Modulos.ENVIOS,
 	CONFIGURACION = '/' + Modulos.CONFIGURACION,
+	CONFIGURACION_ESTADOS = '/' + Modulos.CONFIGURACION + '/estados',
+	CONFIGURACION_EMPRESA = '/' + Modulos.CONFIGURACION + '/empresa',
 	CONFIGURACION_USUARIOS = '/' + Modulos.CONFIGURACION + '/usuarios',
 	CONFIGURACION_ROLES = '/' + Modulos.CONFIGURACION + '/roles',
 	CONFIGURACION_EMPLEADOS = '/' + Modulos.CONFIGURACION + '/empleados',

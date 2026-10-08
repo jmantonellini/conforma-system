@@ -4,6 +4,7 @@ import { db } from '$lib/server/db';
 import { roles, permisos, roles_permisos } from '$lib/server/db/schema';
 import { eq } from 'drizzle-orm';
 import { requirePermission } from '$lib/server/auth/permissions';
+import { getCurrentUser } from './usuarios.remote';
 
 const PermisoAsignacionSchema = v.object({
 	rol_id: v.pipe(v.string(), v.transform(Number), v.number()),
@@ -11,14 +12,19 @@ const PermisoAsignacionSchema = v.object({
 });
 
 export const getRoles = query(async () => {
+	await requirePermission('configuracion', 'view');
 	return await db.select().from(roles).orderBy(roles.nombre);
 });
 
 export const getPermisos = query(async () => {
+	await requirePermission('configuracion', 'view');
 	return await db.select().from(permisos).orderBy(permisos.modulo, permisos.accion);
 });
 
 export const getPermisosByRol = query(v.number(), async (rol_id) => {
+	const user = await getCurrentUser();
+	if (!user) throw new Error('No autorizado');
+	if (user.rol?.id !== rol_id) await requirePermission('configuracion', 'view');
 	return await db
 		.select({
 			id: roles_permisos.permiso_id,

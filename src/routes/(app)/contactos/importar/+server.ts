@@ -1,51 +1,12 @@
 import { json } from '@sveltejs/kit';
 import * as XLSX from 'xlsx';
-
-const normalizar = (valor: unknown) =>
-	String(valor ?? '')
-		.trim()
-		.toLowerCase()
-		.normalize('NFD')
-		.replace(/[\u0300-\u036f]/g, '')
-		.replace(/[^a-z0-9]+/g, '_')
-		.replace(/^_|_$/g, '');
-
-const encabezado = (valor: unknown) => {
-	const aliases: Record<string, string> = {
-		razon_social: 'razon_social',
-		nombre_empresa: 'razon_social',
-		nombre: 'nombre',
-		apellido: 'apellido',
-		cuit: 'cuit',
-		email: 'email',
-		correo: 'email',
-		telefono: 'telefono',
-		celular: 'telefono',
-		rol: 'rol',
-		tipo: 'rol',
-		distribuidor: 'es_distribuidor',
-		es_distribuidor: 'es_distribuidor',
-		comision: 'porcentaje_compensacion',
-		porcentaje_comision: 'porcentaje_compensacion',
-		saldo: 'saldo_disponible',
-		saldo_disponible: 'saldo_disponible',
-		codigo_proveedor: 'codigo_proveedor',
-		contacto_proveedor: 'contacto_proveedor',
-		condiciones_pago: 'condiciones_pago'
-	};
-	return aliases[normalizar(valor)];
-};
-
-const numero = (valor: unknown) => {
-	const texto = String(valor ?? '')
-		.trim()
-		.replace(/%$/, '');
-	const normalizado = texto.includes(',') ? texto.replace(/\./g, '').replace(',', '.') : texto;
-	return Number(normalizado);
-};
-
-const booleano = (valor: unknown) =>
-	['true', 'si', 'sí', '1', 'x', 'yes'].includes(normalizar(valor));
+import {
+	booleano,
+	mapearFilaContactoExcel,
+	normalizar,
+	normalizarCabecera,
+	numero
+} from '$lib/server/utils/contactos-importar-excel';
 
 export async function POST({ request }) {
 	const formData = await request.formData();
@@ -64,7 +25,7 @@ export async function POST({ request }) {
 		const hoja = workbook.Sheets[workbook.SheetNames[0]];
 		if (!hoja) return json({ error: 'El Excel no contiene hojas' }, { status: 400 });
 		const filas = XLSX.utils.sheet_to_json<unknown[]>(hoja, { header: 1, raw: true, defval: '' });
-		const cabeceras = (filas.shift() ?? []).map(encabezado);
+		const cabeceras = (filas.shift() ?? []).map(normalizarCabecera);
 		if (!cabeceras.includes('razon_social')) {
 			return json({ error: 'Falta la columna razón social' }, { status: 400 });
 		}
@@ -73,7 +34,10 @@ export async function POST({ request }) {
 		const datos = filas
 			.filter((fila) => fila.some((celda) => String(celda).trim() !== ''))
 			.map((fila, indice) => {
-				const valor = (campo: string) => fila[cabeceras.indexOf(campo)];
+				const filaMapeada = Object.fromEntries(
+					cabeceras.map((cabecera, columna) => [cabecera ?? '', fila[columna]])
+				);
+				const valor = (campo: string) => filaMapeada[campo];
 				const razonSocial = String(valor('razon_social') ?? '').trim();
 				const rol = normalizar(valor('rol')) || 'ninguno';
 				const porcentaje = numero(valor('porcentaje_compensacion') || 0);
@@ -86,12 +50,8 @@ export async function POST({ request }) {
 				if (!Number.isFinite(saldo) || saldo < 0)
 					errores.push(`Fila ${indice + 2}: saldo inválido`);
 				return {
+					...mapearFilaContactoExcel(filaMapeada),
 					razon_social: razonSocial,
-					nombre: String(valor('nombre') ?? '').trim() || undefined,
-					apellido: String(valor('apellido') ?? '').trim() || undefined,
-					cuit: String(valor('cuit') ?? '').trim() || undefined,
-					email: String(valor('email') ?? '').trim() || undefined,
-					telefono: String(valor('telefono') ?? '').trim() || undefined,
 					rol: rol as 'ninguno' | 'cliente' | 'proveedor' | 'ambos',
 					es_distribuidor: booleano(valor('es_distribuidor')),
 					porcentaje_compensacion: porcentaje,

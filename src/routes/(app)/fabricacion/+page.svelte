@@ -1,9 +1,9 @@
 <script lang="ts">
 	import {
-		getOrdenesFabricacion,
 		getEstadosFabricacion,
-		eliminarOrdenFabricacion
-	} from '$lib/remote/fabricacion.remote';
+		getOrdenesFabricacion
+	} from '$lib/remote/fabricacion-consultas.remote';
+	import { eliminarOrdenFabricacion } from '$lib/remote/fabricacion.remote';
 	import { Highlight, Table, PageLayout, Pagination, Modal } from '$lib/components/ui';
 	import { goto, invalidateAll } from '$app/navigation';
 	import { SvelteURLSearchParams } from 'svelte/reactivity';
@@ -65,7 +65,7 @@
 			</div>
 			<select
 				bind:value={estadoFilter}
-				class="select select-sm w-48"
+				class="select w-48 select-sm"
 				onchange={() => {
 					currentPage = 1;
 					handleSearchChange();
@@ -77,7 +77,7 @@
 				{/each}
 			</select>
 		</div>
-		<a href={resolve('/fabricacion/crear')} class="btn btn-sm btn-primary">+ Nueva Orden</a>
+		<a href={resolve('/fabricacion/crear')} class="btn btn-primary btn-sm">+ Nueva Orden</a>
 	</div>
 
 	<div class="card bg-base-100 shadow">

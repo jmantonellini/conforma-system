@@ -32,6 +32,7 @@ export const ProductoSchemaService = v.object({
 	medidas_secundario_diametro: v.optional(v.number()),
 	medidas_secundario_largo: v.optional(v.number()),
 	trombon_diametro_inicial: v.optional(v.number()),
+	trombon_diametro_final: v.optional(v.number()),
 	trombon_largo: v.optional(v.number()),
 	trombon_observaciones: v.optional(v.string()),
 	es_personalizable: v.optional(v.boolean(), false),
@@ -338,6 +339,7 @@ export async function crearProductoServicio(data: {
 	medidas_secundario_diametro?: number;
 	medidas_secundario_largo?: number;
 	trombon_diametro_inicial?: number;
+	trombon_diametro_final?: number;
 	trombon_largo?: number;
 	trombon_observaciones?: string;
 	es_personalizable?: boolean;
@@ -411,6 +413,7 @@ export async function actualizarProductoServicio(data: {
 	medidas_secundario_diametro?: number;
 	medidas_secundario_largo?: number;
 	trombon_diametro_inicial?: number;
+	trombon_diametro_final?: number;
 	trombon_largo?: number;
 	trombon_observaciones?: string;
 	es_personalizable?: boolean;

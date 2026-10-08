@@ -7,8 +7,6 @@ import {
 	adjuntos_cotizacion,
 	notas_cotizacion,
 	estados_cotizacion,
-	contactos,
-	empleados,
 	usuarios,
 	roles,
 	permisos,
@@ -16,18 +14,11 @@ import {
 	pedidos,
 	lineas_pedido,
 	pedido_insumos,
-	ordenes_fabricacion,
 	estados_pedido,
-	productos,
-	logs_cambios_estado,
-	transiciones_estado,
 	notificaciones,
-	insumos,
-	producto_insumos
+	insumos
 } from '$lib/server/db/schema';
-import { redirect } from '@sveltejs/kit';
-import { resolve } from '$app/paths';
-import { and, count, desc, eq, ilike, or, sql, aliasedTable } from 'drizzle-orm';
+import { and, desc, eq, or } from 'drizzle-orm';
 import { unlink } from 'fs/promises';
 import path from 'path';
 import { env } from '$env/dynamic/private';
@@ -35,9 +26,15 @@ import { getCurrentUser } from './usuarios.remote';
 import { requirePermission } from '$lib/server/auth/permissions';
 import { generarNumeroPedido } from '../server/utils/pedidos';
 import { CotizacionSchema, LineaCotizacionSchema } from './cotizaciones.schema';
+import {
+	getCotizacionById,
+	getCotizaciones,
+	getHistorialCotizacion,
+	getNotasCotizacion
+} from './cotizaciones-consultas.remote';
 import { getProductoConReceta } from './productos.remote';
 import { obtenerPrecioProducto } from '$lib/server/services/productos.service';
-import { calcularPrecioConDescuento } from '$lib/utils/precios';
+import { calcularIva21, calcularPrecioConDescuento } from '$lib/utils/precios';
 import { es } from '$lib/i18n/es';
 import {
 	aplicarCambioDeEstado,
@@ -89,35 +86,6 @@ async function obtenerEstadoPorSlug(slug: string) {
 		.limit(1);
 	return estado;
 }
-
-const crearCondicionBusquedaCotizacion = ({
-	search,
-	estadoId,
-	asignadaA
-}: {
-	search?: string;
-	estadoId?: number;
-	asignadaA?: number;
-}) => {
-	const condiciones = [];
-
-	if (search) {
-		const termino = `%${search}%`;
-		condiciones.push(
-			or(
-				ilike(cotizaciones.numero_cotizacion, termino),
-				ilike(cotizaciones.cliente_nombre, termino),
-				ilike(contactos.razon_social, termino),
-				ilike(contactos.cuit, termino)
-			)
-		);
-	}
-
-	if (estadoId) condiciones.push(eq(cotizaciones.estado_id, estadoId));
-	if (asignadaA) condiciones.push(eq(cotizaciones.asignada_a, asignadaA));
-
-	return condiciones.length ? and(...condiciones) : undefined;
-};
 
 async function notificarActualizacionCotizacion({
 	cotizacionId,
@@ -230,232 +198,6 @@ async function notificarCambioEstadoCotizacion({
 				: undefined
 	});
 }
-
-export const getCotizaciones = query(
-	v.object({
-		search: v.optional(v.string()),
-		estadoId: v.optional(v.number()),
-		asignadaA: v.optional(v.number()),
-		page: v.optional(v.pipe(v.number(), v.toMinValue(1)), 1),
-		limit: v.optional(v.pipe(v.number(), v.minValue(1), v.maxValue(100)), 10)
-	}),
-	async ({ search, estadoId, asignadaA, page = 1, limit = 10 }) => {
-		const offset = (page - 1) * limit;
-		const where = crearCondicionBusquedaCotizacion({ search, estadoId, asignadaA });
-
-		const data = await db
-			.select({
-				id: cotizaciones.id,
-				numero_cotizacion: cotizaciones.numero_cotizacion,
-				cliente_nombre: sql<string>`
-					COALESCE(
-						${contactos.razon_social},
-						${cotizaciones.cliente_nombre}
-					)`.as('cliente_nombre'),
-				canal: cotizaciones.canal,
-				created_at: cotizaciones.created_at,
-				precio_total: cotizaciones.precio_total,
-				estado_id: cotizaciones.estado_id,
-				estado_nombre: estados_cotizacion.nombre,
-				estado_color: estados_cotizacion.color,
-				estado_slug: estados_cotizacion.slug,
-				asignado_nombre: empleados.nombre,
-				asignado_apellido: empleados.apellido
-			})
-			.from(cotizaciones)
-			.leftJoin(contactos, eq(cotizaciones.contacto_id, contactos.id))
-			.leftJoin(estados_cotizacion, eq(cotizaciones.estado_id, estados_cotizacion.id))
-			.leftJoin(empleados, eq(cotizaciones.asignada_a, empleados.id))
-			.where(where)
-			.orderBy(desc(cotizaciones.id))
-			.limit(limit)
-			.offset(offset);
-
-		const [totalResult] = await db.select({ count: count() }).from(cotizaciones).where(where);
-
-		return {
-			data,
-			total: totalResult?.count || 0,
-			totalPages: Math.ceil((totalResult?.count || 0) / limit),
-			currentPage: page
-		};
-	}
-);
-
-export const getCotizacionById = query(v.number(), async (id) => {
-	const [cotizacion] = await db
-		.select({
-			id: cotizaciones.id,
-			numero_cotizacion: cotizaciones.numero_cotizacion,
-			canal: cotizaciones.canal,
-			descripcion: cotizaciones.descripcion,
-			observaciones: cotizaciones.observaciones,
-			precio_total: cotizaciones.precio_total,
-			validez_dias: cotizaciones.validez_dias,
-			fecha_envio: cotizaciones.fecha_envio,
-			created_at: cotizaciones.created_at,
-			pedido_id: cotizaciones.pedido_id,
-			cliente: {
-				id: contactos.id,
-				nombre: contactos.razon_social,
-				apellido: sql<string | null>`NULL`,
-				razon_social: contactos.razon_social,
-				telefono: contactos.telefono,
-				email: contactos.email
-			},
-			cliente_nombre: cotizaciones.cliente_nombre,
-			cliente_telefono: cotizaciones.cliente_telefono,
-			cliente_email: cotizaciones.cliente_email,
-			estado: {
-				id: cotizaciones.estado_id,
-				nombre: estados_cotizacion.nombre,
-				color: estados_cotizacion.color,
-				slug: estados_cotizacion.slug
-			},
-			asignado: {
-				id: empleados.id,
-				nombre: empleados.nombre,
-				apellido: empleados.apellido
-			},
-			creada_por: usuarios.username
-		})
-		.from(cotizaciones)
-		.leftJoin(contactos, eq(cotizaciones.contacto_id, contactos.id))
-		.leftJoin(estados_cotizacion, eq(cotizaciones.estado_id, estados_cotizacion.id))
-		.leftJoin(empleados, eq(cotizaciones.asignada_a, empleados.id))
-		.leftJoin(usuarios, eq(cotizaciones.creada_por, usuarios.id))
-		.where(eq(cotizaciones.id, id))
-		.limit(1);
-
-	if (!cotizacion) throw new Error('Cotización no encontrada');
-
-	// Transiciones permitidas desde el estado actual
-	const transiciones = await db
-		.select({
-			id: transiciones_estado.id,
-			estado_destino_id: transiciones_estado.estado_destino_id,
-			destino_nombre: estados_cotizacion.nombre,
-			destino_slug: estados_cotizacion.slug,
-			destino_color: estados_cotizacion.color
-		})
-		.from(transiciones_estado)
-		.innerJoin(estados_cotizacion, eq(transiciones_estado.estado_destino_id, estados_cotizacion.id))
-		.where(
-			and(
-				eq(transiciones_estado.tipo, 'cotizacion'),
-				eq(transiciones_estado.estado_origen_id, cotizacion.estado.id)
-			)
-		);
-
-	const lineas = await db
-		.select({
-			id: lineas_cotizacion.id,
-			producto_id: lineas_cotizacion.producto_id,
-			insumo_id: lineas_cotizacion.insumo_id,
-			producto_nombre: productos.nombre,
-			insumo_nombre: insumos.nombre,
-			insumo_unidad: insumos.unidad,
-			es_personalizado: lineas_cotizacion.es_personalizado,
-			descripcion: lineas_cotizacion.descripcion,
-			cantidad: lineas_cotizacion.cantidad,
-			precio_unitario: lineas_cotizacion.precio_unitario,
-			precio_lista_unitario: lineas_cotizacion.precio_lista_unitario,
-			margen_porcentaje: lineas_cotizacion.margen_porcentaje,
-			descuento_porcentaje: lineas_cotizacion.descuento_porcentaje,
-			justificacion_descuento: lineas_cotizacion.justificacion_descuento,
-			subtotal: lineas_cotizacion.subtotal,
-			costo_mano_obra: lineas_cotizacion.costo_mano_obra,
-			costo_materiales: lineas_cotizacion.costo_materiales,
-			insumos_snapshot: lineas_cotizacion.insumos_snapshot
-		})
-		.from(lineas_cotizacion)
-		.leftJoin(productos, eq(lineas_cotizacion.producto_id, productos.id))
-		.leftJoin(insumos, eq(lineas_cotizacion.insumo_id, insumos.id))
-		.where(eq(lineas_cotizacion.cotizacion_id, id))
-		.orderBy(lineas_cotizacion.orden_linea);
-
-	const adjuntos = await db
-		.select()
-		.from(adjuntos_cotizacion)
-		.where(eq(adjuntos_cotizacion.cotizacion_id, id))
-		.orderBy(desc(adjuntos_cotizacion.id));
-
-	const ordenes = cotizacion.pedido_id
-		? await db
-				.select({ id: ordenes_fabricacion.id })
-				.from(ordenes_fabricacion)
-				.innerJoin(lineas_pedido, eq(ordenes_fabricacion.linea_pedido_id, lineas_pedido.id))
-				.where(eq(lineas_pedido.pedido_id, cotizacion.pedido_id))
-				.limit(2)
-		: [];
-
-	return {
-		cotizacion: {
-			...cotizacion,
-			transiciones,
-			navegacion: {
-				pedido_id: cotizacion.pedido_id,
-				orden_fabricacion_id: ordenes.length === 1 ? ordenes[0].id : null
-			}
-		},
-		lineas,
-		adjuntos
-	};
-});
-
-export const getEstadosCotizacion = query(async () => {
-	return await db.select().from(estados_cotizacion).orderBy(estados_cotizacion.orden);
-});
-
-export const getHistorialCotizacion = query(v.number(), async (cotizacionId) => {
-	const estadoAnterior = aliasedTable(estados_cotizacion, 'estado_anterior');
-	const estadoNuevo = aliasedTable(estados_cotizacion, 'estado_nuevo');
-
-	return await db
-		.select({
-			id: logs_cambios_estado.id,
-			estado_anterior: {
-				nombre: estadoAnterior.nombre,
-				color: estadoAnterior.color
-			},
-			estado_nuevo: {
-				nombre: estadoNuevo.nombre,
-				color: estadoNuevo.color
-			},
-			comentario: logs_cambios_estado.comentario,
-			fecha: logs_cambios_estado.created_at,
-			empleado: empleados.nombre
-		})
-		.from(logs_cambios_estado)
-		.leftJoin(usuarios, eq(logs_cambios_estado.usuario_id, usuarios.id))
-		.leftJoin(empleados, eq(usuarios.empleado_id, empleados.id))
-		.leftJoin(estadoAnterior, eq(logs_cambios_estado.estado_anterior_id, estadoAnterior.id))
-		.leftJoin(estadoNuevo, eq(logs_cambios_estado.estado_nuevo_id, estadoNuevo.id))
-		.where(
-			and(
-				eq(logs_cambios_estado.entidad_tipo, 'cotizacion'),
-				eq(logs_cambios_estado.entidad_id, cotizacionId)
-			)
-		)
-		.orderBy(desc(logs_cambios_estado.created_at));
-});
-
-export const getNotasCotizacion = query(v.number(), async (cotizacionId) => {
-	await requirePermission('cotizaciones', 'view');
-
-	return await db
-		.select({
-			id: notas_cotizacion.id,
-			contenido: notas_cotizacion.contenido,
-			fecha: notas_cotizacion.created_at,
-			autor: sql<string>`coalesce(nullif(concat_ws(' ', ${empleados.nombre}, ${empleados.apellido}), ''), 'Usuario')`
-		})
-		.from(notas_cotizacion)
-		.leftJoin(usuarios, eq(notas_cotizacion.usuario_id, usuarios.id))
-		.leftJoin(empleados, eq(usuarios.empleado_id, empleados.id))
-		.where(eq(notas_cotizacion.cotizacion_id, cotizacionId))
-		.orderBy(desc(notas_cotizacion.created_at));
-});
 
 export const agregarNotaCotizacion = command(
 	v.object({
@@ -636,9 +378,19 @@ export const cotizarCotizacion = command(
 	v.object({
 		cotizacion_id: v.number(),
 		validez_dias: v.pipe(v.number(), v.toMinValue(1)),
+		precio_total: v.optional(v.pipe(v.number(), v.toMinValue(0))),
+		incluir_iva: v.optional(v.boolean(), false),
+		condiciones_pago: v.optional(v.pipe(v.string(), v.maxLength(1000))),
 		lineas: v.pipe(v.array(LineaCotizacionSchema), v.minLength(1, 'Agregá al menos una línea'))
 	}),
-	async ({ cotizacion_id, validez_dias, lineas }) => {
+	async ({
+		cotizacion_id,
+		validez_dias,
+		precio_total: precioTotalFinal,
+		incluir_iva: incluirIva,
+		condiciones_pago: condicionesPago,
+		lineas
+	}) => {
 		await requirePermission('cotizaciones', 'cotizar');
 		const user = await getCurrentUser();
 		if (!user) throw new Error('No autorizado');
@@ -667,20 +419,37 @@ export const cotizarCotizacion = command(
 				let insumos_snapshot: unknown = null;
 
 				if (linea.producto_id) {
-					const [{ receta }, precioProducto] = await Promise.all([
+					const [{ receta, recetaDirecta, componentes }, precioProducto] = await Promise.all([
 						getProductoConReceta(Number(linea.producto_id)),
 						obtenerPrecioProducto(Number(linea.producto_id))
 					]);
 
-					insumos_snapshot = receta.map((material) => ({
-						insumo_id: material.insumo_id,
-						codigo: material.codigo,
-						nombre: material.nombre,
-						cantidad: material.cantidad,
-						costo_unitario: material.costo_unitario ?? 0,
-						unidad: material.unidad,
-						subtotal: redondearMoneda((material.cantidad || 0) * (material.costo_unitario ?? 0))
-					}));
+					insumos_snapshot = recetaDirecta.map((lineaReceta) => {
+						if (lineaReceta.insumo_id) {
+							const material = receta.find((item) => item.insumo_id === lineaReceta.insumo_id);
+							return {
+								insumo_id: lineaReceta.insumo_id,
+								codigo: material?.codigo ?? null,
+								nombre: material?.nombre ?? 'Insumo',
+								cantidad: lineaReceta.cantidad,
+								costo_unitario: material?.costo_unitario ?? 0,
+								unidad: material?.unidad ?? '',
+								subtotal: (lineaReceta.cantidad || 0) * (material?.costo_unitario ?? 0)
+							};
+						}
+
+						const nombre =
+							componentes.find((componente) => componente.componente_id === lineaReceta.producto_id)
+								?.nombre ?? 'Componente';
+						return {
+							producto_id: lineaReceta.producto_id ?? null,
+							nombre: `${nombre} (${lineaReceta.cantidad}x)`,
+							cantidad: lineaReceta.cantidad,
+							unidad: 'subproducto',
+							costo_unitario: 0,
+							subtotal: 0
+						};
+					});
 					costo_materiales = precioProducto.costo_materiales;
 					margen_porcentaje = precioProducto.margen_porcentaje;
 					precio_lista_unitario = redondearMoneda(
@@ -703,7 +472,7 @@ export const cotizarCotizacion = command(
 					precio_lista_unitario = redondearMoneda(
 						linea.precio_lista_unitario ?? material.costo_unitario
 					);
-					if (precio_lista_unitario < material.costo_unitario) {
+					if (precio_lista_unitario < redondearMoneda(material.costo_unitario)) {
 						throw new Error(
 							'El precio de lista del insumo no puede ser menor al costo; aplicá un descuento justificado'
 						);
@@ -730,7 +499,9 @@ export const cotizarCotizacion = command(
 					descuento_porcentaje,
 					justificacion_descuento ?? undefined
 				);
-				precio_total = redondearMoneda(precio_total + linea.cantidad * precio_unitario);
+				if (!linea.insumo_id) {
+					precio_total = redondearMoneda(precio_total + linea.cantidad * precio_unitario);
+				}
 
 				await tx.insert(lineas_cotizacion).values({
 					cotizacion_id,
@@ -752,9 +523,18 @@ export const cotizarCotizacion = command(
 				});
 			}
 
+			const totalCalculado = redondearMoneda(
+				precio_total + (incluirIva ? calcularIva21(precio_total) : 0)
+			);
 			await tx
 				.update(cotizaciones)
-				.set({ precio_total, validez_dias, updated_at: new Date() })
+				.set({
+					precio_total: redondearMoneda(precioTotalFinal ?? totalCalculado),
+					incluir_iva: incluirIva,
+					condiciones_pago: condicionesPago?.trim() ?? null,
+					validez_dias,
+					updated_at: new Date()
+				})
 				.where(eq(cotizaciones.id, cotizacion_id));
 		});
 
@@ -798,6 +578,10 @@ export const cambiarEstadoCotizacion = command(
 			.from(estados_cotizacion)
 			.where(eq(estados_cotizacion.id, estado_destino_id))
 			.limit(1);
+		const comentarioNormalizado = comentario?.trim() || null;
+		if (estadoDestino?.slug === 'rechazada' && !comentarioNormalizado) {
+			throw new Error('Indicá el motivo del rechazo');
+		}
 
 		await db.transaction(async (tx) => {
 			const updates: Partial<typeof cotizaciones.$inferSelect> = {
@@ -816,7 +600,7 @@ export const cambiarEstadoCotizacion = command(
 				usuarioId: user.id,
 				estadoAnteriorId: cotizacion.estado_id,
 				estadoNuevoId: estado_destino_id,
-				comentario: comentario ?? null,
+				comentario: comentarioNormalizado,
 				createdAt: now,
 				actualizarEntidad: async (txActual: typeof tx) => {
 					await txActual
@@ -834,7 +618,7 @@ export const cambiarEstadoCotizacion = command(
 			estadoDestino: estadoDestino
 				? { slug: estadoDestino.slug, nombre: estadoDestino.nombre }
 				: undefined,
-			comentario
+			comentario: comentarioNormalizado ?? undefined
 		});
 
 		getCotizaciones({ search: '', page: 1 }).refresh();
@@ -888,7 +672,13 @@ export const convertirCotizacionAPedido = command(v.number(), async (cotizacionI
 		.where(eq(estados_pedido.slug, 'pendiente'))
 		.limit(1);
 
-	const precio_total = redondearMoneda(lineas.reduce((sum, l) => sum + (l.subtotal ?? 0), 0));
+	const precio_total =
+		cotizacion.precio_total ??
+		redondearMoneda(
+			lineas
+				.filter((linea) => !linea.insumo_id)
+				.reduce((sum, linea) => sum + (linea.subtotal ?? 0), 0)
+		);
 
 	// Variable para guardar el ID del pedido creado
 	let pedidoId: number;

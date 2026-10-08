@@ -298,6 +298,15 @@
 									)}
 								/>
 							</FormFieldWrapper>
+							<FormFieldWrapper label="Diámetro Final" id="trombon_diametro_final">
+								<input
+									class="remove-arrow input"
+									{...form.fields.trombon_diametro_final.as(
+										'number',
+										data.producto.trombon_diametro_final ?? 0
+									)}
+								/>
+							</FormFieldWrapper>
 							<FormFieldWrapper label="Largo" id="trombon_largo">
 								<input class="remove-arrow input" {...form.fields.trombon_largo.as('number')} />
 							</FormFieldWrapper>
