@@ -320,6 +320,7 @@
 				bloqueada={!!cotizacion.pedido_id}
 				validezInicial={cotizacion.validez_dias ?? 15}
 				precioTotalInicial={cotizacion.precio_total}
+				descuentoGlobalInicial={cotizacion.descuento_global_porcentaje}
 				incluirIvaInicial={cotizacion.incluir_iva}
 				condicionesPagoInicial={cotizacion.condiciones_pago}
 				lineasIniciales={data.lineas}

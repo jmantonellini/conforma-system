@@ -156,6 +156,7 @@ export const cotizaciones = pgTable('cotizaciones', {
 	asignada_a: integer('asignada_a').references(() => empleados.id, { onDelete: 'set null' }),
 	creada_por: integer('creada_por').references(() => usuarios.id, { onDelete: 'set null' }),
 	precio_total: real('precio_total'),
+	descuento_global_porcentaje: real('descuento_global_porcentaje').notNull().default(0),
 	incluir_iva: boolean('incluir_iva').notNull().default(false),
 	condiciones_pago: text('condiciones_pago'),
 	validez_dias: integer('validez_dias').default(15),
@@ -737,6 +738,7 @@ export const tareas = pgTable('tareas', {
 	})
 		.notNull()
 		.default(EstadosTarea.PENDIENTE),
+	archivada: boolean('archivada').notNull().default(false),
 	orden: integer('orden').default(0),
 	prioridad: text('prioridad', { enum: [Prioridades.BAJA, Prioridades.MEDIA, Prioridades.ALTA] })
 		.notNull()

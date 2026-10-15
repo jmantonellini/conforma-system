@@ -196,13 +196,6 @@
 
 <PageLayout>
 	<div class="flex flex-col gap-6">
-		<div>
-			<h1 class="text-2xl font-bold">Configuración de catálogos</h1>
-			<p class="mt-1 text-sm text-base-content/60">
-				Administrá categorías y estados usados por el ERP.
-			</p>
-		</div>
-
 		<div role="tablist" class="tabs-box tabs w-fit">
 			<button
 				class:tab-active={activeSection === 'categorias'}

@@ -8,7 +8,7 @@
 	import { formatearFecha } from '$lib/utils/fechas';
 
 	type TareaConEmpleado = Tarea & {
-		empleado?: { id: number | null; nombre: string | null; apellido?: string | null } | null;
+		empleado: { id: number; nombre: string; apellido: string } | null;
 	};
 
 	let {
@@ -18,6 +18,8 @@
 		tareas = [],
 		onEstadoChange = () => {},
 		onEliminar = () => {},
+		onEditar = () => {},
+		onArchivar = () => {},
 		onReorder = () => {}
 	}: {
 		estado: EstadosTarea;
@@ -26,6 +28,8 @@
 		tareas: TareaConEmpleado[];
 		onEstadoChange?: (id: number, nuevoEstado: EstadosTarea) => void;
 		onEliminar?: (id: number) => void;
+		onEditar?: (tarea: TareaConEmpleado) => void;
+		onArchivar?: (id: number) => void;
 		onReorder?: (items: TareaConEmpleado[]) => void;
 	} = $props();
 
@@ -145,13 +149,34 @@
 					<div class="card-body p-4">
 						<div class="flex items-start justify-between gap-2">
 							<h3 class="card-title text-base">{tarea.titulo}</h3>
-							<button
-								class="btn btn-circle btn-ghost text-error opacity-0 transition-opacity btn-xs group-hover:opacity-100"
-								onclick={() => onEliminar(tarea.id)}
-								title="Eliminar tarea"
+							<div
+								class="flex items-center gap-1 opacity-0 transition-opacity group-hover:opacity-100"
 							>
-								✕
-							</button>
+								<button
+									type="button"
+									class="btn btn-circle btn-ghost btn-xs"
+									onclick={() => onEditar(tarea)}
+									title="Editar tarea"
+								>
+									✎
+								</button>
+								<button
+									type="button"
+									class="btn btn-circle btn-ghost text-warning btn-xs"
+									onclick={() => onArchivar(tarea.id)}
+									title="Archivar tarea"
+								>
+									🗄
+								</button>
+								<button
+									type="button"
+									class="btn btn-circle btn-ghost text-error btn-xs"
+									onclick={() => onEliminar(tarea.id)}
+									title="Eliminar tarea"
+								>
+									✕
+								</button>
+							</div>
 						</div>
 
 						{#if tarea.descripcion}

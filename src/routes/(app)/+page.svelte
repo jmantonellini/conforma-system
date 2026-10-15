@@ -3,6 +3,8 @@
 		getTareas,
 		crearTarea,
 		actualizarEstadoTarea,
+		actualizarTarea,
+		archivarTarea,
 		eliminarTarea,
 		reordenarTareas
 	} from '$lib/remote/tareas.remote';
@@ -25,7 +27,51 @@
 	let empleados = $derived(await getEmpleados());
 	let { ordenes: ordenesActivas } = $derived(await getOrdenesFabricacion({ soloActivas: true }));
 	let showModal = $state(false);
+	let modalMode = $state<'create' | 'edit'>('create');
+	let tareaEditandoId = $state<number | null>(null);
+	let tareaForm = $state({
+		titulo: '',
+		descripcion: '',
+		fecha_entrega: '',
+		asignado_a: ''
+	});
 	const form = crearTarea;
+
+	function formatearFechaInput(value: Date | string | null | undefined) {
+		if (!value) return '';
+		const fecha = new Date(value);
+		if (Number.isNaN(fecha.getTime())) return '';
+		const offset = fecha.getTimezoneOffset();
+		return new Date(fecha.getTime() - offset * 60000).toISOString().slice(0, 10);
+	}
+
+	function resetTareaForm() {
+		tareaForm = {
+			titulo: '',
+			descripcion: '',
+			fecha_entrega: '',
+			asignado_a: ''
+		};
+	}
+
+	function abrirNuevaTarea() {
+		modalMode = 'create';
+		tareaEditandoId = null;
+		resetTareaForm();
+		showModal = true;
+	}
+
+	function abrirEditarTarea(tarea: (typeof tareas)[number]) {
+		modalMode = 'edit';
+		tareaEditandoId = tarea.id;
+		tareaForm = {
+			titulo: tarea.titulo,
+			descripcion: tarea.descripcion ?? '',
+			fecha_entrega: formatearFechaInput(tarea.fecha_entrega),
+			asignado_a: tarea.asignado_a ? String(tarea.asignado_a) : ''
+		};
+		showModal = true;
+	}
 
 	async function handleEstadoChange(id: number, nuevoEstado: EstadosTarea) {
 		tareas = tareas.map((t) => (t.id === id ? { ...t, estado: nuevoEstado } : t));
@@ -47,13 +93,41 @@
 			toast.success('Tarea eliminada');
 		}
 	}
+
+	async function handleArchivar(id: number) {
+		if (confirm('¿Archivar esta tarea?')) {
+			tareas = tareas.filter((t) => t.id !== id);
+			await archivarTarea({ id: String(id), archivada: true });
+			toast.success('Tarea archivada');
+		}
+	}
+
+	async function handleGuardarEdicion(event: SubmitEvent) {
+		event.preventDefault();
+		if (tareaEditandoId === null) return;
+		if (!tareaForm.titulo.trim()) {
+			toast.error('El título es requerido');
+			return;
+		}
+
+		await actualizarTarea({
+			id: String(tareaEditandoId),
+			titulo: tareaForm.titulo.trim(),
+			descripcion: tareaForm.descripcion.trim() || undefined,
+			fecha_entrega: tareaForm.fecha_entrega || undefined,
+			asignado_a: tareaForm.asignado_a || undefined
+		});
+		tareas = await getTareas();
+		showModal = false;
+		resetTareaForm();
+		tareaEditandoId = null;
+		toast.success('Tarea actualizada');
+	}
 </script>
 
 <PageLayout>
 	<div class="mb-6 flex items-center justify-end">
-		<button class="btn btn-primary btn-sm" onclick={() => (showModal = true)}>
-			+ Nueva Tarea
-		</button>
+		<button class="btn btn-primary btn-sm" onclick={abrirNuevaTarea}> + Nueva Tarea </button>
 	</div>
 
 	<!-- KANBAN: Tareas accionables -->
@@ -62,6 +136,8 @@
 		onEstadoChange={handleEstadoChange}
 		onReorder={handleReorder}
 		onEliminar={handleEliminar}
+		onEditar={abrirEditarTarea}
+		onArchivar={handleArchivar}
 	/>
 
 	<!-- PEDIDOS ACTIVOS: Contexto de negocio -->
@@ -132,58 +208,105 @@
 	</div>
 </PageLayout>
 
-<Modal bind:open={showModal} title="Nueva Tarea" onClose={() => (showModal = false)}>
-	<form
-		{...form.enhance(async (formInstance) => {
-			try {
-				if (await formInstance.submit()) {
-					toast.success('Tarea creada');
-					tareas = await getTareas();
-					showModal = false;
-					formInstance.element.reset();
-				} else {
-					toast.error('Error de validación');
+<Modal
+	bind:open={showModal}
+	title={modalMode === 'create' ? 'Nueva Tarea' : 'Editar Tarea'}
+	onClose={() => {
+		showModal = false;
+		if (modalMode === 'edit') {
+			resetTareaForm();
+			tareaEditandoId = null;
+		}
+	}}
+>
+	{#if modalMode === 'create'}
+		<form
+			{...form.enhance(async (formInstance) => {
+				try {
+					if (await formInstance.submit()) {
+						toast.success('Tarea creada');
+						tareas = await getTareas();
+						showModal = false;
+						formInstance.element.reset();
+					} else {
+						toast.error('Error de validación');
+					}
+				} catch (error) {
+					console.log(error);
+
+					toast.error('Error del servidor');
 				}
-			} catch (error) {
-				console.log(error);
-
-				toast.error('Error del servidor');
-			}
-		})}
-		id="tarea-form"
-	>
-		<div class="space-y-4">
-			<FormFieldWrapper id="titulo" label="Título" required>
-				<input class="input w-full" {...form.fields.titulo.as('text')} />
-			</FormFieldWrapper>
-
-			<FormFieldWrapper id="descripcion" label="Descripción">
-				<textarea class="textarea w-full" rows="3" {...form.fields.descripcion.as('text')}>
-				</textarea>
-			</FormFieldWrapper>
-
-			<div class="grid grid-cols-2 gap-4">
-				<FormFieldWrapper id="fecha_entrega" label="Fecha de entrega">
-					<input class="input w-full" {...form.fields.fecha_entrega.as('date')} />
+			})}
+			id="tarea-form"
+		>
+			<div class="space-y-4">
+				<FormFieldWrapper id="titulo" label="Título" required>
+					<input class="input w-full" {...form.fields.titulo.as('text')} />
 				</FormFieldWrapper>
 
-				<FormFieldWrapper id="asignado_a" label="Asignar a">
-					<select class="select w-full" {...form.fields.asignado_a.as('select')}>
-						<option value="">Sin asignar</option>
-						{#each empleados as emp (emp.id)}
-							<option value={String(emp.id)}>{emp.nombre} {emp.apellido}</option>
-						{/each}
-					</select>
+				<FormFieldWrapper id="descripcion" label="Descripción">
+					<textarea class="textarea w-full" rows="3" {...form.fields.descripcion.as('text')}>
+					</textarea>
 				</FormFieldWrapper>
+
+				<div class="grid grid-cols-2 gap-4">
+					<FormFieldWrapper id="fecha_entrega" label="Fecha de entrega">
+						<input class="input w-full" {...form.fields.fecha_entrega.as('date')} />
+					</FormFieldWrapper>
+
+					<FormFieldWrapper id="asignado_a" label="Asignar a">
+						<select class="select w-full" {...form.fields.asignado_a.as('select')}>
+							<option value="">Sin asignar</option>
+							{#each empleados as emp (emp.id)}
+								<option value={String(emp.id)}>{emp.nombre} {emp.apellido}</option>
+							{/each}
+						</select>
+					</FormFieldWrapper>
+				</div>
 			</div>
-		</div>
-		<FormErrors {form} />
-	</form>
+			<FormErrors {form} />
+		</form>
+	{:else}
+		<form id="editar-tarea-form" onsubmit={handleGuardarEdicion}>
+			<div class="space-y-4">
+				<FormFieldWrapper id="titulo-editar" label="Título" required>
+					<input
+						class="input w-full"
+						bind:value={tareaForm.titulo}
+						placeholder="Título de la tarea"
+					/>
+				</FormFieldWrapper>
+
+				<FormFieldWrapper id="descripcion-editar" label="Descripción">
+					<textarea class="textarea w-full" rows="3" bind:value={tareaForm.descripcion}></textarea>
+				</FormFieldWrapper>
+
+				<div class="grid grid-cols-2 gap-4">
+					<FormFieldWrapper id="fecha-entrega-editar" label="Fecha de entrega">
+						<input class="input w-full" type="date" bind:value={tareaForm.fecha_entrega} />
+					</FormFieldWrapper>
+
+					<FormFieldWrapper id="asignado-editar" label="Asignar a">
+						<select class="select w-full" bind:value={tareaForm.asignado_a}>
+							<option value="">Sin asignar</option>
+							{#each empleados as emp (emp.id)}
+								<option value={String(emp.id)}>{emp.nombre} {emp.apellido}</option>
+							{/each}
+						</select>
+					</FormFieldWrapper>
+				</div>
+			</div>
+		</form>
+	{/if}
 
 	{#snippet actions()}
 		<button class="btn" onclick={() => (showModal = false)}>Cancelar</button>
-		<button type="submit" class="btn btn-primary" form="tarea-form" disabled={!!form.pending}>
-			{form.pending ? 'Creando...' : 'Crear'}
-		</button>
+		{#if modalMode === 'create'}
+			<button type="submit" class="btn btn-primary" form="tarea-form" disabled={!!form.pending}>
+				{form.pending ? 'Creando...' : 'Crear'}
+			</button>
+		{:else}
+			<button type="submit" class="btn btn-primary" form="editar-tarea-form">Guardar</button>
+		{/if}
 	{/snippet}
 </Modal>

@@ -18,11 +18,13 @@ export enum Modulos {
 	FABRICACION = 'fabricacion',
 	CONFIGURACION = 'configuracion',
 	INSUMOS = 'insumos',
-	ENVIOS = 'envios'
+	ENVIOS = 'envios',
+	TAREAS = 'tareas'
 }
 
 export enum Paths {
-	TAREAS = '/',
+	INICIO = '/',
+	TAREAS = '/tareas',
 	LOGIN = '/login',
 	PRODUCTOS = '/' + Modulos.PRODUCTOS,
 	CONTACTOS = '/' + Modulos.CONTACTOS,

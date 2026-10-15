@@ -4,6 +4,7 @@
 	import { SideBar } from '$lib/components/ui';
 	import {
 		Fabricacion,
+		Graph,
 		Price,
 		Producto,
 		Puzzle,
@@ -20,6 +21,7 @@
 
 	// === Tabs calculados desde data (única fuente de verdad) ===
 	const tabs = $derived([
+		{ href: Paths.INICIO, label: 'Inicio', icon: Graph },
 		{ href: Paths.TAREAS, label: 'Tareas', icon: Rocket },
 		...(can(data.user, data.permisos, Modulos.COTIZACIONES)
 			? [{ href: Paths.COTIZACIONES, label: 'Cotizaciones', icon: Price }]

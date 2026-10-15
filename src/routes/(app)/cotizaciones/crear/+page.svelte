@@ -83,10 +83,11 @@
 					if (await form.submit()) {
 						const cotizacionId = form.result?.cotizacionId;
 						if (!cotizacionId) throw new Error('No se recibió el número de cotización');
+						if (form.result?.clienteCreado) toast.success('Cliente creado');
+						toast.success('Cotización creada');
 						subiendoArchivos = true;
 						try {
 							await subirArchivos(cotizacionId);
-							toast.success('Cotización creada');
 						} catch {
 							toast.warning(
 								'La cotización se creó, pero no se pudieron subir todos los archivos. Podés reintentarlo desde el detalle.'
@@ -103,7 +104,7 @@
 					toast.error('Error del servidor');
 				}
 			})}
-			class="space-y-6"
+			class="space-y-4"
 		>
 			<!-- Contacto -->
 			<fieldset class="fieldset rounded-box border border-base-300 bg-base-200 p-4">
@@ -112,19 +113,11 @@
 				<div class="grid gap-4 md:grid-cols-4">
 					<SearchSelect
 						id="contacto_id"
-						label="Cliente (opcional)"
+						label="Razón Social (opcional)"
 						options={clientesOptions}
-						placeholder="Buscar cliente cargado..."
+						placeholder="Buscar razón social cargada..."
 						field={form.fields.contacto_id}
 						onChange={completarContacto}
-					/>
-
-					<SearchSelect
-						id="contacto_distribuidor_id"
-						label="Distribuidor (opcional)"
-						options={distribuidoresOptions}
-						placeholder="Buscar distribuidor..."
-						field={form.fields.contacto_distribuidor_id}
 					/>
 
 					<FormFieldWrapper label="Nombre del contacto" id="cliente_nombre" required>
@@ -147,6 +140,14 @@
 					<FormFieldWrapper label="Email" id="cliente_email">
 						<input class="input" placeholder="Opcional" {...form.fields.cliente_email.as('text')} />
 					</FormFieldWrapper>
+
+					<SearchSelect
+						id="contacto_distribuidor_id"
+						label="Distribuidor (opcional)"
+						options={distribuidoresOptions}
+						placeholder="Buscar distribuidor..."
+						field={form.fields.contacto_distribuidor_id}
+					/>
 				</div>
 			</fieldset>
 

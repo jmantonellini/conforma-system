@@ -111,7 +111,7 @@
 			<input
 				{id}
 				type="text"
-				class="input w-full pr-10"
+				class="input w-full pr-10 input-sm"
 				{placeholder}
 				aria-label={label || placeholder}
 				role="combobox"

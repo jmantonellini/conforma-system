@@ -3,6 +3,7 @@ import { command, form, query } from '$app/server';
 import { db } from '$lib/server/db';
 import {
 	cotizaciones,
+	contactos,
 	lineas_cotizacion,
 	adjuntos_cotizacion,
 	notas_cotizacion,
@@ -278,28 +279,50 @@ export const crearCotizacion = form(CotizacionSchema, async (data) => {
 	const estadoInicial = await obtenerEstadoPorSlug('ingresada');
 	if (!estadoInicial) throw new Error('No existe el estado inicial "ingresada"');
 
-	const [cotizacion] = await db
-		.insert(cotizaciones)
-		.values({
-			numero_cotizacion: await generarNumeroCotizacion(),
-			contacto_id: data.contacto_id && data.contacto_id > 0 ? data.contacto_id : null,
-			contacto_distribuidor_id:
-				data.contacto_distribuidor_id && data.contacto_distribuidor_id > 0
-					? data.contacto_distribuidor_id
-					: null,
-			cliente_nombre: data.cliente_nombre,
-			cliente_telefono: data.cliente_telefono || null,
-			cliente_email: data.cliente_email || null,
-			canal: data.canal,
-			descripcion: data.descripcion,
-			observaciones: data.observaciones || null,
-			estado_id: estadoInicial.id,
-			creada_por: user.id
-		})
-		.returning();
+	const resultado = await db.transaction(async (tx) => {
+		let contactoId = data.contacto_id && data.contacto_id > 0 ? data.contacto_id : null;
+		let clienteCreado = false;
+
+		if (!contactoId) {
+			const [cliente] = await tx
+				.insert(contactos)
+				.values({
+					razon_social: data.cliente_nombre,
+					nombre: data.cliente_nombre,
+					email: data.cliente_email || null,
+					telefono: data.cliente_telefono || null,
+					es_cliente: true
+				})
+				.returning({ id: contactos.id });
+			contactoId = cliente.id;
+			clienteCreado = true;
+		}
+
+		const [cotizacion] = await tx
+			.insert(cotizaciones)
+			.values({
+				numero_cotizacion: await generarNumeroCotizacion(),
+				contacto_id: contactoId,
+				contacto_distribuidor_id:
+					data.contacto_distribuidor_id && data.contacto_distribuidor_id > 0
+						? data.contacto_distribuidor_id
+						: null,
+				cliente_nombre: data.cliente_nombre,
+				cliente_telefono: data.cliente_telefono || null,
+				cliente_email: data.cliente_email || null,
+				canal: data.canal,
+				descripcion: data.descripcion,
+				observaciones: data.observaciones || null,
+				estado_id: estadoInicial.id,
+				creada_por: user.id
+			})
+			.returning();
+
+		return { cotizacion, clienteCreado };
+	});
 
 	getCotizaciones({ search: '', page: 1 }).refresh();
-	return { cotizacionId: cotizacion.id };
+	return { cotizacionId: resultado.cotizacion.id, clienteCreado: resultado.clienteCreado };
 });
 
 // ============================================================
@@ -379,6 +402,10 @@ export const cotizarCotizacion = command(
 		cotizacion_id: v.number(),
 		validez_dias: v.pipe(v.number(), v.toMinValue(1)),
 		precio_total: v.optional(v.pipe(v.number(), v.toMinValue(0))),
+		descuento_global_porcentaje: v.optional(
+			v.pipe(v.number(), v.minValue(0), v.maxValue(99.99)),
+			0
+		),
 		incluir_iva: v.optional(v.boolean(), false),
 		condiciones_pago: v.optional(v.pipe(v.string(), v.maxLength(1000))),
 		lineas: v.pipe(v.array(LineaCotizacionSchema), v.minLength(1, 'Agregá al menos una línea'))
@@ -387,6 +414,7 @@ export const cotizarCotizacion = command(
 		cotizacion_id,
 		validez_dias,
 		precio_total: precioTotalFinal,
+		descuento_global_porcentaje: descuentoGlobalPorcentaje,
 		incluir_iva: incluirIva,
 		condiciones_pago: condicionesPago,
 		lineas
@@ -403,7 +431,10 @@ export const cotizarCotizacion = command(
 		if (cotizacionExistente.pedido_id) {
 			throw new Error('No se puede modificar una cotización convertida en pedido');
 		}
-		if (lineas.some((linea) => (linea.descuento_porcentaje ?? 0) > 0)) {
+		if (
+			descuentoGlobalPorcentaje > 0 ||
+			lineas.some((linea) => (linea.descuento_porcentaje ?? 0) > 0)
+		) {
 			await requirePermission('cotizaciones', 'descuento');
 		}
 		let precio_total = 0;
@@ -523,13 +554,16 @@ export const cotizarCotizacion = command(
 				});
 			}
 
+			const importeDescuento = redondearMoneda(precio_total * (descuentoGlobalPorcentaje / 100));
+			const baseImponible = redondearMoneda(precio_total - importeDescuento);
 			const totalCalculado = redondearMoneda(
-				precio_total + (incluirIva ? calcularIva21(precio_total) : 0)
+				baseImponible + (incluirIva ? calcularIva21(baseImponible) : 0)
 			);
 			await tx
 				.update(cotizaciones)
 				.set({
 					precio_total: redondearMoneda(precioTotalFinal ?? totalCalculado),
+					descuento_global_porcentaje: descuentoGlobalPorcentaje,
 					incluir_iva: incluirIva,
 					condiciones_pago: condicionesPago?.trim() ?? null,
 					validez_dias,

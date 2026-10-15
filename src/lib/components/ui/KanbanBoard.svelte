@@ -4,19 +4,23 @@
 	import { EstadosTarea } from '$lib/types';
 
 	type TareaConEmpleado = Tarea & {
-		empleado?: { id: number | null; nombre: string | null; apellido?: string | null } | null;
+		empleado: { id: number; nombre: string; apellido: string } | null;
 	};
 
 	let {
 		tareas = [],
 		onEstadoChange = () => {},
 		onReorder = () => {},
-		onEliminar = () => {}
+		onEliminar = () => {},
+		onEditar = () => {},
+		onArchivar = () => {}
 	}: {
 		tareas: TareaConEmpleado[];
 		onEstadoChange?: (id: number, nuevoEstado: EstadosTarea) => void;
 		onReorder?: (tareas: { id: number; orden: number }[]) => void;
 		onEliminar?: (id: number) => void;
+		onEditar?: (tarea: TareaConEmpleado) => void;
+		onArchivar?: (id: number) => void;
 	} = $props();
 
 	const columnas = [
@@ -50,6 +54,8 @@
 			tareas={getTareasPorColumna(columna.estado)}
 			{onEstadoChange}
 			{onEliminar}
+			{onEditar}
+			{onArchivar}
 			onReorder={(items) => handleReorder(columna.estado, items)}
 		/>
 	{/each}

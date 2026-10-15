@@ -15,3 +15,4 @@ export { default as Price } from './Price.svelte';
 export { default as Document } from './Document.svelte';
 export { default as Excel } from './Excel.svelte';
 export { default as Puzzle } from './Puzzle.svelte';
+export { default as Graph } from './Graph.svelte';

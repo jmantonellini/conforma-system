@@ -35,7 +35,13 @@
 	}: Props = $props();
 </script>
 
-<tr class="focus-within:opacity-100" class:opacity-70={linea.tipo === 'insumo'}>
+<tr
+	class="relative z-0 border-x-2 border-y-2 focus-within:z-50 focus-within:opacity-100"
+	class:border-success={linea.tipo === 'producto'}
+	class:border-warning={linea.tipo === 'insumo'}
+	class:border-info={linea.tipo === 'personalizado'}
+	class:opacity-70={linea.tipo === 'insumo'}
+>
 	<td class="relative min-w-72 focus-within:z-50">
 		{#if linea.tipo === 'producto'}
 			<SearchSelect
@@ -53,25 +59,20 @@
 				onChange={(value: string) => onSeleccionarProducto(linea.idx, value)}
 			/>
 		{:else if linea.tipo === 'insumo'}
-			<div class="flex flex-col gap-1">
-				<SearchSelect
-					label=""
-					id={`insumo-${linea.idx}`}
-					placeholder="Buscar insumo interno..."
-					disabled={bloqueada}
-					field={{
-						value: () => String(linea.insumo_id ?? '')
-					}}
-					options={insumos.map((insumo) => ({
-						value: String(insumo.id),
-						label: `${insumo.codigo} - ${insumo.nombre}`
-					}))}
-					onChange={(value: string) => onSeleccionarInsumo(linea.idx, value)}
-				/>
-				<span class="badge w-fit badge-ghost badge-xs">
-					Costo interno · no se incluye en el PDF ni en el total de venta
-				</span>
-			</div>
+			<SearchSelect
+				label=""
+				id={`insumo-${linea.idx}`}
+				placeholder="Buscar insumo interno..."
+				disabled={bloqueada}
+				field={{
+					value: () => String(linea.insumo_id ?? '')
+				}}
+				options={insumos.map((insumo) => ({
+					value: String(insumo.id),
+					label: `${insumo.codigo} - ${insumo.nombre}`
+				}))}
+				onChange={(value: string) => onSeleccionarInsumo(linea.idx, value)}
+			/>
 		{:else}
 			<input
 				class="input w-full input-sm"
@@ -84,7 +85,7 @@
 		{/if}
 	</td>
 	<td>
-		<div class="flex items-center justify-end gap-1">
+		<div class="flex items-center gap-1">
 			<input
 				class="remove-arrow input w-20 text-right input-sm"
 				type="number"
@@ -148,7 +149,11 @@
 	</td>
 </tr>
 {#if linea.descuento_porcentaje > 0 && linea.tipo !== 'insumo'}
-	<tr>
+	<tr
+		class="border-x-2 border-b-2"
+		class:border-success={linea.tipo === 'producto'}
+		class:border-info={linea.tipo === 'personalizado'}
+	>
 		<td colspan="6" class="bg-base-200/50">
 			<Can modulo="cotizaciones" accion="descuento">
 				<FormFieldWrapper label="Motivo del descuento" id={`motivo-${linea.idx}`} required>
@@ -165,7 +170,7 @@
 	</tr>
 {/if}
 {#if linea.tipo === 'producto' && linea.insumos_snapshot.length > 0}
-	<tr>
+	<tr class="border-x-2 border-b-2 border-success">
 		<td colspan="6" class="bg-base-200/50">
 			<details class="collapse-arrow collapse p-0 text-sm">
 				<summary class="collapse-title min-h-8 py-1 ps-8">Receta del producto</summary>

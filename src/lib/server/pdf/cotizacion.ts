@@ -57,7 +57,20 @@ const template = {
 	basePdf: {
 		width: 210,
 		height: 297,
-		padding: [20, 20, 20, 20] as [number, number, number, number]
+		padding: [20, 20, 20, 20] as [number, number, number, number],
+		staticSchema: [
+			{
+				name: 'footer',
+				type: 'text',
+				content: '{footer}',
+				position: { x: 20, y: 258 },
+				width: 170,
+				height: 16,
+				fontSize: 8,
+				fontColor: '#666',
+				lineHeight: 1.2
+			}
+		]
 	},
 	schemas: [
 		[
@@ -186,19 +199,25 @@ const template = {
 			// Footer
 			{
 				type: 'text',
-				position: { x: 20, y: 270 },
+				position: { x: 20, y: 178 },
 				width: 170,
-				height: 20,
-				fontSize: 8,
+				height: 65,
+				fontSize: 9,
+				dynamicFontSize: { min: 6, max: 9, fit: 'vertical' },
 				fontColor: '#666',
-				lineHeight: 1.4,
-				name: 'footer'
+				lineHeight: 1.3,
+				verticalAlignment: 'top',
+				name: 'condicionesPago'
 			}
 		]
 	]
 };
 
-export async function generarPDFCotizacion(cotizacionId: number): Promise<Uint8Array> {
+export async function generarPDFCotizacion(cotizacionId: number): Promise<{
+	pdf: Uint8Array;
+	clienteNombre: string;
+	fechaCotizacion: Date;
+}> {
 	const businessConfigPromise = Promise.resolve(
 		db.select().from(configuracion_empresa).where(eq(configuracion_empresa.id, 1)).limit(1)
 	);
@@ -209,6 +228,7 @@ export async function generarPDFCotizacion(cotizacionId: number): Promise<Uint8A
 				id: cotizaciones.id,
 				numero: cotizaciones.numero_cotizacion,
 				precio_total: cotizaciones.precio_total,
+				descuento_global_porcentaje: cotizaciones.descuento_global_porcentaje,
 				incluir_iva: cotizaciones.incluir_iva,
 				condiciones_pago: cotizaciones.condiciones_pago,
 				cliente_nombre: cotizaciones.cliente_nombre,
@@ -247,8 +267,11 @@ export async function generarPDFCotizacion(cotizacionId: number): Promise<Uint8A
 	if (!cot) throw new Error('Cotización no encontrada');
 
 	const totalBase = redondearPrecio(lineas.reduce((sum, linea) => sum + (linea.subtotal ?? 0), 0));
-	const importeIva = cot.incluir_iva ? calcularIva21(totalBase) : 0;
-	const totalCalculado = Number((totalBase + importeIva).toFixed(2));
+	const descuentoGlobalPorcentaje = cot.descuento_global_porcentaje ?? 0;
+	const importeDescuento = redondearPrecio(totalBase * (descuentoGlobalPorcentaje / 100));
+	const baseImponible = redondearPrecio(totalBase - importeDescuento);
+	const importeIva = cot.incluir_iva ? calcularIva21(baseImponible) : 0;
+	const totalCalculado = redondearPrecio(baseImponible + importeIva);
 	const total = cot.precio_total ?? totalCalculado;
 	const ajusteComercial = Number((total - totalCalculado).toFixed(2));
 	const condicionesPago =
@@ -262,7 +285,8 @@ export async function generarPDFCotizacion(cotizacionId: number): Promise<Uint8A
 		`${cot.cliente?.nombre ?? ''} ${cot.cliente?.apellido ?? ''}`.trim() ||
 		cot.cliente_nombre;
 
-	const vencimiento = new Date(cot.created_at ?? Date.now());
+	const fechaCotizacion = cot.created_at ?? new Date();
+	const vencimiento = new Date(fechaCotizacion);
 	vencimiento.setDate(vencimiento.getDate() + (cot.validez_dias ?? 15));
 
 	const businessName = businessConfig?.razon_social || 'Conforma';
@@ -291,6 +315,17 @@ export async function generarPDFCotizacion(cotizacionId: number): Promise<Uint8A
 					`$${l.precio?.toLocaleString('es-AR')}`,
 					`$${l.subtotal?.toLocaleString('es-AR')}`
 				]),
+				...(descuentoGlobalPorcentaje > 0
+					? [
+							['Subtotal', '', '', formatearImporte(totalBase)],
+							[
+								`Descuento general (${descuentoGlobalPorcentaje.toLocaleString('es-AR')}%)`,
+								'',
+								'',
+								formatearImporte(-importeDescuento)
+							]
+						]
+					: []),
 				...(cot.incluir_iva ? [['IVA (21%)', '', '', formatearImporte(importeIva)]] : []),
 				...(ajusteComercial !== 0
 					? [
@@ -305,13 +340,12 @@ export async function generarPDFCotizacion(cotizacionId: number): Promise<Uint8A
 			],
 			totalLabel: 'TOTAL:',
 			total: formatearImporte(total),
-			footer:
-				`Precios expresados en pesos argentinos. Cotización válida hasta el ${vencimiento.toLocaleDateString('es-AR')}.\n` +
-				(condicionesPago ? `Condiciones de pago: ${condicionesPago}\n` : '') +
-				`Gracias por consultar.`
+			condicionesPago: condicionesPago ? `Condiciones de pago:\n${condicionesPago}` : '',
+			footer: `Precios expresados en pesos argentinos. Cotización válida hasta el ${vencimiento.toLocaleDateString('es-AR')}. Gracias por consultar.`
 		}
 	];
 
 	// generate devuelve Uint8Array, no Buffer
-	return await generate({ template, inputs, plugins: { text, table, image } });
+	const pdf = await generate({ template, inputs, plugins: { text, table, image } });
+	return { pdf, clienteNombre, fechaCotizacion };
 }

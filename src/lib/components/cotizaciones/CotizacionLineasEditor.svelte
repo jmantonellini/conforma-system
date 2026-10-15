@@ -6,6 +6,7 @@
 	import { getProductoConReceta } from '$lib/remote/productos.remote';
 	import { toast } from '$lib/stores/toast.svelte';
 	import { calcularIva21, redondearPrecio } from '$lib/utils/precios';
+	import { Can } from '$lib/components/ui';
 	import type {
 		InsumoOpcion,
 		LineaEdicion,
@@ -19,6 +20,7 @@
 		bloqueada: boolean;
 		validezInicial: number;
 		precioTotalInicial: number | null;
+		descuentoGlobalInicial: number;
 		incluirIvaInicial: boolean;
 		condicionesPagoInicial: string | null;
 		lineasIniciales: LineaInicial[];
@@ -31,6 +33,7 @@
 		bloqueada,
 		validezInicial,
 		precioTotalInicial,
+		descuentoGlobalInicial,
 		incluirIvaInicial,
 		condicionesPagoInicial,
 		lineasIniciales,
@@ -45,13 +48,19 @@
 				.toFixed(2)
 		)
 	);
+	const baseInicialConDescuento = untrack(() =>
+		redondearPrecio(totalBaseInicial * (1 - descuentoGlobalInicial / 100))
+	);
 	const totalInicialCalculado = untrack(() =>
-		redondearPrecio(totalBaseInicial + (incluirIvaInicial ? calcularIva21(totalBaseInicial) : 0))
+		redondearPrecio(
+			baseInicialConDescuento + (incluirIvaInicial ? calcularIva21(baseInicialConDescuento) : 0)
+		)
 	);
 	const ajusteManualInicial = untrack(() =>
 		precioTotalInicial === null ? 0 : redondearPrecio(precioTotalInicial - totalInicialCalculado)
 	);
 	let incluirIva = $state(untrack(() => incluirIvaInicial));
+	let descuentoGlobal = $state(untrack(() => descuentoGlobalInicial));
 	let condicionesPago = $state(
 		untrack(() => condicionesPagoInicial ?? '50% de anticipo al aprobar, saldo contra entrega.')
 	);
@@ -96,8 +105,10 @@
 				.toFixed(2)
 		)
 	);
-	let importeIva = $derived(incluirIva ? calcularIva21(totalBase) : 0);
-	let totalCalculado = $derived(redondearPrecio(totalBase + importeIva));
+	let importeDescuento = $derived(redondearPrecio(totalBase * (descuentoGlobal / 100)));
+	let baseImponible = $derived(redondearPrecio(totalBase - importeDescuento));
+	let importeIva = $derived(incluirIva ? calcularIva21(baseImponible) : 0);
+	let totalCalculado = $derived(redondearPrecio(baseImponible + importeIva));
 	let precioTotalIngresado = $state<string | null>(null);
 	let precioTotalEditado = $state(false);
 	let ajusteManualIngresado = $state(0);
@@ -279,6 +290,7 @@
 				cotizacion_id: cotizacionId,
 				validez_dias: Number(validezDias) || 15,
 				precio_total: totalFinal,
+				descuento_global_porcentaje: descuentoGlobal,
 				incluir_iva: incluirIva,
 				condiciones_pago: condicionesPago.trim(),
 				lineas: lineas.map((linea) => ({
@@ -305,16 +317,6 @@
 	}
 </script>
 
-{#if incluirIva}
-	<tr>
-		<td colspan="4" class="text-right font-semibold">IVA (21%)</td>
-		<td class="text-right font-semibold">
-			${importeIva.toLocaleString('es-AR', { minimumFractionDigits: 2 })}
-		</td>
-		<td></td>
-	</tr>
-{/if}
-
 <section class="card bg-base-100 shadow">
 	<div class="card-body gap-4">
 		<label class="fieldset w-full">
@@ -338,7 +340,7 @@
 			<div class="flex flex-wrap gap-2">
 				<button
 					type="button"
-					class="btn btn-outline btn-sm"
+					class="btn btn-outline btn-sm btn-success"
 					disabled={bloqueada}
 					onclick={() => agregarLinea('producto')}
 				>
@@ -346,7 +348,7 @@
 				</button>
 				<button
 					type="button"
-					class="btn btn-outline btn-sm"
+					class="btn btn-outline btn-sm btn-warning"
 					disabled={bloqueada}
 					onclick={() => agregarLinea('insumo')}
 				>
@@ -354,7 +356,7 @@
 				</button>
 				<button
 					type="button"
-					class="btn btn-outline btn-sm"
+					class="btn btn-outline btn-info btn-sm"
 					disabled={bloqueada}
 					onclick={() => agregarLinea('personalizado')}
 				>
@@ -396,6 +398,33 @@
 								actualizarDescuento(lineaId, 'justificacion', motivo)}
 						/>
 					{/each}
+					{#if descuentoGlobal > 0}
+						<tr>
+							<td colspan="4" class="text-right font-semibold">Subtotal</td>
+							<td class="text-right font-semibold">
+								${totalBase.toLocaleString('es-AR', { minimumFractionDigits: 2 })}
+							</td>
+							<td></td>
+						</tr>
+						<tr>
+							<td colspan="4" class="text-right font-semibold">
+								Descuento general ({descuentoGlobal.toLocaleString('es-AR')}%)
+							</td>
+							<td class="text-right font-semibold">
+								-${importeDescuento.toLocaleString('es-AR', { minimumFractionDigits: 2 })}
+							</td>
+							<td></td>
+						</tr>
+					{/if}
+					{#if incluirIva}
+						<tr>
+							<td colspan="4" class="text-right font-semibold">IVA (21%)</td>
+							<td class="text-right font-semibold">
+								${importeIva.toLocaleString('es-AR', { minimumFractionDigits: 2 })}
+							</td>
+							<td></td>
+						</tr>
+					{/if}
 				</tbody>
 			</table>
 		</div>
@@ -414,6 +443,27 @@
 				/>
 				<span>Agregar IVA 21%</span>
 			</label>
+			<Can modulo="cotizaciones" accion="descuento">
+				<label for="descuento-global" class="flex items-center gap-2 text-sm">
+					Descuento general (%)
+					<input
+						id="descuento-global"
+						class="remove-arrow input w-24 text-right input-sm"
+						type="number"
+						min="0"
+						max="99.99"
+						step="0.01"
+						disabled={bloqueada}
+						value={descuentoGlobal}
+						oninput={(event) => {
+							descuentoGlobal = Math.min(
+								Math.max(Number(event.currentTarget.value) || 0, 0),
+								99.99
+							);
+						}}
+					/>
+				</label>
+			</Can>
 			<div class="flex items-center gap-2">
 				<label class="flex items-center gap-3 text-sm font-semibold">
 					<span>Total final</span>

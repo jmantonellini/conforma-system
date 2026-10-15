@@ -74,151 +74,158 @@
 				</Can>
 			</div>
 		</div>
-		<fieldset class="fieldset rounded-box border border-base-300 bg-base-200 p-4">
-			<legend class="fieldset-legend">Datos del contacto</legend>
-			<div class="grid gap-4 md:grid-cols-3">
-				<input type="hidden" name="id" value={contacto.id} />
-				<FormFieldWrapper id="razon_social" label="Razón social" required>
-					<input
-						class="input"
-						disabled={!editando}
-						{...form.fields.razon_social.as('text', contacto.razon_social)}
-					/>
-				</FormFieldWrapper>
-				<FormFieldWrapper id="nombre" label="Nombre">
-					<input
-						class="input"
-						disabled={!editando}
-						{...form.fields.nombre.as('text', contacto.nombre || '')}
-					/>
-				</FormFieldWrapper>
-				<FormFieldWrapper id="apellido" label="Apellido">
-					<input
-						class="input"
-						disabled={!editando}
-						{...form.fields.apellido.as('text', contacto.apellido || '')}
-					/>
-				</FormFieldWrapper>
-				<FormFieldWrapper id="cuit" label="CUIT">
-					<input
-						class="input"
-						disabled={!editando}
-						{...form.fields.cuit.as('text', contacto.cuit || '')}
-					/>
-				</FormFieldWrapper>
-				<FormFieldWrapper id="email" label="Email">
-					<input
-						class="input"
-						disabled={!editando}
-						{...form.fields.email.as('email', contacto.email || '')}
-					/>
-				</FormFieldWrapper>
-				<FormFieldWrapper id="telefono" label="Teléfono">
-					<input
-						class="input"
-						disabled={!editando}
-						{...form.fields.telefono.as('text', contacto.telefono || '')}
-					/>
-				</FormFieldWrapper>
-				<FormFieldWrapper id="rol" label="Rol comercial">
-					<select
-						class="select"
-						disabled={!editando}
-						{...form.fields.rol.as('select', rol)}
-						onchange={(event) => (rolEditado = event.currentTarget.value)}
-					>
-						<option value="ninguno">Sin rol comercial</option>
-						<option value="cliente">Cliente</option>
-						<option value="proveedor">Proveedor</option>
-						<option value="ambos">Cliente y proveedor</option>
-					</select>
-				</FormFieldWrapper>
-				<FormFieldWrapper id="es_distribuidor" label="Distribuidor">
-					<label class="label cursor-pointer justify-start gap-3">
-						<input
-							type="checkbox"
-							class="checkbox checkbox-primary"
-							name="es_distribuidor"
-							value="true"
-							disabled={!editando}
-							checked={esDistribuidor}
-							onchange={(event) => (distribuidorEditado = event.currentTarget.checked)}
-						/>
-						<span>Es distribuidor</span>
-					</label>
-				</FormFieldWrapper>
-				{#if esDistribuidor}
-					<FormFieldWrapper id="porcentaje_compensacion" label="Comisión (%)">
-						<input
-							class="remove-arrow input"
-							disabled={!editando}
-							min="0"
-							max="100"
-							step="0.01"
-							{...form.fields.porcentaje_compensacion.as(
-								'number',
-								contacto.porcentaje_compensacion || 0
-							)}
-						/>
-					</FormFieldWrapper>
-					<FormFieldWrapper id="saldo_disponible" label="Saldo disponible">
-						<input
-							class="remove-arrow input"
-							disabled={!editando}
-							min="0"
-							step="0.01"
-							{...form.fields.saldo_disponible.as('number', contacto.saldo_disponible || 0)}
-						/>
-					</FormFieldWrapper>
-				{/if}
-				{#if rol === 'proveedor' || rol === 'ambos'}
-					<FormFieldWrapper id="codigo" label="Código de proveedor">
+		<div class="flex flex-col gap-4 md:flex-row">
+			<fieldset class="fieldset rounded-box border border-base-300 bg-base-200 p-4">
+				<legend class="fieldset-legend">Datos del contacto</legend>
+				<div class="grid gap-4 md:grid-cols-3">
+					<input type="hidden" name="id" value={contacto.id} />
+					<FormFieldWrapper id="razon_social" label="Razón social" required>
 						<input
 							class="input"
 							disabled={!editando}
-							{...form.fields.codigo.as('text', contacto.proveedor?.codigo || '')}
+							{...form.fields.razon_social.as('text', contacto.razon_social)}
 						/>
 					</FormFieldWrapper>
-					<FormFieldWrapper id="contacto_nombre" label="Contacto de compras">
+					<FormFieldWrapper id="nombre" label="Nombre">
 						<input
 							class="input"
 							disabled={!editando}
-							{...form.fields.contacto_nombre.as('text', contacto.proveedor?.contacto_nombre || '')}
+							{...form.fields.nombre.as('text', contacto.nombre || '')}
 						/>
 					</FormFieldWrapper>
-					<FormFieldWrapper id="contacto_email" label="Email de compras">
+					<FormFieldWrapper id="apellido" label="Apellido">
 						<input
 							class="input"
 							disabled={!editando}
-							{...form.fields.contacto_email.as('email', contacto.proveedor?.contacto_email || '')}
+							{...form.fields.apellido.as('text', contacto.apellido || '')}
 						/>
 					</FormFieldWrapper>
-					<FormFieldWrapper id="contacto_telefono" label="Teléfono de compras">
+					<FormFieldWrapper id="cuit" label="CUIT">
 						<input
 							class="input"
 							disabled={!editando}
-							{...form.fields.contacto_telefono.as(
-								'text',
-								contacto.proveedor?.contacto_telefono || ''
-							)}
+							{...form.fields.cuit.as('text', contacto.cuit || '')}
 						/>
 					</FormFieldWrapper>
-					<FormFieldWrapper id="condiciones_pago" label="Condiciones de pago">
+					<FormFieldWrapper id="email" label="Email">
 						<input
 							class="input"
 							disabled={!editando}
-							{...form.fields.condiciones_pago.as(
-								'text',
-								contacto.proveedor?.condiciones_pago || ''
-							)}
+							{...form.fields.email.as('email', contacto.email || '')}
 						/>
 					</FormFieldWrapper>
-				{/if}
-			</div>
-		</fieldset>
-
-		<FormDireccion {form} initialData={contacto} disabled={!editando} />
-		<FormErrors {form} />
+					<FormFieldWrapper id="telefono" label="Teléfono">
+						<input
+							class="input"
+							disabled={!editando}
+							{...form.fields.telefono.as('text', contacto.telefono || '')}
+						/>
+					</FormFieldWrapper>
+					<FormFieldWrapper id="rol" label="Rol comercial">
+						<select
+							class="select"
+							disabled={!editando}
+							{...form.fields.rol.as('select', rol)}
+							onchange={(event) => (rolEditado = event.currentTarget.value)}
+						>
+							<option value="ninguno">Sin rol comercial</option>
+							<option value="cliente">Cliente</option>
+							<option value="proveedor">Proveedor</option>
+							<option value="ambos">Cliente y proveedor</option>
+						</select>
+					</FormFieldWrapper>
+					<FormFieldWrapper id="es_distribuidor" label="Distribuidor">
+						<label class="label cursor-pointer justify-start gap-3">
+							<input
+								type="checkbox"
+								class="checkbox checkbox-primary"
+								name="es_distribuidor"
+								value="true"
+								disabled={!editando}
+								checked={esDistribuidor}
+								onchange={(event) => (distribuidorEditado = event.currentTarget.checked)}
+							/>
+							<span>Es distribuidor</span>
+						</label>
+					</FormFieldWrapper>
+					{#if esDistribuidor}
+						<FormFieldWrapper id="porcentaje_compensacion" label="Comisión (%)">
+							<input
+								class="remove-arrow input"
+								disabled={!editando}
+								min="0"
+								max="100"
+								step="0.01"
+								{...form.fields.porcentaje_compensacion.as(
+									'number',
+									contacto.porcentaje_compensacion || 0
+								)}
+							/>
+						</FormFieldWrapper>
+						<FormFieldWrapper id="saldo_disponible" label="Saldo disponible">
+							<input
+								class="remove-arrow input"
+								disabled={!editando}
+								min="0"
+								step="0.01"
+								{...form.fields.saldo_disponible.as('number', contacto.saldo_disponible || 0)}
+							/>
+						</FormFieldWrapper>
+					{/if}
+					{#if rol === 'proveedor' || rol === 'ambos'}
+						<FormFieldWrapper id="codigo" label="Código de proveedor">
+							<input
+								class="input"
+								disabled={!editando}
+								{...form.fields.codigo.as('text', contacto.proveedor?.codigo || '')}
+							/>
+						</FormFieldWrapper>
+						<FormFieldWrapper id="contacto_nombre" label="Contacto de compras">
+							<input
+								class="input"
+								disabled={!editando}
+								{...form.fields.contacto_nombre.as(
+									'text',
+									contacto.proveedor?.contacto_nombre || ''
+								)}
+							/>
+						</FormFieldWrapper>
+						<FormFieldWrapper id="contacto_email" label="Email de compras">
+							<input
+								class="input"
+								disabled={!editando}
+								{...form.fields.contacto_email.as(
+									'email',
+									contacto.proveedor?.contacto_email || ''
+								)}
+							/>
+						</FormFieldWrapper>
+						<FormFieldWrapper id="contacto_telefono" label="Teléfono de compras">
+							<input
+								class="input"
+								disabled={!editando}
+								{...form.fields.contacto_telefono.as(
+									'text',
+									contacto.proveedor?.contacto_telefono || ''
+								)}
+							/>
+						</FormFieldWrapper>
+						<FormFieldWrapper id="condiciones_pago" label="Condiciones de pago">
+							<input
+								class="input"
+								disabled={!editando}
+								{...form.fields.condiciones_pago.as(
+									'text',
+									contacto.proveedor?.condiciones_pago || ''
+								)}
+							/>
+						</FormFieldWrapper>
+					{/if}
+				</div>
+			</fieldset>
+			<FormDireccion {form} initialData={contacto} disabled={!editando} />
+			<FormErrors {form} />
+		</div>
 	</form>
 
 	<section class="card mt-6 bg-base-100 shadow">

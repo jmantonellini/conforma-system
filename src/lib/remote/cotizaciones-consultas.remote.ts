@@ -111,6 +111,7 @@ export const getCotizacionById = query(v.number(), async (id) => {
 			descripcion: cotizaciones.descripcion,
 			observaciones: cotizaciones.observaciones,
 			precio_total: cotizaciones.precio_total,
+			descuento_global_porcentaje: cotizaciones.descuento_global_porcentaje,
 			incluir_iva: cotizaciones.incluir_iva,
 			condiciones_pago: cotizaciones.condiciones_pago,
 			validez_dias: cotizaciones.validez_dias,
