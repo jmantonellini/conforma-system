@@ -33,12 +33,17 @@
 	let form = actualizarProducto;
 
 	let categoriaActual = $derived(
-		form.fields.categoria_id.value() ?? String(data.producto.categoria_id)
+		form.fields.categoria_id.value() ??
+			(data.producto.categoria_id == null ? '' : String(data.producto.categoria_id))
 	);
 	let tipoVehiculoActual = $derived(
-		form.fields.tipo_vehiculo_id.value() ?? String(data.producto.tipo_vehiculo_id)
+		form.fields.tipo_vehiculo_id.value() ??
+			(data.producto.tipo_vehiculo_id == null ? '' : String(data.producto.tipo_vehiculo_id))
 	);
-	let marcaActual = $derived(form.fields.marca_id.value() ?? String(data.producto.marca_id));
+	let marcaActual = $derived(
+		form.fields.marca_id.value() ??
+			(data.producto.marca_id == null ? '' : String(data.producto.marca_id))
+	);
 	let tipoUsoActual = $derived(
 		form.fields.tipo_uso_id.value() ?? String(data.producto.tipo_uso_id)
 	);
@@ -198,7 +203,7 @@
 								disabled={!marcaActual}
 							>
 								<option value="">Seleccionar...</option>
-								{#each await getModelos(Number(marcaActual)) as mod (mod.id)}
+								{#each marcaActual ? await getModelos(Number(marcaActual)) : [] as mod (mod.id)}
 									<option value={String(mod.id)}>{mod.nombre}</option>
 								{/each}
 							</select>
@@ -228,7 +233,7 @@
 									class="select w-full"
 								>
 									<option value="">Seleccionar...</option>
-									{#each await getCategoriasComp(Number(tipoVehiculoActual)) as cat (cat.id)}
+									{#each tipoVehiculoActual ? await getCategoriasComp(Number(tipoVehiculoActual)) : [] as cat (cat.id)}
 										<option value={String(cat.id)}>{cat.nombre}</option>
 									{/each}
 								</select>
@@ -317,7 +322,10 @@
 			<fieldset class="fieldset rounded-box border border-base-300 bg-base-200 p-4">
 				<legend class="fieldset-legend">Receta del producto</legend>
 				{#each receta as linea, indice (indice)}
-					<div class="mb-1 grid grid-cols-[1fr_auto_auto_auto] gap-1 sm:items-center">
+					{@const unidad =
+						data.insumos.find((insumo) => String(insumo.id) === linea.insumo_id)?.unidad ??
+						(linea.producto_id ? 'Producto' : '-')}
+					<div class="mb-1 grid grid-cols-[minmax(0,1fr)_4rem_5rem_2rem] gap-1 sm:items-center">
 						<SearchSelect
 							label=""
 							id={`receta-edit-${indice}`}
@@ -354,15 +362,14 @@
 							}}
 						/>
 						<input
-							class="remove-arrow input w-16"
+							class="remove-arrow input w-16 input-sm"
 							type="number"
 							min="0"
 							step="0.01"
 							bind:value={linea.cantidad}
 						/>
-						<span class="label whitespace-nowrap"
-							>{data.insumos.find((insumo) => String(insumo.id) === linea.insumo_id)?.unidad ??
-								(linea.producto_id ? 'Producto' : '-')}
+						<span class="label w-20 min-w-0 justify-start truncate whitespace-nowrap" title={unidad}
+							>{unidad}
 						</span>
 						<button
 							class="btn btn-square btn-ghost text-error btn-sm"

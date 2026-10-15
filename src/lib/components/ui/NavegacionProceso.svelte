@@ -14,6 +14,7 @@
 	let next = $derived(steps[currentIndex + 1]);
 </script>
 
+
 {#if previous || next}
 	<nav class="join" aria-label="Navegación del proceso">
 		{#if previous?.href}

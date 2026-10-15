@@ -227,15 +227,12 @@
 							<td>
 								{#if linea.produccion}
 									{@const p = linea.produccion}
-									<div class="flex items-center gap-2">
-										<button
-											class={`badge-${p.es_final ? 'success' : p.total > 0 ? 'warning' : 'ghost'} badge cursor-pointer hover:opacity-80`}
-											onclick={() => irADetalleOrden(p.orden_id)}
-										>
-											{p.es_final ? 'Terminado' : p.total > 0 ? 'En progreso' : 'Sin unidades'}
-											({p.terminadas}/{p.total})
-										</button>
-									</div>
+									<button
+										class={`badge-${p.es_final ? 'success' : p.total > 0 ? 'warning' : 'ghost'} badge cursor-pointer hover:opacity-80 text-nowrap`}
+										onclick={() => irADetalleOrden(p.orden_id)}
+									>
+										({p.terminadas}/{p.total})
+									</button>
 								{:else}
 									<span class="text-sm text-base-content/50">Sin Orden</span>
 								{/if}
