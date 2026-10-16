@@ -12,7 +12,8 @@
 	import { CANALES_COTIZACION } from '$lib/utils/canales-cotizacion';
 
 	let form = crearCotizacion;
-	let clientes = await obtenerContactosCliente({ limit: 100 });
+	const limiteContactosSelect = 50;
+	let clientes = await obtenerContactosCliente({ limit: limiteContactosSelect });
 
 	const CANALES = Object.entries(CANALES_COTIZACION).map(([value, label]) => ({ value, label }));
 	let archivosSeleccionados = $state<File[]>([]);
@@ -54,16 +55,47 @@
 		for (const vista of vistasPrevias) if (vista.url) URL.revokeObjectURL(vista.url);
 	});
 
-	const clientesOptions = clientes.data.map((c) => ({
-		value: c.id.toString(),
-		label: c.razon_social
-	}));
-	const distribuidoresOptions = clientes.data
-		.filter((c) => c.es_distribuidor)
-		.map((c) => ({
+	function crearOpcionesClientes(contactos: typeof clientes.data) {
+		return contactos.map((c) => ({
 			value: c.id.toString(),
-			label: `${c.razon_social} (distribuidor)`
+			label: c.razon_social
 		}));
+	}
+
+	function crearOpcionesDistribuidores(contactos: typeof clientes.data) {
+		return contactos
+			.filter((c) => c.es_distribuidor)
+			.map((c) => ({
+				value: c.id.toString(),
+				label: `${c.razon_social} (distribuidor)`
+			}));
+	}
+
+	let clientesOptions = $state(crearOpcionesClientes(clientes.data));
+	let distribuidoresOptions = $state(crearOpcionesDistribuidores(clientes.data));
+	let solicitudBusquedaClientes = 0;
+	let solicitudBusquedaDistribuidores = 0;
+
+	async function buscarContactos(search: string, tipo: 'cliente' | 'distribuidor') {
+		const soloDistribuidores = tipo === 'distribuidor';
+		const solicitud = soloDistribuidores
+			? ++solicitudBusquedaDistribuidores
+			: ++solicitudBusquedaClientes;
+		const resultado = await obtenerContactosCliente({
+			search: search || undefined,
+			soloDistribuidores: soloDistribuidores || undefined,
+			limit: limiteContactosSelect
+		});
+		const solicitudActual = soloDistribuidores
+			? solicitudBusquedaDistribuidores
+			: solicitudBusquedaClientes;
+		if (solicitud !== solicitudActual) return;
+		if (soloDistribuidores) {
+			distribuidoresOptions = crearOpcionesDistribuidores(resultado.data);
+		} else {
+			clientesOptions = crearOpcionesClientes(resultado.data);
+		}
+	}
 </script>
 
 <PageLayout>
@@ -107,6 +139,7 @@
 						options={clientesOptions}
 						placeholder="Buscar razón social cargada..."
 						field={form.fields.contacto_id}
+						onSearch={(search) => buscarContactos(search, 'cliente')}
 					/>
 
 					<SearchSelect
@@ -115,6 +148,7 @@
 						options={distribuidoresOptions}
 						placeholder="Buscar distribuidor..."
 						field={form.fields.contacto_distribuidor_id}
+						onSearch={(search) => buscarContactos(search, 'distribuidor')}
 					/>
 				</div>
 			</fieldset>

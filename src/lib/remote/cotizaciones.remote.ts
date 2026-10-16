@@ -1,4 +1,5 @@
 import * as v from 'valibot';
+import { randomUUID } from 'node:crypto';
 import { command, form, query } from '$app/server';
 import { db } from '$lib/server/db';
 import {
@@ -17,7 +18,10 @@ import {
 	pedido_insumos,
 	estados_pedido,
 	notificaciones,
-	insumos
+	insumos,
+	tipos_insumo,
+	categorias_insumos,
+	unidades_medida
 } from '$lib/server/db/schema';
 import { and, desc, eq, getTableColumns, or } from 'drizzle-orm';
 import { unlink } from 'fs/promises';
@@ -33,9 +37,11 @@ import {
 	getHistorialCotizacion,
 	getNotasCotizacion
 } from './cotizaciones-consultas.remote';
+import type { MaterialSnapshot } from '$lib/types/cotizacion-editor';
 import { getProductoConReceta } from './productos.remote';
+import { getInsumos } from './insumos.remote';
 import { obtenerPrecioProducto } from '$lib/server/services/productos.service';
-import { calcularIva21, calcularPrecioConDescuento } from '$lib/utils/precios';
+import { calcularIva21 } from '$lib/utils/precios';
 import { es } from '$lib/i18n/es';
 import {
 	aplicarCambioDeEstado,
@@ -416,13 +422,14 @@ export const cotizarCotizacion = command(
 		if (cotizacionExistente.pedido_id) {
 			throw new Error('No se puede modificar una cotización convertida en pedido');
 		}
-		if (
-			descuentoGlobalPorcentaje > 0 ||
-			lineas.some((linea) => (linea.descuento_porcentaje ?? 0) > 0)
-		) {
+		if (descuentoGlobalPorcentaje > 0) {
 			await requirePermission('cotizaciones', 'descuento');
 		}
+		if (lineas.some((linea) => linea.nuevo_insumo)) {
+			await requirePermission('insumos', 'create');
+		}
 		let precio_total = 0;
+		let insumosCreados = false;
 
 		await db.transaction(async (tx) => {
 			await tx.delete(lineas_cotizacion).where(eq(lineas_cotizacion.cotizacion_id, cotizacion_id));
@@ -432,7 +439,63 @@ export const cotizarCotizacion = command(
 				let costo_materiales = linea.costo_materiales || 0;
 				let margen_porcentaje = 0;
 				let precio_lista_unitario = Number(linea.precio_unitario || 0);
-				let insumos_snapshot: unknown = null;
+				let insumoId = linea.insumo_id ?? null;
+				let insumos_snapshot: MaterialSnapshot[] = [];
+
+				if (linea.nuevo_insumo) {
+					const nuevo = linea.nuevo_insumo;
+					const [tipo, unidad] = await Promise.all([
+						tx
+							.select({ codigo: tipos_insumo.codigo })
+							.from(tipos_insumo)
+							.where(eq(tipos_insumo.id, nuevo.tipo_id))
+							.limit(1),
+						tx
+							.select({ codigo: unidades_medida.codigo })
+							.from(unidades_medida)
+							.where(eq(unidades_medida.id, nuevo.unidad_id))
+							.limit(1)
+					]);
+					if (!tipo[0] || !unidad[0])
+						throw new Error('El tipo o la unidad seleccionados no existen');
+
+					const [insumoCreado] = await tx
+						.insert(insumos)
+						.values({
+							codigo: `COT-${randomUUID().replaceAll('-', '').slice(0, 16).toUpperCase()}`,
+							nombre: nuevo.nombre.trim(),
+							tipo_id: nuevo.tipo_id,
+							categoria_id: nuevo.categoria_id ?? null,
+							unidad_id: nuevo.unidad_id,
+							tipo: tipo[0].codigo,
+							unidad: unidad[0].codigo,
+							costo_unitario: nuevo.costo_unitario,
+							flete_porcentaje: 0,
+							activo: true
+						})
+						.returning({
+							id: insumos.id,
+							codigo: insumos.codigo,
+							nombre: insumos.nombre,
+							unidad: insumos.unidad,
+							costo_unitario: insumos.costo_unitario
+						});
+					insumoId = insumoCreado.id;
+					descripcion = insumoCreado.nombre;
+					costo_materiales = insumoCreado.costo_unitario;
+					insumos_snapshot = [
+						{
+							insumo_id: insumoCreado.id,
+							codigo: insumoCreado.codigo,
+							nombre: insumoCreado.nombre,
+							unidad: insumoCreado.unidad,
+							cantidad: 1,
+							costo_unitario: insumoCreado.costo_unitario,
+							subtotal: insumoCreado.costo_unitario
+						}
+					];
+					insumosCreados = true;
+				}
 
 				if (linea.producto_id) {
 					const [{ receta, recetaDirecta, componentes }, precioProducto] = await Promise.all([
@@ -440,7 +503,7 @@ export const cotizarCotizacion = command(
 						obtenerPrecioProducto(Number(linea.producto_id))
 					]);
 
-					insumos_snapshot = recetaDirecta.map((lineaReceta) => {
+					const materialesReceta: MaterialSnapshot[] = recetaDirecta.map((lineaReceta) => {
 						if (lineaReceta.insumo_id) {
 							const material = receta.find((item) => item.insumo_id === lineaReceta.insumo_id);
 							return {
@@ -466,21 +529,19 @@ export const cotizarCotizacion = command(
 							subtotal: 0
 						};
 					});
+					insumos_snapshot = materialesReceta;
 					costo_materiales = precioProducto.costo_materiales;
-					margen_porcentaje = precioProducto.margen_porcentaje;
 					precio_lista_unitario = redondearMoneda(
 						linea.precio_lista_unitario ?? precioProducto.precio_venta
 					);
 					if (precio_lista_unitario < precioProducto.precio_venta) {
-						throw new Error(
-							'El precio de lista no puede ser menor al precio del producto; aplicá un descuento justificado'
-						);
+						throw new Error('El precio de lista no puede ser menor al precio base del producto');
 					}
-				} else if (linea.insumo_id) {
+				} else if (insumoId) {
 					const [material] = await tx
 						.select()
 						.from(insumos)
-						.where(eq(insumos.id, linea.insumo_id))
+						.where(eq(insumos.id, insumoId))
 						.limit(1);
 					if (!material) throw new Error('Insumo no encontrado');
 					descripcion = material.nombre;
@@ -489,9 +550,7 @@ export const cotizarCotizacion = command(
 						linea.precio_lista_unitario ?? material.costo_unitario
 					);
 					if (precio_lista_unitario < redondearMoneda(material.costo_unitario)) {
-						throw new Error(
-							'El precio de lista del insumo no puede ser menor al costo; aplicá un descuento justificado'
-						);
+						throw new Error('El precio del insumo no puede ser menor al costo unitario');
 					}
 					insumos_snapshot = [
 						{
@@ -507,37 +566,34 @@ export const cotizarCotizacion = command(
 				} else if (linea.precio_lista_unitario != null) {
 					precio_lista_unitario = redondearMoneda(linea.precio_lista_unitario);
 				}
-				const descuento_porcentaje = Number(linea.descuento_porcentaje ?? 0);
-				const justificacion_descuento =
-					descuento_porcentaje > 0 ? linea.justificacion_descuento?.trim() || null : null;
-				const precio_unitario = calcularPrecioConDescuento(
-					precio_lista_unitario,
-					descuento_porcentaje,
-					justificacion_descuento ?? undefined
-				);
-				if (!linea.insumo_id) {
+				const visible_cliente = linea.visible_cliente ?? true;
+				const precio_unitario = redondearMoneda(precio_lista_unitario);
+				const costoUnitarioTotal = costo_materiales;
+				margen_porcentaje =
+					visible_cliente && precio_unitario > 0
+						? redondearMoneda(((precio_unitario - costoUnitarioTotal) / precio_unitario) * 100)
+						: 0;
+				if (visible_cliente) {
 					precio_total = redondearMoneda(precio_total + linea.cantidad * precio_unitario);
 				}
 
 				await tx.insert(lineas_cotizacion).values({
 					cotizacion_id,
 					producto_id: linea.producto_id ?? null,
-					insumo_id: linea.insumo_id ?? null,
-					es_personalizado: linea.es_personalizado ?? !linea.producto_id,
+					insumo_id: insumoId,
+					es_personalizado: !linea.producto_id && !insumoId,
+					visible_cliente,
 					descripcion,
 					cantidad: linea.cantidad,
 					precio_unitario,
 					precio_lista_unitario,
 					margen_porcentaje,
-					descuento_porcentaje,
-					justificacion_descuento,
-					descuento_usuario_id: descuento_porcentaje > 0 ? user.id : null,
-					costo_mano_obra: redondearMoneda(linea.costo_mano_obra || 0),
 					costo_materiales: redondearMoneda(costo_materiales || 0),
 					insumos_snapshot,
 					orden_linea: i
 				});
 			}
+			if (insumosCreados) getInsumos({}).refresh();
 
 			const importeDescuento = redondearMoneda(precio_total * (descuentoGlobalPorcentaje / 100));
 			const baseImponible = redondearMoneda(precio_total - importeDescuento);
@@ -557,6 +613,7 @@ export const cotizarCotizacion = command(
 				.where(eq(cotizaciones.id, cotizacion_id));
 		});
 
+		if (insumosCreados) getInsumos({}).refresh();
 		getCotizacionById(cotizacion_id).refresh();
 
 		return { success: true };
@@ -687,7 +744,9 @@ export const convertirCotizacionAPedido = command(v.number(), async (cotizacionI
 		.where(eq(lineas_cotizacion.cotizacion_id, cotizacionId))
 		.orderBy(lineas_cotizacion.orden_linea);
 
-	if (!lineas.length) throw new Error('La cotización no tiene líneas para producir');
+	if (!lineas.some((linea) => linea.visible_cliente && !linea.insumo_id)) {
+		throw new Error('La cotización no tiene líneas visibles para producir');
+	}
 
 	const [estadoPendiente] = await db
 		.select({ id: estados_pedido.id })
@@ -699,7 +758,7 @@ export const convertirCotizacionAPedido = command(v.number(), async (cotizacionI
 		cotizacion.precio_total ??
 		redondearMoneda(
 			lineas
-				.filter((linea) => !linea.insumo_id)
+				.filter((linea) => linea.visible_cliente && !linea.insumo_id)
 				.reduce((sum, linea) => sum + (linea.subtotal ?? 0), 0)
 		);
 
@@ -724,6 +783,8 @@ export const convertirCotizacionAPedido = command(v.number(), async (cotizacionI
 		pedidoId = pedido.id; // Asignar dentro de la transacción
 
 		for (const linea of lineas) {
+			if (!linea.visible_cliente && !linea.insumo_id) continue;
+
 			if (!linea.producto_id && linea.insumo_id) {
 				const [insumo] = await tx
 					.select({ unidad: insumos.unidad, costo_unitario: insumos.costo_unitario })
@@ -740,9 +801,6 @@ export const convertirCotizacionAPedido = command(v.number(), async (cotizacionI
 					costo_unitario: linea.costo_materiales,
 					precio_lista_unitario: linea.precio_lista_unitario,
 					precio_unitario: linea.precio_unitario,
-					descuento_porcentaje: linea.descuento_porcentaje,
-					justificacion_descuento: linea.justificacion_descuento,
-					descuento_usuario_id: linea.descuento_usuario_id,
 					cotizacion_linea_id: linea.id,
 					observaciones: `Insumo agregado desde la cotización ${cotizacion.numero_cotizacion}`
 				});
@@ -758,9 +816,6 @@ export const convertirCotizacionAPedido = command(v.number(), async (cotizacionI
 				precio_unitario: redondearMoneda(linea.precio_unitario || 0),
 				precio_lista_unitario: linea.precio_lista_unitario,
 				margen_porcentaje: linea.margen_porcentaje,
-				descuento_porcentaje: linea.descuento_porcentaje,
-				justificacion_descuento: linea.justificacion_descuento,
-				descuento_usuario_id: linea.descuento_usuario_id,
 				costo_materiales: linea.costo_materiales,
 				insumos_snapshot: linea.insumos_snapshot,
 				orden_linea: linea.orden_linea

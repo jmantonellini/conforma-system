@@ -8,7 +8,7 @@ import {
 	contactos
 } from '$lib/server/db/schema';
 import { and, eq, isNull, sql } from 'drizzle-orm';
-import { calcularIva21, redondearPrecio } from '$lib/utils/precios';
+import { calcularIva21, formatearDosDecimales, redondearPrecio } from '$lib/utils/precios';
 import { readFile } from 'fs/promises';
 import path from 'path';
 import logoUrl from '$lib/assets/Logo.png';
@@ -257,7 +257,11 @@ export async function generarPDFCotizacion(cotizacionId: number): Promise<{
 			})
 			.from(lineas_cotizacion)
 			.where(
-				and(eq(lineas_cotizacion.cotizacion_id, cotizacionId), isNull(lineas_cotizacion.insumo_id))
+				and(
+					eq(lineas_cotizacion.cotizacion_id, cotizacionId),
+					eq(lineas_cotizacion.visible_cliente, true),
+					isNull(lineas_cotizacion.insumo_id)
+				)
 			),
 		logoPromise
 	]);
@@ -277,7 +281,7 @@ export async function generarPDFCotizacion(cotizacionId: number): Promise<{
 			? '50% de anticipo al aprobar, saldo contra entrega.'
 			: cot.condiciones_pago.trim();
 	const formatearImporte = (importe: number) =>
-		`${importe < 0 ? '-$' : '$'}${Math.abs(importe).toLocaleString('es-AR', { minimumFractionDigits: 2 })}`;
+		`${importe < 0 ? '-$' : '$'}${formatearDosDecimales(Math.abs(importe))}`;
 	const clienteNombre =
 		cot.cliente?.razon_social ||
 		`${cot.cliente?.nombre ?? ''} ${cot.cliente?.apellido ?? ''}`.trim() ||
@@ -310,14 +314,14 @@ export async function generarPDFCotizacion(cotizacionId: number): Promise<{
 				...lineas.map((l) => [
 					l.descripcion_snapshot,
 					String(l.cantidad),
-					`$${l.precio?.toLocaleString('es-AR')}`,
-					`$${l.subtotal?.toLocaleString('es-AR')}`
+					`$${formatearDosDecimales(l.precio)}`,
+					`$${formatearDosDecimales(l.subtotal)}`
 				]),
 				...(descuentoGlobalPorcentaje > 0
 					? [
 							['Subtotal', '', '', formatearImporte(totalBase)],
 							[
-								`Descuento general (${descuentoGlobalPorcentaje.toLocaleString('es-AR')}%)`,
+								`Descuento general (${formatearDosDecimales(descuentoGlobalPorcentaje)}%)`,
 								'',
 								'',
 								formatearImporte(-importeDescuento)

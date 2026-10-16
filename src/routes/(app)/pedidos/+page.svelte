@@ -8,6 +8,7 @@
 	import { debounce } from '$lib/utils/debounce';
 	import { SvelteURLSearchParams } from 'svelte/reactivity';
 	import { formatearFecha } from '$lib/utils/fechas';
+	import { formatearDosDecimales } from '$lib/utils/precios';
 
 	let { data }: PageProps = $props();
 
@@ -45,7 +46,7 @@
 			</div>
 			<select
 				bind:value={estadoFilter}
-				class="select select-sm w-48"
+				class="select w-48 select-sm"
 				onchange={() => {
 					currentPage = 1;
 					handleSearchChange();
@@ -58,7 +59,7 @@
 			</select>
 		</div>
 		<Can modulo="pedidos" accion="create">
-			<a class="btn btn-sm btn-primary" href={resolve('/pedidos/crear')}>+ Nuevo Pedido</a>
+			<a class="btn btn-primary btn-sm" href={resolve('/pedidos/crear')}>+ Nuevo Pedido</a>
 		</Can>
 	</div>
 
@@ -83,7 +84,7 @@
 					{pedido.fecha_entrega ? formatearFecha(new Date(pedido.fecha_entrega)) : '-'}
 				</td>
 				<td class="text-right font-medium">
-					${pedido.total?.toLocaleString() || 0}
+					${formatearDosDecimales(pedido.total)}
 				</td>
 				<td>
 					<span class="badge badge-dash capitalize badge-{pedido.estado_color}">

@@ -44,15 +44,13 @@ import {
 	aplicarCambioPedidoEstado
 } from '$lib/server/services/pedidos-estado.service';
 import { obtenerPrecioProducto } from '$lib/server/services/productos.service';
-import { calcularPrecioConDescuento, redondearPrecio } from '$lib/utils/precios';
+import { formatearDosDecimales, redondearPrecio } from '$lib/utils/precios';
 
 export const LineaPedidoSchema = v.object({
 	producto_id: v.string(),
 	cantidad: v.pipe(v.number(), v.toMinValue(1)),
 	precio: v.pipe(v.number(), v.toMinValue(0)),
 	precio_lista: v.optional(v.pipe(v.number(), v.toMinValue(0)), 0),
-	descuento_porcentaje: v.optional(v.pipe(v.number(), v.minValue(0), v.maxValue(99.99)), 0),
-	justificacion_descuento: v.optional(v.string()),
 	descripcion: v.optional(v.string())
 });
 
@@ -177,8 +175,6 @@ export async function obtenerPedidoDetalle(id: number) {
 			precio_unitario: lineas_pedido.precio_unitario,
 			precio_lista_unitario: lineas_pedido.precio_lista_unitario,
 			margen_porcentaje: lineas_pedido.margen_porcentaje,
-			descuento_porcentaje: lineas_pedido.descuento_porcentaje,
-			justificacion_descuento: lineas_pedido.justificacion_descuento,
 			costo_materiales: lineas_pedido.costo_materiales,
 			subtotal: lineas_pedido.subtotal,
 			es_personalizado: lineas_pedido.es_personalizado,
@@ -232,9 +228,7 @@ export async function obtenerPedidoDetalle(id: number) {
 			unidad: pedido_insumos.unidad,
 			costo_unitario: pedido_insumos.costo_unitario,
 			precio_lista_unitario: pedido_insumos.precio_lista_unitario,
-			precio_unitario: pedido_insumos.precio_unitario,
-			descuento_porcentaje: pedido_insumos.descuento_porcentaje,
-			justificacion_descuento: pedido_insumos.justificacion_descuento
+			precio_unitario: pedido_insumos.precio_unitario
 		})
 		.from(pedido_insumos)
 		.innerJoin(insumos, eq(pedido_insumos.insumo_id, insumos.id))
@@ -393,7 +387,7 @@ export async function getHistorialPedidoServicio(pedidoId: number) {
 						tipo: 'pago' as const,
 						titulo: 'Anticipo inicial',
 						fecha: pedidoInfo.created_at,
-						detalle: `$${pedidoInfo.anticipo.toLocaleString('es-AR', { minimumFractionDigits: 2 })}`,
+						detalle: `$${formatearDosDecimales(pedidoInfo.anticipo)}`,
 						empleado: null,
 						estado_anterior: null,
 						estado_nuevo: null
@@ -405,11 +399,7 @@ export async function getHistorialPedidoServicio(pedidoId: number) {
 			tipo: 'pago' as const,
 			titulo: 'Pago registrado',
 			fecha: pago.fecha_pago ?? pago.created_at,
-			detalle: [
-				`$${pago.monto.toLocaleString('es-AR', { minimumFractionDigits: 2 })}`,
-				pago.metodo_pago,
-				pago.observaciones
-			]
+			detalle: [`$${formatearDosDecimales(pago.monto)}`, pago.metodo_pago, pago.observaciones]
 				.filter(Boolean)
 				.join(' · '),
 			empleado: null,
@@ -469,8 +459,6 @@ export async function crearPedidoServicio(data: {
 		cantidad: number;
 		precio: number;
 		precio_lista?: number;
-		descuento_porcentaje?: number;
-		justificacion_descuento?: string;
 		descripcion?: string;
 	}[];
 	fecha_entrega_prometida?: string;
@@ -481,9 +469,6 @@ export async function crearPedidoServicio(data: {
 	if (!user) throw new Error('Usuario no autenticado');
 
 	await requirePermission('pedidos', 'create');
-	if (data.lineas.some((linea) => (linea.descuento_porcentaje ?? 0) > 0)) {
-		await requirePermission('pedidos', 'descuento');
-	}
 	const lineasConPrecio = await Promise.all(
 		data.lineas.map(async (linea) => {
 			let precio_lista_unitario = redondearPrecio(linea.precio_lista ?? linea.precio);
@@ -500,23 +485,13 @@ export async function crearPedidoServicio(data: {
 				margen_porcentaje = precioProducto.margen_porcentaje;
 				costo_materiales = precioProducto.costo_materiales;
 			}
-			const descuento_porcentaje = Number(linea.descuento_porcentaje ?? 0);
-			const justificacion_descuento =
-				descuento_porcentaje > 0 ? linea.justificacion_descuento?.trim() || null : null;
-			const precio = calcularPrecioConDescuento(
-				precio_lista_unitario,
-				descuento_porcentaje,
-				justificacion_descuento ?? undefined
-			);
+			const precio = redondearPrecio(precio_lista_unitario);
 			return {
 				...linea,
 				precio,
 				precio_lista_unitario,
 				margen_porcentaje,
-				costo_materiales,
-				descuento_porcentaje,
-				justificacion_descuento,
-				descuento_usuario_id: descuento_porcentaje > 0 ? user.id : null
+				costo_materiales
 			};
 		})
 	);
@@ -567,9 +542,6 @@ export async function crearPedidoServicio(data: {
 			precio_unitario: linea.precio,
 			precio_lista_unitario: linea.precio_lista_unitario,
 			margen_porcentaje: linea.margen_porcentaje,
-			descuento_porcentaje: linea.descuento_porcentaje,
-			justificacion_descuento: linea.justificacion_descuento,
-			descuento_usuario_id: linea.descuento_usuario_id,
 			costo_materiales: linea.costo_materiales,
 			es_personalizado: linea.producto_id === 'personalizado',
 			descripcion_personalizada: linea.descripcion

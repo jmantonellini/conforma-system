@@ -5,6 +5,7 @@
 	import FormDireccion from '$lib/components/ui/FormDireccion.svelte';
 	import { actualizarContacto, eliminarContacto } from '$lib/remote/contactos.remote';
 	import { toast } from '$lib/stores/toast.svelte';
+	import { formatearDosDecimales } from '$lib/utils/precios';
 	import type { PageProps } from './$types';
 
 	let { data }: PageProps = $props();
@@ -248,11 +249,7 @@
 									>
 									<td>{pedido.fecha_pedido?.toLocaleDateString('es-AR') || '-'}</td>
 									<td><span class="badge badge-sm">{pedido.estado || 'Sin estado'}</span></td>
-									<td class="text-right"
-										>${Number(pedido.precio_total ?? 0).toLocaleString('es-AR', {
-											minimumFractionDigits: 2
-										})}</td
-									>
+									<td class="text-right">${formatearDosDecimales(pedido.precio_total)}</td>
 								</tr>
 							{/each}
 						</tbody>

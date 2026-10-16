@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { calcularIva21, calcularPrecioConDescuento, calcularPrecioVenta } from './precios';
+import {
+	calcularIva21,
+	calcularPrecioConDescuento,
+	calcularPrecioVenta,
+	formatearDosDecimales
+} from './precios';
 
 describe('quotation pricing', () => {
 	it('calculates 21% VAT rounded to cents', () => {
@@ -9,6 +14,12 @@ describe('quotation pricing', () => {
 
 	it('calculates the sale price from cost and margin', () => {
 		expect(calcularPrecioVenta(100, 25)).toBe(133.33);
+	});
+
+	it('formats rounded values with exactly two locale decimals', () => {
+		expect(formatearDosDecimales(1234.5)).toBe('1.234,50');
+		expect(formatearDosDecimales(12.345)).toBe('12,35');
+		expect(formatearDosDecimales(12)).toBe('12,00');
 	});
 
 	it('applies a justified discount to the list price', () => {

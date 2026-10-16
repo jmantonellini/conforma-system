@@ -13,24 +13,20 @@ export type LineaInicial = {
 	id: number;
 	producto_id: number | null;
 	insumo_id: number | null;
+	visible_cliente: boolean;
 	insumo_unidad: string | null;
 	descripcion: string;
 	cantidad: number;
 	precio_unitario: number;
 	precio_lista_unitario: number;
-	margen_porcentaje: number | null;
-	descuento_porcentaje: number | null;
-	justificacion_descuento: string | null;
-	costo_mano_obra: number | null;
 	costo_materiales: number;
-	insumos_snapshot: unknown;
+	insumos_snapshot?: MaterialSnapshot[] | null;
 };
 
 export type ProductoOpcion = {
 	id: number;
 	nombre: string;
 	costo_materiales: number | null;
-	margen_porcentaje: number | null;
 	precio_venta: number;
 };
 
@@ -44,19 +40,24 @@ export type InsumoOpcion = {
 
 export type LineaEdicion = {
 	idx: number;
-	tipo: 'producto' | 'insumo' | 'personalizado';
+	tipo: 'producto' | 'insumo' | 'concepto';
+	visible_cliente: boolean;
 	producto_id: string;
 	insumo_id: number | string | undefined;
-	unidad: string;
+	nuevo_insumo?: {
+		nombre: string;
+		tipo_id: number;
+		categoria_id?: number;
+		unidad_id: number;
+		unidad: string;
+		costo_unitario: number;
+	};
 	insumos_snapshot: MaterialSnapshot[];
+	unidad: string;
 	descripcion: string;
 	cantidad: number;
 	precio_unitario: number;
 	precio_lista_unitario: number;
 	precio_minimo_unitario: number;
-	margen_porcentaje: number;
-	descuento_porcentaje: number;
-	justificacion_descuento: string;
-	costo_mano_obra: number;
 	costo_materiales: number;
 };

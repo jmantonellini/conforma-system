@@ -175,35 +175,20 @@ export const lineas_cotizacion = pgTable(
 		producto_id: integer('producto_id').references(() => productos.id, { onDelete: 'set null' }),
 		insumo_id: integer('insumo_id').references(() => insumos.id, { onDelete: 'set null' }),
 		es_personalizado: boolean('es_personalizado').default(false),
+		visible_cliente: boolean('visible_cliente').notNull().default(true),
 		descripcion: text('descripcion').notNull(),
 		cantidad: integer('cantidad').notNull().default(1),
 		precio_unitario: real('precio_unitario').notNull(),
 		subtotal: real('subtotal').generatedAlwaysAs(sql`cantidad * precio_unitario`),
 		precio_lista_unitario: real('precio_lista_unitario').notNull().default(0),
 		margen_porcentaje: real('margen_porcentaje').notNull().default(0),
-		descuento_porcentaje: real('descuento_porcentaje').notNull().default(0),
-		justificacion_descuento: text('justificacion_descuento'),
-		descuento_usuario_id: integer('descuento_usuario_id').references(() => usuarios.id, {
-			onDelete: 'set null'
-		}),
-		costo_mano_obra: real('costo_mano_obra'),
 		costo_materiales: real('costo_materiales').notNull().default(0),
 		insumos_snapshot: jsonb('insumos_snapshot'),
 		orden_linea: integer('orden_linea'),
 		created_at: timestamp('created_at').defaultNow(),
 		updated_at: timestamp('updated_at').$onUpdate(() => new Date())
 	},
-	(table) => [
-		index('idx_lineas_cotizacion').on(table.cotizacion_id),
-		check(
-			'lineas_cotizacion_descuento_range',
-			sql`${table.descuento_porcentaje} >= 0 AND ${table.descuento_porcentaje} < 100`
-		),
-		check(
-			'lineas_cotizacion_descuento_reason',
-			sql`${table.descuento_porcentaje} = 0 OR length(trim(coalesce(${table.justificacion_descuento}, ''))) > 0`
-		)
-	]
+	(table) => [index('idx_lineas_cotizacion').on(table.cotizacion_id)]
 );
 
 export const adjuntos_cotizacion = pgTable(
@@ -401,28 +386,13 @@ export const lineas_pedido = pgTable(
 		subtotal: real('subtotal').generatedAlwaysAs(sql`cantidad * precio_unitario`),
 		precio_lista_unitario: real('precio_lista_unitario').notNull().default(0),
 		margen_porcentaje: real('margen_porcentaje').notNull().default(0),
-		descuento_porcentaje: real('descuento_porcentaje').notNull().default(0),
-		justificacion_descuento: text('justificacion_descuento'),
-		descuento_usuario_id: integer('descuento_usuario_id').references(() => usuarios.id, {
-			onDelete: 'set null'
-		}),
 		costo_materiales: real('costo_materiales').notNull().default(0),
 		insumos_snapshot: jsonb('insumos_snapshot'),
 		orden_linea: integer('orden_linea'),
 		created_at: timestamp('created_at').defaultNow(),
 		updated_at: timestamp('updated_at').$onUpdate(() => new Date())
 	},
-	(table) => [
-		index('idx_lineas_pedido').on(table.pedido_id),
-		check(
-			'lineas_pedido_descuento_range',
-			sql`${table.descuento_porcentaje} >= 0 AND ${table.descuento_porcentaje} < 100`
-		),
-		check(
-			'lineas_pedido_descuento_reason',
-			sql`${table.descuento_porcentaje} = 0 OR length(trim(coalesce(${table.justificacion_descuento}, ''))) > 0`
-		)
-	]
+	(table) => [index('idx_lineas_pedido').on(table.pedido_id)]
 );
 
 export const pedido_insumos = pgTable(
@@ -440,11 +410,6 @@ export const pedido_insumos = pgTable(
 		costo_unitario: real('costo_unitario'),
 		precio_lista_unitario: real('precio_lista_unitario').notNull().default(0),
 		precio_unitario: real('precio_unitario').notNull().default(0),
-		descuento_porcentaje: real('descuento_porcentaje').notNull().default(0),
-		justificacion_descuento: text('justificacion_descuento'),
-		descuento_usuario_id: integer('descuento_usuario_id').references(() => usuarios.id, {
-			onDelete: 'set null'
-		}),
 		cotizacion_linea_id: integer('cotizacion_linea_id').references(() => lineas_cotizacion.id, {
 			onDelete: 'set null'
 		}),
@@ -452,17 +417,7 @@ export const pedido_insumos = pgTable(
 		created_at: timestamp('created_at').defaultNow(),
 		updated_at: timestamp('updated_at').$onUpdate(() => new Date())
 	},
-	(table) => [
-		index('idx_pedido_insumos_pedido').on(table.pedido_id),
-		check(
-			'pedido_insumos_descuento_range',
-			sql`${table.descuento_porcentaje} >= 0 AND ${table.descuento_porcentaje} < 100`
-		),
-		check(
-			'pedido_insumos_descuento_reason',
-			sql`${table.descuento_porcentaje} = 0 OR length(trim(coalesce(${table.justificacion_descuento}, ''))) > 0`
-		)
-	]
+	(table) => [index('idx_pedido_insumos_pedido').on(table.pedido_id)]
 );
 
 // ============================================================
@@ -475,6 +430,7 @@ export const pagos = pgTable('pagos', {
 		.references(() => pedidos.id, { onDelete: 'cascade' })
 		.notNull(),
 	monto: real('monto').notNull(),
+	cantidad_cuotas: integer('cantidad_cuotas'),
 	fecha_pago: timestamp('fecha_pago').defaultNow(),
 	metodo_pago: text('metodo_pago'), // 'efectivo', 'transferencia', 'cheque'
 	observaciones: text('observaciones'),

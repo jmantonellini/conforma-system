@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { onDestroy } from 'svelte';
 	import { FormFieldWrapper } from '.';
 
 	let {
@@ -10,6 +11,7 @@
 		id = '',
 		class: className = '',
 		allowClear = true,
+		onSearch,
 		...restProps
 	}: {
 		options: { value: string; label: string }[];
@@ -20,19 +22,28 @@
 		class?: string;
 		allowClear?: boolean;
 		onChange?: (val: string) => void;
+		onSearch?: (term: string) => Promise<void>;
 		[key: string]: any;
 	} = $props();
 
+	type Option = { value: string; label: string };
 	let searchTerm = $state('');
 	let isOpen = $state(false);
 	let activeIndex = $state(0);
 	let hasTyped = $state(false);
+	let selectedOption = $state<Option | null>(null);
+	let isSearching = $state(false);
+	let searchFailed = $state(false);
+	let searchTimer: ReturnType<typeof setTimeout> | undefined;
+	let searchRequestId = 0;
 	let listboxId = $derived(`${id}-options`);
 	let selectedLabel = $derived(
-		options.find((option) => option.value === field?.value?.())?.label ?? ''
+		selectedOption && selectedOption.value === field?.value?.()
+			? selectedOption.label
+			: (options.find((option) => option.value === field?.value?.())?.label ?? '')
 	);
 	let filteredOptions = $derived(
-		hasTyped && searchTerm
+		!onSearch && hasTyped && searchTerm
 			? options.filter(
 					(opt) =>
 						opt.label.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -41,11 +52,43 @@
 			: options
 	);
 
+	function buscarRemoto(term: string, debounce: boolean) {
+		if (!onSearch) return;
+		if (searchTimer) clearTimeout(searchTimer);
+		const requestId = ++searchRequestId;
+		isSearching = true;
+		searchFailed = false;
+
+		const ejecutar = async () => {
+			try {
+				await onSearch(term);
+			} catch {
+				if (requestId === searchRequestId) searchFailed = true;
+			} finally {
+				if (requestId === searchRequestId) isSearching = false;
+			}
+		};
+
+		if (debounce) searchTimer = setTimeout(() => void ejecutar(), 250);
+		else void ejecutar();
+	}
+
+	function cancelarBusqueda() {
+		searchRequestId += 1;
+		if (searchTimer) clearTimeout(searchTimer);
+		searchTimer = undefined;
+		isSearching = false;
+	}
+
+	onDestroy(cancelarBusqueda);
+
 	function clearSelection() {
 		if (field?.set) field.set('');
+		selectedOption = null;
 		searchTerm = '';
 		hasTyped = false;
 		isOpen = true;
+		buscarRemoto('', false);
 		onChange('');
 	}
 
@@ -53,6 +96,7 @@
 		isOpen = true;
 		hasTyped = false;
 		searchTerm = selectedLabel;
+		buscarRemoto('', false);
 		const selectedIndex = options.findIndex((option) => option.value === field?.value?.());
 		activeIndex = selectedIndex >= 0 ? selectedIndex : 0;
 		if (event?.currentTarget instanceof HTMLInputElement) {
@@ -65,6 +109,7 @@
 		hasTyped = true;
 		activeIndex = 0;
 		isOpen = true;
+		buscarRemoto(searchTerm.trim(), true);
 	}
 
 	function handleKeydown(event: KeyboardEvent) {
@@ -90,6 +135,7 @@
 			if (option) handleSelect(option);
 		} else if (event.key === 'Escape' && isOpen) {
 			event.preventDefault();
+			cancelarBusqueda();
 			isOpen = false;
 			hasTyped = false;
 			searchTerm = selectedLabel;
@@ -98,14 +144,16 @@
 
 	function handleSelect(option: { value: string; label: string }) {
 		if (field?.set) field.set(option.value);
+		selectedOption = option;
 		searchTerm = option.label;
 		hasTyped = false;
 		isOpen = false;
+		cancelarBusqueda();
 		onChange(option.value);
 	}
 </script>
 
-<div class="relative {className || ''}" class:z-50={isOpen}>
+<div class={[`relative ${className || ''}`, { 'z-50': isOpen }]}>
 	<FormFieldWrapper {label} {id}>
 		<div class="relative">
 			<input
@@ -145,13 +193,30 @@
 	{#if field?.as}
 		<select {...field.as('select')} class="hidden">
 			<option value="">Seleccionar...</option>
+			{#if selectedOption && selectedOption.value === field?.value?.() && !options.some((option) => option.value === selectedOption?.value)}
+				<option value={selectedOption.value}>{selectedOption.label}</option>
+			{/if}
 			{#each options as opt (opt.value)}
 				<option value={opt.value}>{opt.label}</option>
 			{/each}
 		</select>
 	{/if}
 
-	{#if isOpen && filteredOptions.length}
+	{#if isOpen && isSearching}
+		<div
+			role="status"
+			class="absolute z-50 mt-1 w-full rounded-md border border-base-300 bg-base-100 px-3 py-2 text-sm text-base-content/70 shadow-lg"
+		>
+			Buscando...
+		</div>
+	{:else if isOpen && searchFailed}
+		<div
+			role="status"
+			class="absolute z-50 mt-1 w-full rounded-md border border-base-300 bg-base-100 px-3 py-2 text-sm text-error shadow-lg"
+		>
+			No se pudo completar la búsqueda
+		</div>
+	{:else if isOpen && filteredOptions.length}
 		<div
 			id={listboxId}
 			role="listbox"
@@ -164,8 +229,10 @@
 					role="option"
 					aria-selected={opt.value === field?.value?.()}
 					tabindex="-1"
-					class="w-full px-4 py-2 text-left hover:bg-base-200"
-					class:bg-base-200={index === activeIndex}
+					class={[
+						'w-full px-4 py-2 text-left hover:bg-base-200',
+						{ 'bg-base-200': index === activeIndex }
+					]}
 					onmousedown={(event) => event.preventDefault()}
 					onclick={() => handleSelect(opt)}
 				>

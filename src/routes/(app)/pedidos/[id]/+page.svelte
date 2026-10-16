@@ -19,6 +19,7 @@
 	import { toast } from '$lib/stores/toast.svelte';
 	import { Paths } from '$lib/types';
 	import { formatearFecha } from '$lib/utils/fechas';
+	import { formatearDosDecimales } from '$lib/utils/precios';
 	import PedidoEnvios from './PedidoEnvios.svelte';
 	import PedidoPagos from './PedidoPagos.svelte';
 
@@ -181,7 +182,6 @@
 							<th>Cantidad</th>
 							<th>Costo</th>
 							<th>Precio lista</th>
-							<th>Descuento</th>
 							<th>Precio neto</th>
 							<th>Subtotal</th>
 							<th>Fabricación</th>
@@ -202,28 +202,10 @@
 								{linea.producto_nombre || linea.descripcion_personalizada || '-'}
 							</td>
 							<td class="text-center">{linea.cantidad}</td>
-							<td class="text-right"
-								>${Number(linea.costo_materiales || 0).toLocaleString('es-AR', {
-									minimumFractionDigits: 2
-								})}</td
-							>
-							<td class="text-right"
-								>${Number(linea.precio_lista_unitario || 0).toLocaleString('es-AR', {
-									minimumFractionDigits: 2
-								})}</td
-							>
-							<td class="text-right">
-								{#if linea.descuento_porcentaje > 0}
-									<span class="font-medium">{linea.descuento_porcentaje}%</span>
-									<p class="max-w-48 text-xs whitespace-normal text-base-content/60">
-										{linea.justificacion_descuento}
-									</p>
-								{:else}
-									-
-								{/if}
-							</td>
-							<td class="text-right">${linea.precio_unitario?.toLocaleString() || '0'}</td>
-							<td class="text-right font-semibold">${linea.subtotal?.toLocaleString() || '0'}</td>
+							<td class="text-right">${formatearDosDecimales(linea.costo_materiales)}</td>
+							<td class="text-right">${formatearDosDecimales(linea.precio_lista_unitario)}</td>
+							<td class="text-right">${formatearDosDecimales(linea.precio_unitario)}</td>
+							<td class="text-right font-semibold">${formatearDosDecimales(linea.subtotal)}</td>
 							<td>
 								{#if linea.produccion}
 									{@const p = linea.produccion}
@@ -260,7 +242,7 @@
 						{#snippet footer()}
 							<td colspan="9" class="text-right font-bold">Total:</td>
 							<td class="text-right text-lg font-bold text-primary">
-								${pedido.total?.toLocaleString() || '0'}
+								${formatearDosDecimales(pedido.total)}
 							</td>
 						{/snippet}
 						<Table data={await lineas} {header} {row} {footer} />
@@ -279,7 +261,7 @@
 										<th>Código</th><th>Insumo</th><th>Unidad</th><th class="text-right">Cantidad</th
 										>
 										<th class="text-right">Costo</th><th class="text-right">Precio lista</th>
-										<th class="text-right">Descuento</th><th class="text-right">Precio neto</th>
+										<th class="text-right">Precio neto</th>
 									</tr>
 								</thead>
 								<tbody>
@@ -289,28 +271,11 @@
 											<td>{insumo.nombre}</td>
 											<td>{insumo.unidad}</td>
 											<td class="text-right">{insumo.cantidad}</td>
+											<td class="text-right">${formatearDosDecimales(insumo.costo_unitario)}</td>
 											<td class="text-right"
-												>${Number(insumo.costo_unitario || 0).toLocaleString('es-AR', {
-													minimumFractionDigits: 2
-												})}</td
+												>${formatearDosDecimales(insumo.precio_lista_unitario)}</td
 											>
-											<td class="text-right"
-												>${Number(insumo.precio_lista_unitario || 0).toLocaleString('es-AR', {
-													minimumFractionDigits: 2
-												})}</td
-											>
-											<td class="text-right">
-												{#if insumo.descuento_porcentaje > 0}
-													{insumo.descuento_porcentaje}% · {insumo.justificacion_descuento}
-												{:else}
-													-
-												{/if}
-											</td>
-											<td class="text-right"
-												>${Number(insumo.precio_unitario || 0).toLocaleString('es-AR', {
-													minimumFractionDigits: 2
-												})}</td
-											>
+											<td class="text-right">${formatearDosDecimales(insumo.precio_unitario)}</td>
 										</tr>
 									{/each}
 								</tbody>

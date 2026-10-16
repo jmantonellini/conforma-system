@@ -243,17 +243,21 @@ export const obtenerContactos = query(
 export const obtenerContactosCliente = query(
 	v.object({
 		search: v.optional(v.string()),
-		limit: v.optional(v.number(), 100)
+		limit: v.optional(v.number(), 100),
+		soloDistribuidores: v.optional(v.boolean(), false)
 	}),
-	async ({ search, limit }) => {
+	async ({ search, limit, soloDistribuidores }) => {
 		const condicionBase = construirCondicionContactoBase({ search, rol: 'cliente' });
+		const where = soloDistribuidores
+			? and(condicionBase, eq(contactos.es_distribuidor, true))
+			: condicionBase;
 		const datos = await db
 			.select()
 			.from(contactos)
-			.where(condicionBase)
+			.where(where)
 			.orderBy(contactos.razon_social)
 			.limit(limit);
-		const [{ total }] = await db.select({ total: count() }).from(contactos).where(condicionBase);
+		const [{ total }] = await db.select({ total: count() }).from(contactos).where(where);
 		return { data: datos, total };
 	}
 );

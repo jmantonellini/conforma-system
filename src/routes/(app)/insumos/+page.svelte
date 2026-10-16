@@ -15,6 +15,7 @@
 	import { toast } from '$lib/stores/toast.svelte';
 	import { debounce } from '$lib/utils/debounce';
 	import { can as tienePermiso } from '$lib/utils/permissions';
+	import { formatearDosDecimales } from '$lib/utils/precios';
 	import { SvelteURLSearchParams } from 'svelte/reactivity';
 	import type { PageProps } from './$types';
 
@@ -136,9 +137,7 @@
 				>
 				<td><Highlight text={insumo.categoria?.nombre ?? 'Sin categoría'} query={search} /></td>
 				<td>{insumo.unidad}</td>
-				<td class="text-right"
-					>${insumo.costo_unitario.toLocaleString('es-AR', { minimumFractionDigits: 2 })}</td
-				>
+				<td class="text-right">${formatearDosDecimales(insumo.costo_unitario)}</td>
 				<td>
 					<div class="flex justify-center gap-2">
 						<Can modulo="insumos" accion="edit">

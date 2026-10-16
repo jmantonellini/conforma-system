@@ -1,7 +1,9 @@
 <script lang="ts">
 	import { invalidateAll } from '$app/navigation';
-	import { untrack } from 'svelte';
-	import CotizacionLineaFila from '$lib/components/cotizaciones/CotizacionLineaFila.svelte';
+	import { onMount, untrack } from 'svelte';
+	import CotizacionLineasTabla from '$lib/components/cotizaciones/CotizacionLineasTabla.svelte';
+	import CotizacionNuevoInsumoDialog from '$lib/components/cotizaciones/CotizacionNuevoInsumoDialog.svelte';
+	import CotizacionTotales from '$lib/components/cotizaciones/CotizacionTotales.svelte';
 	import { cotizarCotizacion } from '$lib/remote/cotizaciones.remote';
 	import { getProductoConReceta } from '$lib/remote/productos.remote';
 	import { toast } from '$lib/stores/toast.svelte';
@@ -11,7 +13,6 @@
 		InsumoOpcion,
 		LineaEdicion,
 		LineaInicial,
-		MaterialSnapshot,
 		ProductoOpcion
 	} from '$lib/types/cotizacion-editor';
 
@@ -26,6 +27,9 @@
 		lineasIniciales: LineaInicial[];
 		productos: ProductoOpcion[];
 		insumos: InsumoOpcion[];
+		tiposInsumo: { id: number; nombre: string }[];
+		categoriasInsumo: { id: number; nombre: string }[];
+		unidadesInsumo: { id: number; nombre: string }[];
 	};
 
 	let {
@@ -38,12 +42,15 @@
 		condicionesPagoInicial,
 		lineasIniciales,
 		productos,
-		insumos
+		insumos,
+		tiposInsumo,
+		categoriasInsumo,
+		unidadesInsumo
 	}: Props = $props();
 	const totalBaseInicial = untrack(() =>
 		Number(
 			lineasIniciales
-				.filter((linea) => linea.producto_id || !linea.insumo_id)
+				.filter((linea) => linea.visible_cliente)
 				.reduce((suma, linea) => suma + linea.cantidad * linea.precio_unitario, 0)
 				.toFixed(2)
 		)
@@ -64,43 +71,43 @@
 	let condicionesPago = $state(
 		untrack(() => condicionesPagoInicial ?? '50% de anticipo al aprobar, saldo contra entrega.')
 	);
-	let validezDias = $derived(validezInicial);
+	let validezDias = $state(untrack(() => validezInicial));
 	let guardando = $state(false);
 	let siguienteId = $state(Date.now());
+	let nuevoInsumoAbierto = $state(false);
+	const atajosAgregar = [
+		{ key: 'F1', action: () => agregarLinea('producto') },
+		{ key: 'F2', action: () => agregarLinea('insumo') },
+		{ key: 'F3', action: () => agregarLinea('concepto') },
+		{ key: 'F4', action: abrirNuevoInsumo }
+	] as const;
 
 	let lineas = $derived.by<LineaEdicion[]>(() =>
 		lineasIniciales.map((linea) => {
 			const producto = productos.find((item) => item.id === linea.producto_id);
 			const insumo = insumos.find((item) => item.id === linea.insumo_id);
 			const precioMinimo = producto?.precio_venta ?? insumo?.costo_unitario ?? 0;
-
 			return {
 				idx: linea.id,
-				tipo: linea.producto_id ? 'producto' : linea.insumo_id ? 'insumo' : 'personalizado',
+				tipo: linea.producto_id ? 'producto' : linea.insumo_id ? 'insumo' : 'concepto',
+				visible_cliente: linea.visible_cliente,
 				producto_id: linea.producto_id ? String(linea.producto_id) : '',
 				insumo_id: linea.insumo_id ?? undefined,
+				insumos_snapshot: Array.isArray(linea.insumos_snapshot) ? linea.insumos_snapshot : [],
 				unidad: linea.insumo_unidad ?? '',
-				insumos_snapshot: Array.isArray(linea.insumos_snapshot)
-					? (linea.insumos_snapshot as MaterialSnapshot[])
-					: [],
 				descripcion: linea.descripcion,
 				cantidad: linea.cantidad,
 				precio_unitario: linea.precio_unitario,
 				precio_lista_unitario: Math.max(linea.precio_lista_unitario, precioMinimo),
 				precio_minimo_unitario: precioMinimo,
-				margen_porcentaje: linea.margen_porcentaje ?? 0,
-				descuento_porcentaje: linea.descuento_porcentaje ?? 0,
-				justificacion_descuento: linea.justificacion_descuento ?? '',
-				costo_mano_obra: linea.costo_mano_obra ?? 0,
 				costo_materiales: linea.costo_materiales ?? 0
 			};
 		})
 	);
-
 	let totalBase = $derived(
 		Number(
 			lineas
-				.filter((linea) => linea.tipo !== 'insumo')
+				.filter((linea) => linea.visible_cliente)
 				.reduce((suma, linea) => suma + linea.cantidad * linea.precio_unitario, 0)
 				.toFixed(2)
 		)
@@ -119,19 +126,16 @@
 		return {
 			idx,
 			tipo,
+			visible_cliente: tipo !== 'insumo',
 			producto_id: '',
 			insumo_id: undefined,
-			unidad: '',
 			insumos_snapshot: [],
-			descripcion: '',
+			unidad: '',
+			descripcion: tipo === 'concepto' ? 'Trabajo o concepto para el cliente' : '',
 			cantidad: 1,
 			precio_unitario: 0,
 			precio_lista_unitario: 0,
 			precio_minimo_unitario: 0,
-			margen_porcentaje: 0,
-			descuento_porcentaje: 0,
-			justificacion_descuento: '',
-			costo_mano_obra: 0,
 			costo_materiales: 0
 		};
 	}
@@ -144,27 +148,8 @@
 		lineas = lineas.map((linea) => (linea.idx === lineaId ? { ...linea, ...cambios } : linea));
 	}
 
-	function actualizarDescuento(
-		lineaId: number,
-		campo: 'porcentaje' | 'justificacion',
-		valor: string
-	) {
-		lineas = lineas.map((linea) => {
-			if (linea.idx !== lineaId) return linea;
-			const descuento =
-				campo === 'porcentaje'
-					? Math.min(Math.max(Number(valor) || 0, 0), 99.99)
-					: linea.descuento_porcentaje;
-			const justificacion =
-				descuento === 0 ? '' : campo === 'justificacion' ? valor : linea.justificacion_descuento;
-
-			return {
-				...linea,
-				descuento_porcentaje: descuento,
-				justificacion_descuento: justificacion,
-				precio_unitario: redondearPrecio(linea.precio_lista_unitario * (1 - descuento / 100))
-			};
-		});
+	function cambiarVisibilidad(lineaId: number, visible: boolean) {
+		actualizarLinea(lineaId, { visible_cliente: visible });
 	}
 
 	function actualizarPrecioUnitario(lineaId: number, valor: string) {
@@ -174,7 +159,7 @@
 			return {
 				...linea,
 				precio_lista_unitario: precioLista,
-				precio_unitario: redondearPrecio(precioLista * (1 - linea.descuento_porcentaje / 100))
+				precio_unitario: redondearPrecio(precioLista)
 			};
 		});
 	}
@@ -192,61 +177,56 @@
 			limpiarLinea(lineaId, 'producto');
 			return;
 		}
+		const producto = productos.find((item) => item.id === Number(productoId));
+		if (!producto) return;
 
+		let insumos_snapshot: LineaEdicion['insumos_snapshot'];
 		try {
-			const { producto, receta, recetaDirecta, componentes } = await getProductoConReceta(
-				Number(productoId)
-			);
-			const snapshot: MaterialSnapshot[] = recetaDirecta.map((linea) => {
-				if (linea.insumo_id) {
-					const material = receta.find((item) => item.insumo_id === linea.insumo_id);
-					const insumo = insumos.find((item) => item.id === linea.insumo_id);
-					const nombre = material?.nombre ?? insumo?.nombre ?? 'Insumo';
-					const costo = material?.costo_unitario ?? insumo?.costo_unitario ?? 0;
+			const receta = await getProductoConReceta(Number(productoId));
+			insumos_snapshot = receta.recetaDirecta.map((material) => {
+				if (material.insumo_id) {
+					const detalle = receta.receta.find((item) => item.insumo_id === material.insumo_id);
 					return {
-						insumo_id: linea.insumo_id,
-						codigo: material?.codigo ?? insumo?.codigo ?? null,
-						nombre,
-						cantidad: linea.cantidad,
-						costo_unitario: Number((costo ?? 0).toFixed(2)),
-						unidad: material?.unidad ?? insumo?.unidad ?? '',
-						subtotal: Number(((linea.cantidad || 0) * (costo ?? 0)).toFixed(2))
+						insumo_id: material.insumo_id,
+						codigo: detalle?.codigo ?? null,
+						nombre: detalle?.nombre ?? 'Insumo',
+						cantidad: material.cantidad,
+						costo_unitario: detalle?.costo_unitario ?? 0,
+						unidad: detalle?.unidad ?? '',
+						subtotal: (material.cantidad || 0) * (detalle?.costo_unitario ?? 0)
 					};
 				}
 
 				const nombre =
-					componentes.find((componente) => componente.componente_id === linea.producto_id)
-						?.nombre ??
-					productos.find((item) => item.id === linea.producto_id)?.nombre ??
-					'Componente';
+					receta.componentes.find((componente) => componente.componente_id === material.producto_id)
+						?.nombre ?? 'Componente';
 				return {
-					producto_id: linea.producto_id ?? null,
-					nombre: `${nombre} (${linea.cantidad}x)`,
-					cantidad: linea.cantidad,
+					producto_id: material.producto_id ?? null,
+					nombre: `${nombre} (${material.cantidad}x)`,
+					cantidad: material.cantidad,
 					unidad: 'subproducto',
 					costo_unitario: 0,
 					subtotal: 0
 				};
 			});
-
-			actualizarLinea(lineaId, {
-				tipo: 'producto',
-				producto_id: productoId,
-				insumo_id: undefined,
-				unidad: '',
-				descripcion: producto.nombre,
-				costo_materiales: producto.costo_materiales ?? 0,
-				margen_porcentaje: producto.margen_porcentaje ?? 0,
-				descuento_porcentaje: 0,
-				justificacion_descuento: '',
-				precio_lista_unitario: producto.precio_venta,
-				precio_minimo_unitario: producto.precio_venta,
-				precio_unitario: producto.precio_venta,
-				insumos_snapshot: snapshot
-			});
 		} catch {
-			toast.error('No se pudo cargar la receta del producto');
+			insumos_snapshot = [];
 		}
+
+		actualizarLinea(lineaId, {
+			tipo: 'producto',
+			visible_cliente: true,
+			producto_id: productoId,
+			insumo_id: undefined,
+			nuevo_insumo: undefined,
+			unidad: '',
+			descripcion: producto.nombre,
+			costo_materiales: producto.costo_materiales ?? 0,
+			precio_lista_unitario: producto.precio_venta,
+			precio_minimo_unitario: producto.precio_venta,
+			precio_unitario: producto.precio_venta,
+			insumos_snapshot
+		});
 	}
 
 	function seleccionarInsumo(lineaId: number, valor: string) {
@@ -258,29 +238,58 @@
 
 		actualizarLinea(lineaId, {
 			tipo: 'insumo',
+			visible_cliente: false,
 			insumo_id: insumo.id,
+			nuevo_insumo: undefined,
 			producto_id: '',
 			descripcion: insumo.nombre,
 			unidad: insumo.unidad,
 			precio_unitario: insumo.costo_unitario,
 			costo_materiales: insumo.costo_unitario,
 			precio_lista_unitario: insumo.costo_unitario,
-			precio_minimo_unitario: insumo.costo_unitario,
-			margen_porcentaje: 0,
-			descuento_porcentaje: 0,
-			justificacion_descuento: '',
-			insumos_snapshot: [
-				{
-					insumo_id: insumo.id,
-					codigo: insumo.codigo,
-					nombre: insumo.nombre,
-					cantidad: 1,
-					costo_unitario: insumo.costo_unitario,
-					unidad: insumo.unidad,
-					subtotal: insumo.costo_unitario
-				}
-			]
+			precio_minimo_unitario: insumo.costo_unitario
 		});
+	}
+
+	onMount(() => {
+		const handleKeydown = (event: KeyboardEvent) => {
+			if (event.target instanceof HTMLElement) {
+				const tag = event.target.tagName;
+				if (['INPUT', 'TEXTAREA', 'SELECT'].includes(tag)) return;
+			}
+			const key = event.key.toUpperCase();
+			const atajo = atajosAgregar.find((item) => item.key === key);
+			if (!atajo || bloqueada) return;
+			event.preventDefault();
+			atajo.action();
+		};
+		document.addEventListener('keydown', handleKeydown);
+		return () => document.removeEventListener('keydown', handleKeydown);
+	});
+
+	function abrirNuevoInsumo() {
+		if (bloqueada) return;
+		nuevoInsumoAbierto = true;
+	}
+
+	function agregarNuevoInsumo(nuevo: NonNullable<LineaEdicion['nuevo_insumo']>) {
+		const linea = {
+			...lineaVacia('insumo', siguienteId++),
+			nuevo_insumo: nuevo,
+			descripcion: nuevo.nombre,
+			unidad: nuevo.unidad,
+			precio_unitario: nuevo.costo_unitario,
+			precio_lista_unitario: nuevo.costo_unitario,
+			precio_minimo_unitario: nuevo.costo_unitario,
+			costo_materiales: nuevo.costo_unitario
+		};
+		lineas = [...lineas, linea];
+	}
+
+	function actualizarPrecioTotal(valor: string) {
+		precioTotalIngresado = valor;
+		precioTotalEditado = true;
+		ajusteManualIngresado = redondearPrecio((Number(valor) || 0) - totalCalculado);
 	}
 
 	async function guardarCotizacion() {
@@ -294,16 +303,14 @@
 				incluir_iva: incluirIva,
 				condiciones_pago: condicionesPago.trim(),
 				lineas: lineas.map((linea) => ({
+					visible_cliente: linea.visible_cliente,
 					producto_id: linea.producto_id || undefined,
 					insumo_id: linea.insumo_id ? Number(linea.insumo_id) : undefined,
-					es_personalizado: linea.tipo === 'personalizado',
+					nuevo_insumo: linea.nuevo_insumo,
 					descripcion: linea.descripcion || '',
 					cantidad: Number(linea.cantidad) || 1,
 					precio_unitario: Number(linea.precio_unitario) || 0,
 					precio_lista_unitario: Number(linea.precio_lista_unitario) || 0,
-					descuento_porcentaje: Number(linea.descuento_porcentaje) || 0,
-					justificacion_descuento: linea.justificacion_descuento || undefined,
-					costo_mano_obra: Number(linea.costo_mano_obra) || 0,
 					costo_materiales: Number(linea.costo_materiales) || 0
 				}))
 			});
@@ -317,195 +324,96 @@
 	}
 </script>
 
-<section class="card bg-base-100 shadow">
-	<div class="card-body gap-4">
-		<label class="fieldset w-full">
-			<span class="fieldset-legend">Condiciones de pago</span>
-			<textarea
-				class="textarea w-full"
-				rows="2"
-				maxlength="1000"
-				disabled={bloqueada}
-				bind:value={condicionesPago}
-				placeholder="Transferencia, tarjeta de crédito en cuotas, anticipo y saldo..."
-			></textarea>
-		</label>
-		<div class="flex flex-wrap items-center justify-between gap-3">
-			<div>
-				<h2 class="card-title">Líneas de la cotización</h2>
-				{#if bloqueada}<p class="text-sm text-base-content/60">
-						Cotización convertida: precios bloqueados.
-					</p>{/if}
-			</div>
-			<div class="flex flex-wrap gap-2">
-				<button
-					type="button"
-					class="btn btn-outline btn-sm btn-success"
-					disabled={bloqueada}
-					onclick={() => agregarLinea('producto')}
-				>
-					+ Producto
-				</button>
-				<button
-					type="button"
-					class="btn btn-outline btn-sm btn-warning"
-					disabled={bloqueada}
-					onclick={() => agregarLinea('insumo')}
-				>
-					+ Insumo interno
-				</button>
-				<button
-					type="button"
-					class="btn btn-outline btn-info btn-sm"
-					disabled={bloqueada}
-					onclick={() => agregarLinea('personalizado')}
-				>
-					+ Concepto
-				</button>
-			</div>
-		</div>
-
-		<div class="overflow-visible rounded-box border border-base-300">
-			<table class="table min-w-232 table-sm">
-				<thead>
-					<tr>
-						<th>Artículo / concepto</th>
-						<th class="w-28 text-right">Cantidad</th>
-						<th class="w-40 text-right">Precio / costo unitario</th>
-						<th class="w-24 text-right">Desc. %</th>
-						<th class="w-40 text-right">Subtotal</th>
-						<th class="w-12"></th>
-					</tr>
-				</thead>
-				<tbody>
-					{#each lineas as linea (linea.idx)}
-						<CotizacionLineaFila
-							{linea}
-							{bloqueada}
-							cantidadLineas={lineas.length}
-							{productos}
-							{insumos}
-							onEliminar={eliminarLinea}
-							onSeleccionarProducto={seleccionarProducto}
-							onSeleccionarInsumo={seleccionarInsumo}
-							onActualizarCantidad={(lineaId, cantidad) => actualizarLinea(lineaId, { cantidad })}
-							onActualizarDescripcion={(lineaId, descripcion) =>
-								actualizarLinea(lineaId, { descripcion })}
-							onActualizarPrecio={actualizarPrecioUnitario}
-							onActualizarDescuento={(lineaId, descuento) =>
-								actualizarDescuento(lineaId, 'porcentaje', descuento)}
-							onActualizarMotivo={(lineaId, motivo) =>
-								actualizarDescuento(lineaId, 'justificacion', motivo)}
-						/>
-					{/each}
-					{#if descuentoGlobal > 0}
-						<tr>
-							<td colspan="4" class="text-right font-semibold">Subtotal</td>
-							<td class="text-right font-semibold">
-								${totalBase.toLocaleString('es-AR', { minimumFractionDigits: 2 })}
-							</td>
-							<td></td>
-						</tr>
-						<tr>
-							<td colspan="4" class="text-right font-semibold">
-								Descuento general ({descuentoGlobal.toLocaleString('es-AR')}%)
-							</td>
-							<td class="text-right font-semibold">
-								-${importeDescuento.toLocaleString('es-AR', { minimumFractionDigits: 2 })}
-							</td>
-							<td></td>
-						</tr>
-					{/if}
-					{#if incluirIva}
-						<tr>
-							<td colspan="4" class="text-right font-semibold">IVA (21%)</td>
-							<td class="text-right font-semibold">
-								${importeIva.toLocaleString('es-AR', { minimumFractionDigits: 2 })}
-							</td>
-							<td></td>
-						</tr>
-					{/if}
-				</tbody>
-			</table>
-		</div>
-
-		<div class="flex flex-wrap items-center justify-end gap-4">
-			<label class="flex items-center gap-2 text-sm">
-				Validez (días)
-				<input class="remove-arrow input input-sm w-20" type="number" min="1" bind:value={validezDias} />
-			</label>
-			<label class="label cursor-pointer gap-2">
-				<input
-					class="checkbox checkbox-sm"
-					type="checkbox"
-					disabled={bloqueada}
-					bind:checked={incluirIva}
-				/>
-				<span>Agregar IVA 21%</span>
-			</label>
-			<Can modulo="cotizaciones" accion="descuento">
-				<label for="descuento-global" class="flex items-center gap-2 text-sm">
-					Descuento general (%)
-					<input
-						id="descuento-global"
-						class="remove-arrow input w-24 text-right input-sm"
-						type="number"
-						min="0"
-						max="99.99"
-						step="0.01"
-						disabled={bloqueada}
-						value={descuentoGlobal}
-						oninput={(event) => {
-							descuentoGlobal = Math.min(
-								Math.max(Number(event.currentTarget.value) || 0, 0),
-								99.99
-							);
-						}}
-					/>
-				</label>
-			</Can>
-			<div class="flex items-center gap-2">
-				<label class="flex items-center gap-3 text-sm font-semibold">
-					<span>Total final</span>
-					<input
-						class="remove-arrow input input-sm w-40 text-right text-lg font-bold"
-						class:input-error={totalFinal < totalCalculado}
-						type="number"
-						min="0"
-						step="0.01"
-						aria-label="Precio final de la cotización"
-						value={precioTotalEditado ? (precioTotalIngresado ?? '') : totalFinal.toFixed(2)}
-						oninput={(event) => {
-							precioTotalIngresado = event.currentTarget.value;
-							precioTotalEditado = true;
-							ajusteManualIngresado = redondearPrecio(
-								(Number(event.currentTarget.value) || 0) - totalCalculado
-							);
-						}}
-					/>
-				</label>
-				{#if totalFinal < totalCalculado}
-					<div
-						class="tooltip tooltip-bottom"
-						data-tip={`El total final está por debajo de la base de cotización (${totalCalculado.toLocaleString('es-AR', { minimumFractionDigits: 2 })}).`}
-					>
-						<button
-							type="button"
-							class="btn btn-circle btn-outline btn-error btn-xs"
-							aria-label="El total final está por debajo de la base de venta"
-						>
-							!
-						</button>
-					</div>
-				{/if}
-			</div>
+<fieldset class="fieldset rounded-box border border-base-300 bg-base-200 p-4">
+	<legend class="fieldset-legend">Líneas de cotización</legend>
+	<div class="flex flex-col gap-4">
+		<div class="flex flex-wrap items-center gap-2">
 			<button
-				class="btn btn-primary btn-sm"
-				disabled={bloqueada || guardando}
-				onclick={guardarCotizacion}
+				type="button"
+				class="btn btn-outline btn-primary btn-sm"
+				disabled={bloqueada}
+				onclick={() => agregarLinea('producto')}
 			>
-				{guardando ? 'Guardando...' : bloqueada ? 'Convertida en pedido' : 'Guardar cotización'}
+				<span>Producto</span>
+				<kbd class="kbd kbd-xs">F1</kbd>
 			</button>
+			<button
+				type="button"
+				class="btn btn-outline btn-secondary btn-sm"
+				disabled={bloqueada}
+				onclick={() => agregarLinea('insumo')}
+			>
+				<span>Insumo</span>
+				<kbd class="kbd kbd-xs">F2</kbd>
+			</button>
+			<button
+				type="button"
+				class="btn btn-outline btn-accent btn-sm"
+				disabled={bloqueada}
+				onclick={() => agregarLinea('concepto')}
+			>
+				<span>Concepto</span>
+				<kbd class="kbd kbd-xs">F3</kbd>
+			</button>
+			<Can modulo="insumos" accion="create">
+				<button
+					type="button"
+					class="btn btn-outline btn-sm"
+					disabled={bloqueada}
+					onclick={abrirNuevoInsumo}
+				>
+					<span>Insumo nuevo</span>
+					<kbd class="kbd kbd-xs">F4</kbd>
+				</button>
+			</Can>
 		</div>
+
+		<CotizacionLineasTabla
+			{lineas}
+			{bloqueada}
+			{productos}
+			{insumos}
+			{descuentoGlobal}
+			{totalBase}
+			{importeDescuento}
+			{incluirIva}
+			{importeIva}
+			onEliminar={eliminarLinea}
+			onSeleccionarProducto={seleccionarProducto}
+			onSeleccionarInsumo={seleccionarInsumo}
+			onActualizarCantidad={(lineaId, cantidad) => actualizarLinea(lineaId, { cantidad })}
+			onActualizarDescripcion={(lineaId, descripcion) => actualizarLinea(lineaId, { descripcion })}
+			onActualizarPrecio={actualizarPrecioUnitario}
+			onCambiarVisibilidad={cambiarVisibilidad}
+			onActualizarCostoInterno={(lineaId, costo) =>
+				actualizarLinea(lineaId, { costo_materiales: Math.max(costo, 0) })}
+		/>
+
+		<CotizacionTotales
+			{bloqueada}
+			{guardando}
+			{validezDias}
+			{incluirIva}
+			{descuentoGlobal}
+			{totalCalculado}
+			{totalFinal}
+			{precioTotalIngresado}
+			{precioTotalEditado}
+			{condicionesPago}
+			onCambiarValidez={(dias) => (validezDias = dias)}
+			onCambiarIva={(incluir) => (incluirIva = incluir)}
+			onCambiarDescuento={(porcentaje) => (descuentoGlobal = porcentaje)}
+			onActualizarTotal={actualizarPrecioTotal}
+			onCambiarCondiciones={(condiciones) => (condicionesPago = condiciones)}
+			onGuardar={guardarCotizacion}
+		/>
 	</div>
-</section>
+</fieldset>
+
+<CotizacionNuevoInsumoDialog
+	bind:open={nuevoInsumoAbierto}
+	tipos={tiposInsumo}
+	categorias={categoriasInsumo}
+	unidades={unidadesInsumo}
+	onAgregar={agregarNuevoInsumo}
+/>

@@ -12,7 +12,7 @@
 	import { page } from '$app/state';
 	import { goto, invalidateAll } from '$app/navigation';
 	import { resolve } from '$app/paths';
-	import { calcularPrecioVenta, redondearPrecio } from '$lib/utils/precios';
+	import { calcularPrecioVenta, formatearDosDecimales, redondearPrecio } from '$lib/utils/precios';
 
 	let categorias = page.data.categorias;
 	let marcas = page.data.marcas;
@@ -106,13 +106,13 @@
 					<div class="stat rounded-box border border-base-300 bg-base-100 p-3">
 						<div class="stat-title">Costo de receta</div>
 						<div class="stat-value text-xl">
-							${costoReceta.toLocaleString('es-AR', { minimumFractionDigits: 2 })}
+							${formatearDosDecimales(costoReceta)}
 						</div>
 					</div>
 					<div class="stat rounded-box border border-primary/30 bg-primary/5 p-3">
 						<div class="stat-title">Precio de lista</div>
 						<div class="stat-value text-xl text-primary">
-							${precioVenta.toLocaleString('es-AR', { minimumFractionDigits: 2 })}
+							${formatearDosDecimales(precioVenta)}
 						</div>
 					</div>
 				</div>
@@ -121,7 +121,7 @@
 			<!-- Vehículo -->
 			{#if crearProducto.fields.categoria_id.value() === '1'}
 				<div class="grid grid-cols-1 gap-4 md:grid-cols-2">
-					<fieldset class="fieldset rounded-box border space-y-3 border-base-300 bg-base-200 p-4">
+					<fieldset class="fieldset space-y-3 rounded-box border border-base-300 bg-base-200 p-4">
 						<legend class="fieldset-legend">Vehículo</legend>
 
 						<div class="grid grid-cols-1 gap-4 md:grid-cols-3">
@@ -207,7 +207,7 @@
 
 						<div class="grid grid-cols-1 gap-4 md:grid-cols-7">
 							<fieldset
-								class="fieldset col-span-2 rounded-box border border-base-300 bg-base-200 p-4"
+								class="col-span-2 fieldset rounded-box border border-base-300 bg-base-200 p-4"
 							>
 								<legend class="fieldset-legend">Primario</legend>
 
@@ -228,7 +228,7 @@
 							</fieldset>
 
 							<fieldset
-								class="fieldset col-span-2 rounded-box border border-base-300 bg-base-200 p-4"
+								class="col-span-2 fieldset rounded-box border border-base-300 bg-base-200 p-4"
 							>
 								<legend class="fieldset-legend">Secundario</legend>
 								<div class="grid grid-cols-2 gap-4">
@@ -248,7 +248,7 @@
 							</fieldset>
 
 							<fieldset
-								class="fieldset col-span-3 rounded-box border border-base-300 bg-base-200 p-4"
+								class="col-span-3 fieldset rounded-box border border-base-300 bg-base-200 p-4"
 							>
 								<legend class="fieldset-legend">Trombon</legend>
 								<div class="grid grid-cols-3 gap-4">
@@ -260,8 +260,8 @@
 									</FormFieldWrapper>
 									<FormFieldWrapper label="Largo" id="trombon_largo">
 										<input
-										class="remove-arrow input input-sm"
-										{...crearProducto.fields.trombon_largo.as('number')}
+											class="remove-arrow input input-sm"
+											{...crearProducto.fields.trombon_largo.as('number')}
 										/>
 									</FormFieldWrapper>
 									<FormFieldWrapper label="Ø Final" id="trombon_diametro_final">
@@ -293,7 +293,9 @@
 				<legend class="fieldset-legend">Receta del producto</legend>
 				<div class="flex flex-col gap-2">
 					{#each receta as linea, indice (indice)}
-						<div class="mb-1 grid grid-cols-[minmax(0,1fr)_repeat(3,minmax(0,50px))] gap-2 sm:items-center">
+						<div
+							class="mb-1 grid grid-cols-[minmax(0,1fr)_repeat(3,minmax(0,50px))] gap-2 sm:items-center"
+						>
 							<SearchSelect
 								label=""
 								id={`receta-create-${indice}`}
@@ -328,7 +330,7 @@
 								}}
 							/>
 							<input
-								class="remove-arrow input input-sm text-right w-full min-w-0"
+								class="remove-arrow input w-full min-w-0 text-right input-sm"
 								type="number"
 								min="0"
 								step="0.01"
@@ -347,7 +349,7 @@
 							>
 						</div>
 					{/each}
-					<button type="button" class="btn btn-outline btn-sm w-fit" onclick={agregarInsumo}
+					<button type="button" class="btn w-fit btn-outline btn-sm" onclick={agregarInsumo}
 						>+ Agregar componente</button
 					>
 				</div>

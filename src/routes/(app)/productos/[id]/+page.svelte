@@ -18,7 +18,7 @@
 	import { goto } from '$app/navigation';
 	import { page } from '$app/state';
 	import { resolve } from '$app/paths';
-	import { calcularPrecioVenta, redondearPrecio } from '$lib/utils/precios';
+	import { calcularPrecioVenta, formatearDosDecimales, redondearPrecio } from '$lib/utils/precios';
 	import type { PageProps } from './$types';
 
 	let { data }: PageProps = $props();
@@ -143,13 +143,13 @@
 					<div class="stat rounded-box border border-base-300 bg-base-100 p-3">
 						<div class="stat-title">Costo de receta</div>
 						<div class="stat-value text-xl">
-							${costoReceta.toLocaleString('es-AR', { minimumFractionDigits: 2 })}
+							${formatearDosDecimales(costoReceta)}
 						</div>
 					</div>
 					<div class="stat rounded-box border border-primary/30 bg-primary/5 p-3">
 						<div class="stat-title">Precio de lista</div>
 						<div class="stat-value text-xl text-primary">
-							${precioVenta.toLocaleString('es-AR', { minimumFractionDigits: 2 })}
+							${formatearDosDecimales(precioVenta)}
 						</div>
 					</div>
 				</div>
@@ -384,11 +384,7 @@
 					<button class="btn btn-outline btn-sm" type="button" onclick={agregarInsumo}
 						>+ Agregar componente</button
 					>
-					<span class="font-semibold"
-						>Costo expandido: ${costoReceta.toLocaleString('es-AR', {
-							minimumFractionDigits: 2
-						})}</span
-					>
+					<span class="font-semibold">Costo expandido: ${formatearDosDecimales(costoReceta)}</span>
 				</div>
 			</fieldset>
 			<fieldset class="fieldset rounded-box border border-base-300 bg-base-200 p-4 lg:w-1/2">

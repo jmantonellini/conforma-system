@@ -230,87 +230,86 @@
 			</div>
 		</div>
 
-		<section class="card bg-base-100 shadow">
-			<div class="card-body">
-				<div class="grid gap-4 lg:grid-cols-7">
-					{#if cotizacion.cliente?.id}
-						<FormFieldWrapper label="Cliente" id="cliente">
-							<p class="font-medium">
-								{cotizacion.cliente.nombre}
-								{cotizacion.cliente.apellido ?? ''}
-								{cotizacion.cliente.razon_social ?? ''} - {cotizacion.cliente.telefono ?? ''}
-							</p>
-						</FormFieldWrapper>
-					{:else}
-						<p class="flex flex-col gap-1">
-							<span class="font-medium">Contacto no disponible</span>
+		<fieldset class="fieldset rounded-box border border-base-300 bg-base-200 p-4">
+			<legend class="fieldset-legend">Información de la cotización</legend>
+			<div class="grid gap-4 lg:grid-cols-7">
+				{#if cotizacion.cliente?.id}
+					<FormFieldWrapper label="Cliente" id="cliente" class="lg:col-span-2">
+						<p class="font-medium">
+							{cotizacion.cliente.nombre}
+							{cotizacion.cliente.apellido ?? ''}
+							{cotizacion.cliente.razon_social ?? ''} - {cotizacion.cliente.telefono ?? ''}
 						</p>
+					</FormFieldWrapper>
+				{:else}
+					<p class="flex flex-col gap-1">
+						<span class="font-medium">Contacto no disponible</span>
+					</p>
+				{/if}
+				<FormFieldWrapper label="Descripción" id="descripcion" class="lg:col-span-2">
+					<p class="whitespace-pre-wrap">{cotizacion.descripcion}</p>
+					{#if cotizacion.observaciones}
+						<p class="mt-2 text-sm text-base-content/60">📝 {cotizacion.observaciones}</p>
 					{/if}
-					<FormFieldWrapper label="Descripción" id="descripcion" class="lg:col-span-2">
-						<p class="whitespace-pre-wrap">{cotizacion.descripcion}</p>
-						{#if cotizacion.observaciones}
-							<p class="mt-2 text-sm text-base-content/60">📝 {cotizacion.observaciones}</p>
-						{/if}
-					</FormFieldWrapper>
-					<FormFieldWrapper label="Fecha" id="fecha">
-						<p>{formatearFecha(cotizacion.created_at)}</p>
-					</FormFieldWrapper>
-					<FormFieldWrapper label="Estado" id="estado">
-						<div class="flex flex-wrap items-center gap-2">
-							<span class="badge badge-{cotizacion.estado.color}">{cotizacion.estado.nombre}</span>
-							{#if cotizacion.transiciones?.length}
-								<button
-									class="btn btn-outline btn-xs"
-									tabindex="0"
-									style="anchor-name:--anchor-1"
-									popovertarget="popover-1">Acciones ↓</button
-								>
-								<ul
-									popover
-									id="popover-1"
-									style="position-anchor:--anchor-1"
-									class="menu dropdown w-52 rounded-box bg-base-100 p-2 shadow"
-								>
-									{#each cotizacion.transiciones as transicion (transicion.estado_destino_id)}
-										<li>
-											<Can
-												modulo="cotizaciones"
-												accion={ACCION_POR_ESTADO[transicion.destino_slug] ?? 'edit'}
+				</FormFieldWrapper>
+				<FormFieldWrapper label="Fecha" id="fecha">
+					<p>{formatearFecha(cotizacion.created_at)}</p>
+				</FormFieldWrapper>
+				<FormFieldWrapper label="Estado" id="estado">
+					<div class="flex flex-wrap items-center gap-2">
+						<span class="badge badge-{cotizacion.estado.color}">{cotizacion.estado.nombre}</span>
+						{#if cotizacion.transiciones?.length}
+							<button
+								class="btn btn-outline btn-xs"
+								tabindex="0"
+								style="anchor-name:--anchor-1"
+								popovertarget="popover-1">Acciones ↓</button
+							>
+							<ul
+								popover
+								id="popover-1"
+								style="position-anchor:--anchor-1"
+								class="menu dropdown w-52 rounded-box bg-base-100 p-2 shadow"
+							>
+								{#each cotizacion.transiciones as transicion (transicion.estado_destino_id)}
+									<li>
+										<Can
+											modulo="cotizaciones"
+											accion={ACCION_POR_ESTADO[transicion.destino_slug] ?? 'edit'}
+										>
+											<button
+												onclick={() =>
+													manejarCambioEstado(
+														transicion.estado_destino_id,
+														transicion.destino_slug
+													)}
 											>
-												<button
-													onclick={() =>
-														manejarCambioEstado(
-															transicion.estado_destino_id,
-															transicion.destino_slug
-														)}
-												>
-													<span class="badge badge-{transicion.destino_color} badge-xs"></span>
-													{transicion.destino_nombre}
-												</button>
-											</Can>
-										</li>
-									{/each}
-								</ul>
-							{/if}
-						</div>
-					</FormFieldWrapper>
-					<Can modulo="cotizaciones" accion="asignar">
-						<FormFieldWrapper label="Asignado a" id="asignar">
-							<select class="select select-sm" bind:value={empleadoSeleccionado}>
-								<option value="">Sin asignar</option>
-								{#each data.empleados as empleado (empleado.id)}
-									<option value={String(empleado.id)}>
-										{empleado.nombre}
-										{empleado.apellido ?? ''}
-									</option>
+												<span class="badge badge-{transicion.destino_color} badge-xs"></span>
+												{transicion.destino_nombre}
+											</button>
+										</Can>
+									</li>
 								{/each}
-							</select>
-							<button class="btn btn-primary btn-sm" onclick={asignar}>Asignar</button>
-						</FormFieldWrapper>
-					</Can>
-				</div>
+							</ul>
+						{/if}
+					</div>
+				</FormFieldWrapper>
+				<Can modulo="cotizaciones" accion="asignar">
+					<FormFieldWrapper label="Asignado a" id="asignar">
+						<select class="select select-sm" bind:value={empleadoSeleccionado}>
+							<option value="">Sin asignar</option>
+							{#each data.empleados as empleado (empleado.id)}
+								<option value={String(empleado.id)}>
+									{empleado.nombre}
+									{empleado.apellido ?? ''}
+								</option>
+							{/each}
+						</select>
+						<button class="btn btn-primary btn-sm" onclick={asignar}>Asignar</button>
+					</FormFieldWrapper>
+				</Can>
 			</div>
-		</section>
+		</fieldset>
 
 		<Can modulo="cotizaciones" accion="cotizar">
 			<CotizacionLineasEditor
@@ -324,124 +323,121 @@
 				lineasIniciales={data.lineas}
 				productos={data.productos}
 				insumos={data.insumos}
+				tiposInsumo={data.tiposInsumo}
+				categoriasInsumo={data.categoriasInsumo}
+				unidadesInsumo={data.unidadesInsumo}
 			/>
 		</Can>
 
-		<section class="card bg-base-100 shadow">
-			<div class="card-body gap-6">
-				<h2 class="card-title">Archivos adjuntos</h2>
-				<input
-					type="file"
-					multiple
-					accept="image/*,audio/*,video/*,application/pdf"
-					class="file-input mt-3 w-full max-w-md"
-					disabled={subiendo}
-					onchange={subirArchivos}
-				/>
-				<div class="flex flex-wrap gap-3">
-					{#each data.adjuntos as adjunto (adjunto.id)}
-						<div class="card bg-base-100">
-							{#if esImagen(adjunto.mime_type)}
-								<img
-									src={urlAdjunto(adjunto.id)}
-									alt={adjunto.nombre_original}
-									class="h-40 w-full rounded-t-xl object-cover"
-								/>
-							{:else if esAudio(adjunto.mime_type)}
-								<div class="p-3">
-									<audio controls src={urlAdjunto(adjunto.id)} class="w-full"></audio>
-								</div>
-							{/if}
-							<div class="flex items-center justify-between p-2 text-xs">
-								<span class="truncate underline">{adjunto.nombre_original}</span>
-								<Can modulo="cotizaciones" accion="edit">
-									<button
-										class="btn btn-ghost text-error btn-xs"
-										onclick={async () => {
-											await eliminarAdjunto(adjunto.id);
-											await invalidateAll();
-										}}>✕</button
-									>
-								</Can>
+		<fieldset class="fieldset rounded-box border border-base-300 bg-base-200 p-4">
+			<legend class="fieldset-legend">Archivos adjuntos</legend>
+			<input
+				type="file"
+				multiple
+				accept="image/*,audio/*,video/*,application/pdf"
+				class="file-input mt-3 w-full max-w-md"
+				disabled={subiendo}
+				onchange={subirArchivos}
+			/>
+			<div class="flex flex-wrap gap-3">
+				{#each data.adjuntos as adjunto (adjunto.id)}
+					<div class="card bg-base-100">
+						{#if esImagen(adjunto.mime_type)}
+							<img
+								src={urlAdjunto(adjunto.id)}
+								alt={adjunto.nombre_original}
+								class="h-40 w-full rounded-t-xl object-cover"
+							/>
+						{:else if esAudio(adjunto.mime_type)}
+							<div class="p-3">
+								<audio controls src={urlAdjunto(adjunto.id)} class="w-full"></audio>
 							</div>
+						{/if}
+						<div class="flex items-center justify-between p-2 text-xs">
+							<span class="truncate underline">{adjunto.nombre_original}</span>
+							<Can modulo="cotizaciones" accion="edit">
+								<button
+									class="btn btn-ghost text-error btn-xs"
+									onclick={async () => {
+										await eliminarAdjunto(adjunto.id);
+										await invalidateAll();
+									}}>✕</button
+								>
+							</Can>
 						</div>
-					{:else}
-						<p class="text-sm text-base-content/50">Sin archivos adjuntos.</p>
-					{/each}
-				</div>
-			</div>
-		</section>
-
-		<section class="card bg-base-100 shadow">
-			<div class="card-body gap-4">
-				<h2 class="card-title">Seguimiento interno</h2>
-				<Can modulo="cotizaciones" accion="edit">
-					<textarea
-						class="textarea w-full"
-						rows="3"
-						maxlength="5000"
-						placeholder="Novedades del cliente, acuerdos o cambios solicitados..."
-						bind:value={notaEnRedaccion}
-					></textarea>
-					<div class="flex justify-end">
-						<button
-							type="button"
-							class="btn btn-primary btn-sm"
-							disabled={guardandoNota || !notaEnRedaccion.trim()}
-							onclick={guardarNota}
-						>
-							{guardandoNota ? 'Agregando...' : 'Agregar nota'}
-						</button>
 					</div>
-				</Can>
-				{#if data.notas.length}
-					<ol class="flex flex-col gap-4 border-s border-base-300 ps-4">
-						{#each data.notas as nota (nota.id)}
-							<li class="relative">
-								<span class="absolute inset-s-[-1.32rem] top-1.5 size-2 rounded-full bg-primary"
-								></span>
-								<p class="text-sm font-medium">
-									{nota.autor} ·
-									<span class="font-normal text-base-content/60"
-										>{formatearFechaHora(nota.fecha)}</span
-									>
-								</p>
-								<p class="mt-1 text-sm whitespace-pre-wrap">{nota.contenido}</p>
-							</li>
-						{/each}
-					</ol>
 				{:else}
-					<p class="text-sm text-base-content/60">Todavía no hay notas.</p>
-				{/if}
+					<p class="text-sm text-base-content/50">Sin archivos adjuntos.</p>
+				{/each}
 			</div>
-		</section>
+		</fieldset>
 
-		<section class="card bg-base-100 shadow">
-			<div class="card-body">
-				<h3 class="card-title">Historial</h3>
-				{#snippet headerHistorial()}
-					<th>Fecha</th><th>Estado anterior</th><th>Estado nuevo</th><th>Empleado</th><th
-						>Comentario</th
+		<fieldset class="fieldset rounded-box border border-base-300 bg-base-200 p-4">
+			<legend class="fieldset-legend">Seguimiento interno</legend>
+			<Can modulo="cotizaciones" accion="edit">
+				<textarea
+					class="textarea w-full"
+					rows="3"
+					maxlength="5000"
+					placeholder="Novedades del cliente, acuerdos o cambios solicitados..."
+					bind:value={notaEnRedaccion}
+				></textarea>
+				<div class="flex justify-end">
+					<button
+						type="button"
+						class="btn btn-primary btn-sm"
+						disabled={guardandoNota || !notaEnRedaccion.trim()}
+						onclick={guardarNota}
 					>
-				{/snippet}
-				{#snippet rowHistorial(log: (typeof data.historial)[number])}
-					<td>{log.fecha ? formatearFecha(new Date(log.fecha)) : '-'}</td>
-					<td
-						><span class="badge badge-sm badge-{log.estado_anterior?.color || 'ghost'}"
-							>{log.estado_anterior?.nombre || '-'}</span
-						></td
-					>
-					<td
-						><span class="badge badge-sm badge-{log.estado_nuevo?.color || 'ghost'}"
-							>{log.estado_nuevo?.nombre || '-'}</span
-						></td
-					>
-					<td>{log.empleado ?? '-'}</td>
-					<td>{log.comentario ?? '-'}</td>
-				{/snippet}
-				<Table data={data.historial} header={headerHistorial} row={rowHistorial} />
-			</div>
-		</section>
+						{guardandoNota ? 'Agregando...' : 'Agregar nota'}
+					</button>
+				</div>
+			</Can>
+			{#if data.notas.length}
+				<ol class="flex flex-col gap-4 border-s border-base-300 ps-4">
+					{#each data.notas as nota (nota.id)}
+						<li class="relative">
+							<span class="absolute inset-s-[-1.32rem] top-1.5 size-2 rounded-full bg-primary"
+							></span>
+							<p class="text-sm font-medium">
+								{nota.autor} ·
+								<span class="font-normal text-base-content/60"
+									>{formatearFechaHora(nota.fecha)}</span
+								>
+							</p>
+							<p class="mt-1 text-sm whitespace-pre-wrap">{nota.contenido}</p>
+						</li>
+					{/each}
+				</ol>
+			{:else}
+				<p class="text-sm text-base-content/60">Todavía no hay notas.</p>
+			{/if}
+		</fieldset>
+
+		<fieldset class="fieldset rounded-box border border-base-300 bg-base-200 p-4">
+			<legend class="fieldset-legend">Historial</legend>
+			{#snippet headerHistorial()}
+				<th>Fecha</th><th>Estado anterior</th><th>Estado nuevo</th><th>Empleado</th><th
+					>Comentario</th
+				>
+			{/snippet}
+			{#snippet rowHistorial(log: (typeof data.historial)[number])}
+				<td>{log.fecha ? formatearFecha(new Date(log.fecha)) : '-'}</td>
+				<td
+					><span class="badge badge-sm badge-{log.estado_anterior?.color || 'ghost'}"
+						>{log.estado_anterior?.nombre || '-'}</span
+					></td
+				>
+				<td
+					><span class="badge badge-sm badge-{log.estado_nuevo?.color || 'ghost'}"
+						>{log.estado_nuevo?.nombre || '-'}</span
+					></td
+				>
+				<td>{log.empleado ?? '-'}</td>
+				<td>{log.comentario ?? '-'}</td>
+			{/snippet}
+			<Table data={data.historial} header={headerHistorial} row={rowHistorial} />
+		</fieldset>
 	</div>
 </PageLayout>
 

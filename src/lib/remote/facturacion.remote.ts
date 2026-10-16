@@ -11,6 +11,7 @@ const RegistrarPagoSchema = v.object({
 	pedido_id: v.pipe(v.string(), v.transform(Number), v.number()),
 	monto: v.number(),
 	metodo_pago: v.optional(v.string()),
+	cantidad_cuotas: v.optional(v.pipe(v.number(), v.integer(), v.minValue(1))),
 	observaciones: v.optional(v.string())
 });
 
@@ -54,6 +55,9 @@ export const registrarPago = form(RegistrarPagoSchema, async (data) => {
 		.then((r) => r[0]);
 
 	if (!pedido) throw new Error('Pedido no encontrado');
+	if (data.metodo_pago === 'cuotas' && !data.cantidad_cuotas) {
+		throw new Error('Indicá la cantidad de cuotas');
+	}
 
 	const pagosActuales = await db
 		.select({ monto: pagos.monto })
@@ -71,6 +75,7 @@ export const registrarPago = form(RegistrarPagoSchema, async (data) => {
 		pedido_id: data.pedido_id,
 		monto: data.monto,
 		metodo_pago: data.metodo_pago,
+		cantidad_cuotas: data.metodo_pago === 'cuotas' ? data.cantidad_cuotas : null,
 		observaciones: data.observaciones
 	});
 

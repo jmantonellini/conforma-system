@@ -4,6 +4,7 @@
 	import { Can, PageLayout } from '$lib/components/ui';
 	import { importarContactos } from '$lib/remote/contactos.remote';
 	import { toast } from '$lib/stores/toast.svelte';
+	import { formatearDosDecimales } from '$lib/utils/precios';
 
 	type FilaContacto = {
 		razon_social: string;
@@ -114,7 +115,7 @@
 											>{fila.apellido || '-'}</td
 										><td>{fila.cuit || '-'}</td><td>{fila.rol}</td><td
 											>{fila.es_distribuidor ? 'Sí' : 'No'}</td
-										><td>${fila.saldo_disponible.toLocaleString('es-AR')}</td></tr
+										><td>${formatearDosDecimales(fila.saldo_disponible)}</td></tr
 									>
 								{/each}
 							</tbody>

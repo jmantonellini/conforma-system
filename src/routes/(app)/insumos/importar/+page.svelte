@@ -4,6 +4,7 @@
 	import { Can, PageLayout } from '$lib/components/ui';
 	import { importarInsumos } from '$lib/remote/insumos.remote';
 	import { toast } from '$lib/stores/toast.svelte';
+	import { formatearDosDecimales } from '$lib/utils/precios';
 
 	type ImportacionFila = {
 		codigo: string;
@@ -104,11 +105,11 @@
 									<tr
 										><td>{fila.codigo}</td><td>{fila.nombre}</td><td>{fila.tipo}</td><td
 											>{fila.unidad}</td
-										><td>${fila.costo_unitario.toLocaleString('es-AR')}</td><td
-											>{fila.flete_porcentaje}%</td
+										><td>${formatearDosDecimales(fila.costo_unitario)}</td><td
+											>{formatearDosDecimales(fila.flete_porcentaje)}%</td
 										><td
-											>${(fila.costo_unitario * (1 + fila.flete_porcentaje / 100)).toLocaleString(
-												'es-AR'
+											>${formatearDosDecimales(
+												fila.costo_unitario * (1 + fila.flete_porcentaje / 100)
 											)}</td
 										><td>{fila.categoria || '-'}</td><td>{fila.proveedor || '-'}</td></tr
 									>

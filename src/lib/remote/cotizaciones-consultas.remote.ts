@@ -19,6 +19,7 @@ import {
 } from '$lib/server/db/schema';
 import { and, aliasedTable, count, desc, eq, ilike, or, sql } from 'drizzle-orm';
 import { requirePermission } from '$lib/server/auth/permissions';
+import type { MaterialSnapshot } from '$lib/types/cotizacion-editor';
 
 const crearCondicionBusquedaCotizacion = ({
 	search,
@@ -148,7 +149,7 @@ export const getCotizacionById = query(v.number(), async (id) => {
 
 	if (!cotizacion) throw new Error('Cotización no encontrada');
 
-	const [transiciones, lineas, adjuntos, ordenes] = await Promise.all([
+	const [transiciones, lineasRaw, adjuntos, ordenes] = await Promise.all([
 		db
 			.select({
 				id: transiciones_estado.id,
@@ -173,24 +174,16 @@ export const getCotizacionById = query(v.number(), async (id) => {
 				id: lineas_cotizacion.id,
 				producto_id: lineas_cotizacion.producto_id,
 				insumo_id: lineas_cotizacion.insumo_id,
-				producto_nombre: productos.nombre,
-				insumo_nombre: insumos.nombre,
 				insumo_unidad: insumos.unidad,
-				es_personalizado: lineas_cotizacion.es_personalizado,
+				visible_cliente: lineas_cotizacion.visible_cliente,
 				descripcion: lineas_cotizacion.descripcion,
 				cantidad: lineas_cotizacion.cantidad,
 				precio_unitario: lineas_cotizacion.precio_unitario,
 				precio_lista_unitario: lineas_cotizacion.precio_lista_unitario,
-				margen_porcentaje: lineas_cotizacion.margen_porcentaje,
-				descuento_porcentaje: lineas_cotizacion.descuento_porcentaje,
-				justificacion_descuento: lineas_cotizacion.justificacion_descuento,
-				subtotal: lineas_cotizacion.subtotal,
-				costo_mano_obra: lineas_cotizacion.costo_mano_obra,
 				costo_materiales: lineas_cotizacion.costo_materiales,
 				insumos_snapshot: lineas_cotizacion.insumos_snapshot
 			})
 			.from(lineas_cotizacion)
-			.leftJoin(productos, eq(lineas_cotizacion.producto_id, productos.id))
 			.leftJoin(insumos, eq(lineas_cotizacion.insumo_id, insumos.id))
 			.where(eq(lineas_cotizacion.cotizacion_id, id))
 			.orderBy(lineas_cotizacion.orden_linea),
@@ -208,6 +201,11 @@ export const getCotizacionById = query(v.number(), async (id) => {
 					.limit(2)
 			: Promise.resolve([])
 	]);
+
+	const lineas = lineasRaw.map((linea) => ({
+		...linea,
+		insumos_snapshot: linea.insumos_snapshot as MaterialSnapshot[] | null
+	}));
 
 	return {
 		cotizacion: {

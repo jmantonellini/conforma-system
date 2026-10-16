@@ -3,8 +3,13 @@ import {
 	getHistorialCotizacion,
 	getNotasCotizacion
 } from '$lib/remote/cotizaciones-consultas.remote';
-import { getProductoConReceta, getProductos } from '$lib/remote/productos.remote';
-import { getInsumos } from '$lib/remote/insumos.remote';
+import { getProductos } from '$lib/remote/productos.remote';
+import {
+	getCategoriasInsumo,
+	getInsumos,
+	getTiposInsumo,
+	getUnidadesInsumo
+} from '$lib/remote/insumos.remote';
 import { getEmpleados } from '$lib/remote/empleados.remote';
 import type { PageServerLoad } from './$types';
 
@@ -16,14 +21,13 @@ export const load: PageServerLoad = async ({ params }) => {
 		getNotasCotizacion(id),
 		getEmpleados()
 	]);
-	const productos = await getProductos({ limit: 100 });
-	const insumos = await getInsumos({ limit: 100 });
-	const productosConReceta = await Promise.all(
-		productos.data.map(async (producto) => ({
-			...producto,
-			receta: (await getProductoConReceta(producto.id)).receta
-		}))
-	);
+	const [productos, insumos, tiposInsumo, categoriasInsumo, unidadesInsumo] = await Promise.all([
+		getProductos({ limit: 100 }),
+		getInsumos({ limit: 100 }),
+		getTiposInsumo(),
+		getCategoriasInsumo(),
+		getUnidadesInsumo()
+	]);
 	return {
 		cotizacion,
 		lineas,
@@ -31,7 +35,10 @@ export const load: PageServerLoad = async ({ params }) => {
 		historial,
 		notas,
 		empleados,
-		productos: productosConReceta,
-		insumos: insumos.data
+		productos: productos.data,
+		insumos: insumos.data,
+		tiposInsumo,
+		categoriasInsumo,
+		unidadesInsumo
 	};
 };

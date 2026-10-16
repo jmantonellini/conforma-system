@@ -7,7 +7,7 @@
 	import { Can, FormActions, FormErrors, PageLayout } from '$lib/components/ui';
 	import { toast } from '$lib/stores/toast.svelte';
 	import { Paths } from '$lib/types';
-	import { redondearPrecio } from '$lib/utils/precios';
+	import { formatearDosDecimales, redondearPrecio } from '$lib/utils/precios';
 
 	let form = crearPedido;
 	let clientes = await obtenerContactosCliente({});
@@ -26,8 +26,6 @@
 			precio: 0,
 			precio_lista: 0,
 			precio_lista_minimo: 0,
-			descuento_porcentaje: 0,
-			justificacion_descuento: '',
 			costo_materiales: 0,
 			descripcion: ''
 		}
@@ -66,8 +64,6 @@
 				precio: 0,
 				precio_lista: 0,
 				precio_lista_minimo: 0,
-				descuento_porcentaje: 0,
-				justificacion_descuento: '',
 				costo_materiales: 0,
 				descripcion: ''
 			}
@@ -94,43 +90,25 @@
 						precio_lista: precioLista,
 						precio_lista_minimo: precioLista,
 						precio: precioLista,
-						costo_materiales: costo,
-						descuento_porcentaje: 0,
-						justificacion_descuento: ''
+						costo_materiales: costo
 					}
 				: linea
 		);
 		form.fields.lineas[idx].precio_lista.set(precioLista);
 		form.fields.lineas[idx].precio.set(precioLista);
-		form.fields.lineas[idx].descuento_porcentaje.set(0);
-		form.fields.lineas[idx].justificacion_descuento.set('');
 	}
 
-	function actualizarPrecioLinea(
-		idx: number,
-		campo: 'precio_lista' | 'descuento_porcentaje' | 'justificacion_descuento',
-		valor: string
-	) {
+	function actualizarPrecioLinea(idx: number, campo: 'precio_lista', valor: string) {
 		const linea = lineas[idx];
 		const precio_lista =
 			campo === 'precio_lista'
 				? Math.max(Number(valor) || 0, Number(linea.precio_lista_minimo || 0))
 				: linea.precio_lista;
-		const descuento_porcentaje =
-			campo === 'descuento_porcentaje'
-				? Math.min(Math.max(Number(valor) || 0, 0), 99.99)
-				: linea.descuento_porcentaje;
-		const justificacion_descuento =
-			campo === 'justificacion_descuento' ? valor : linea.justificacion_descuento;
-		const precio = redondearPrecio(precio_lista * (1 - descuento_porcentaje / 100));
+		const precio = redondearPrecio(precio_lista);
 		lineas = lineas.map((item, index) =>
-			index === idx
-				? { ...item, precio_lista, descuento_porcentaje, justificacion_descuento, precio }
-				: item
+			index === idx ? { ...item, precio_lista, precio } : item
 		);
 		form.fields.lineas[idx].precio_lista.set(precio_lista);
-		form.fields.lineas[idx].descuento_porcentaje.set(descuento_porcentaje);
-		form.fields.lineas[idx].justificacion_descuento.set(justificacion_descuento);
 		form.fields.lineas[idx].precio.set(precio);
 	}
 
@@ -211,9 +189,7 @@
 				/>
 				{#if distribuidorSeleccionado}
 					<p class="self-end text-sm text-base-content/70">
-						Saldo disponible: ${Number(
-							distribuidorSeleccionado.saldo_disponible ?? 0
-						).toLocaleString('es-AR', { minimumFractionDigits: 2 })}
+						Saldo disponible: ${formatearDosDecimales(distribuidorSeleccionado.saldo_disponible)}
 					</p>
 				{/if}
 				{#if distribuidorSeleccionado}
@@ -222,7 +198,7 @@
 						id="porcentaje_comision_distribuidor"
 					>
 						<input
-							class="remove-arrow input"
+							class="remove-arrow input input-sm"
 							min="0"
 							max="100"
 							step="0.01"
@@ -232,11 +208,8 @@
 							)}
 						/>
 						<p class="mt-1 text-xs text-base-content/70">
-							Se descontarán ${montoComisionDistribuidor.toLocaleString('es-AR', {
-								minimumFractionDigits: 2
-							})} al entregar. Saldo posterior: ${saldoLuegoDeEntrega.toLocaleString('es-AR', {
-								minimumFractionDigits: 2
-							})}
+							Se descontarán ${formatearDosDecimales(montoComisionDistribuidor)} al entregar. Saldo posterior:
+							${formatearDosDecimales(saldoLuegoDeEntrega)}
 						</p>
 						{#if saldoLuegoDeEntrega < 0}
 							<p class="mt-1 text-xs text-error">El saldo no alcanza para cubrir la comisión.</p>
@@ -247,7 +220,7 @@
 				<!-- Fecha de entrega -->
 				<FormFieldWrapper label="Fecha de entrega prometida" id="fecha_entrega_prometida">
 					<input
-						class="input"
+						class="input input-sm"
 						{...form.fields?.fecha_entrega_prometida?.as('date')}
 						min={new Date().toISOString().split('T')[0]}
 					/>
@@ -256,7 +229,7 @@
 				<!-- Anticipo -->
 				<FormFieldWrapper label="Anticipo (opcional)" id="anticipo">
 					<input
-						class="remove-arrow input"
+						class="remove-arrow input input-sm"
 						placeholder="0"
 						min="0"
 						{...form.fields?.anticipo?.as('number')}
@@ -282,7 +255,7 @@
 				<div class="mt-4 max-w-md">
 					<FormFieldWrapper label="Monto a usar del distribuidor" id="monto_credito_distribuidor">
 						<input
-							class="remove-arrow input"
+							class="remove-arrow input input-sm"
 							placeholder="0.00"
 							min="0"
 							step="0.01"
@@ -330,7 +303,7 @@
 								class="md:col-span-3"
 							>
 								<input
-									class="input"
+									class="input input-sm"
 									id={`lineas[${idx}].descripcion`}
 									{...form.fields.lineas[idx].descripcion.as('text')}
 								/>
@@ -339,7 +312,7 @@
 							<!-- Cantidad -->
 							<FormFieldWrapper label="Cantidad" id={`lineas[${idx}].cantidad`}>
 								<input
-									class="remove-arrow input"
+									class="remove-arrow input input-sm"
 									id={`lineas[${idx}].cantidad`}
 									{...form.fields.lineas[idx].cantidad.as('number')}
 									min="1"
@@ -347,16 +320,14 @@
 							</FormFieldWrapper>
 
 							<FormFieldWrapper label="Costo" id={`lineas[${idx}].costo`}>
-								<div class="input flex items-center bg-base-200">
-									${Number(linea.costo_materiales || 0).toLocaleString('es-AR', {
-										minimumFractionDigits: 2
-									})}
+								<div class="input flex items-center bg-base-200 input-sm">
+									${formatearDosDecimales(linea.costo_materiales)}
 								</div>
 							</FormFieldWrapper>
 							{#if linea.producto_id === 'personalizado'}
 								<FormFieldWrapper label="Precio de lista" id={`lineas[${idx}].precio_lista`}>
 									<input
-										class="remove-arrow input"
+										class="remove-arrow input input-sm"
 										type="number"
 										min="0"
 										step="0.01"
@@ -368,7 +339,7 @@
 							{:else}
 								<FormFieldWrapper label="Precio de lista" id={`lineas[${idx}].precio_lista`}>
 									<input
-										class="remove-arrow input"
+										class="remove-arrow input input-sm"
 										type="number"
 										min={linea.precio_lista_minimo}
 										step="0.01"
@@ -378,44 +349,9 @@
 									/>
 								</FormFieldWrapper>
 							{/if}
-							<Can modulo="pedidos" accion="descuento">
-								<FormFieldWrapper label="Descuento (%)" id={`lineas[${idx}].descuento_porcentaje`}>
-									<input
-										id={`lineas[${idx}].descuento_porcentaje`}
-										class="remove-arrow input"
-										type="number"
-										min="0"
-										max="99.99"
-										step="0.01"
-										value={linea.descuento_porcentaje}
-										oninput={(event) =>
-											actualizarPrecioLinea(idx, 'descuento_porcentaje', event.currentTarget.value)}
-									/>
-								</FormFieldWrapper>
-								{#if linea.descuento_porcentaje > 0}
-									<FormFieldWrapper
-										label="Motivo del descuento"
-										id={`lineas[${idx}].justificacion_descuento`}
-										required
-									>
-										<input
-											class="input"
-											id={`lineas[${idx}].justificacion_descuento`}
-											required
-											value={linea.justificacion_descuento}
-											oninput={(event) =>
-												actualizarPrecioLinea(
-													idx,
-													'justificacion_descuento',
-													event.currentTarget.value
-												)}
-										/>
-									</FormFieldWrapper>
-								{/if}
-							</Can>
 							<FormFieldWrapper label="Precio neto" id={`lineas[${idx}].precio`}>
-								<div class="input flex items-center bg-base-200 font-semibold">
-									${Number(linea.precio || 0).toLocaleString('es-AR', { minimumFractionDigits: 2 })}
+								<div class="input flex items-center bg-base-200 font-semibold input-sm">
+									${formatearDosDecimales(linea.precio)}
 								</div>
 							</FormFieldWrapper>
 						</div>
@@ -434,7 +370,7 @@
 				<div class="text-right">
 					<p class="text-sm text-base-content/70">Total</p>
 					<p class="text-3xl font-bold">
-						${total.toLocaleString('es-AR', { minimumFractionDigits: 2 })}
+						${formatearDosDecimales(total)}
 					</p>
 				</div>
 			</div>

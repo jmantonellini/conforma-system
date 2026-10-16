@@ -9,6 +9,7 @@
 	import { debounce } from '$lib/utils/debounce';
 	import { SvelteURLSearchParams } from 'svelte/reactivity';
 	import { formatearFecha } from '$lib/utils/fechas';
+	import { formatearDosDecimales } from '$lib/utils/precios';
 	import { CANALES_COTIZACION } from '$lib/utils/canales-cotizacion';
 	import { eliminarCotizacion } from '$lib/remote/cotizaciones.remote';
 	import { toast } from '$lib/stores/toast.svelte';
@@ -95,7 +96,7 @@
 				</td>
 				<td>{cot.created_at ? formatearFecha(new Date(cot.created_at)) : '-'}</td>
 				<td class="text-right font-medium">
-					{cot.precio_total != null ? '$' + cot.precio_total.toLocaleString('es-AR') : '-'}
+					{cot.precio_total != null ? '$' + formatearDosDecimales(cot.precio_total) : '-'}
 				</td>
 				<td>
 					<span class="badge badge-dash capitalize badge-{cot.estado_color}">

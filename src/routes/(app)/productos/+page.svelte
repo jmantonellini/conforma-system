@@ -10,6 +10,7 @@
 	import { debounce } from '$lib/utils/debounce';
 	import { SvelteURLSearchParams } from 'svelte/reactivity';
 	import { page } from '$app/state';
+	import { formatearDosDecimales } from '$lib/utils/precios';
 
 	let { data }: PageProps = $props();
 
@@ -121,10 +122,10 @@
 				<td><Highlight text={producto.marca?.nombre} query={search} /></td>
 				<td><Highlight text={producto.modelo?.nombre} query={search} /></td>
 				<td class="text-right">
-					${producto.costo_materiales.toLocaleString('es-AR', { minimumFractionDigits: 2 })}
+					${formatearDosDecimales(producto.costo_materiales)}
 				</td>
 				<td class="text-right font-semibold">
-					${producto.precio_venta.toLocaleString('es-AR', { minimumFractionDigits: 2 })}
+					${formatearDosDecimales(producto.precio_venta)}
 				</td>
 				<td class="text-center">
 					<div class="flex justify-center gap-2">

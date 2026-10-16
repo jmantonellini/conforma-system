@@ -4,6 +4,15 @@ export function redondearPrecio(valor: number) {
 	return Number(valor.toFixed(2));
 }
 
+const formatoDosDecimales = new Intl.NumberFormat('es-AR', {
+	minimumFractionDigits: 2,
+	maximumFractionDigits: 2
+});
+
+export function formatearDosDecimales(valor: number | null | undefined) {
+	return formatoDosDecimales.format(redondearPrecio(Number(valor ?? 0)));
+}
+
 export function calcularIva21(base: number) {
 	return redondearPrecio(base * 0.21);
 }

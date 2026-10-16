@@ -3,6 +3,7 @@
 	import { getPagosByPedido, registrarPago } from '$lib/remote/facturacion.remote';
 	import { toast } from '$lib/stores/toast.svelte';
 	import { formatearFecha } from '$lib/utils/fechas';
+	import { formatearDosDecimales, redondearPrecio } from '$lib/utils/precios';
 
 	let { pedidoId }: { pedidoId: number } = $props();
 
@@ -13,6 +14,10 @@
 	function cerrar() {
 		showModal = false;
 		form.element?.reset();
+	}
+
+	function completarSaldoRestante() {
+		form.fields.monto.set(redondearPrecio(Math.max(facturacion.saldo, 0)));
 	}
 
 	const items = $derived(facturacion.pagos ?? []);
@@ -48,7 +53,7 @@
 				</span>
 				{#if facturacion.saldo > 0}
 					<span class="text-sm text-base-content/70"
-						>Saldo: ${facturacion.saldo.toLocaleString()}</span
+						>Saldo: ${formatearDosDecimales(facturacion.saldo)}</span
 					>
 				{/if}
 			</div>
@@ -60,11 +65,16 @@
 				{#each items as pago (pago.id)}
 					<div class="flex items-center justify-between rounded bg-base-200 p-3">
 						<div>
-							<p class="font-semibold">${pago.monto.toLocaleString()}</p>
+							<p class="font-semibold">${formatearDosDecimales(pago.monto)}</p>
 							<p class="text-sm text-base-content/70 capitalize">
 								<span>
-									{pago.metodo_pago || 'Sin método'}
+									{pago.metodo_pago === 'cuotas'
+										? 'Tarjeta de crédito'
+										: pago.metodo_pago || 'Sin método'}
 								</span>
+								{#if pago.cantidad_cuotas}
+									<span>· {pago.cantidad_cuotas} cuotas</span>
+								{/if}
 								{#if pago.fecha_pago}
 									<span class="text-xs text-base-content/50">
 										- {formatearFecha(new Date(pago.fecha_pago))}
@@ -95,15 +105,41 @@
 		<input type="hidden" name="pedido_id" value={pedidoId} />
 		<div class="grid gap-3">
 			<FormFieldWrapper label="Monto" id="monto" required>
-				<input class="remove-arrow input" step="0.01" {...form.fields.monto.as('number')} />
+				<div class="join w-full">
+					<input
+						class="remove-arrow input join-item min-w-0 flex-1"
+						step="0.01"
+						{...form.fields.monto.as('number')}
+					/>
+					<button
+						type="button"
+						class="btn join-item btn-outline"
+						disabled={facturacion.saldo <= 0}
+						onclick={completarSaldoRestante}
+					>
+						Saldo restante
+					</button>
+				</div>
 			</FormFieldWrapper>
 			<FormFieldWrapper label="Método" id="metodo_pago">
 				<select class="select" {...form.fields.metodo_pago.as('select', 'efectivo')}>
 					<option value="efectivo">Efectivo</option>
 					<option value="transferencia">Transferencia</option>
 					<option value="cheque">Cheque</option>
+					<option value="cuotas">Tarjeta en cuotas</option>
 				</select>
 			</FormFieldWrapper>
+			{#if form.fields.metodo_pago.value() === 'cuotas'}
+				<FormFieldWrapper label="Cantidad de cuotas" id="cantidad_cuotas" required>
+					<input
+						class="remove-arrow input"
+						min="1"
+						step="1"
+						required
+						{...form.fields.cantidad_cuotas.as('number')}
+					/>
+				</FormFieldWrapper>
+			{/if}
 			<FormFieldWrapper label="Observaciones" id="observaciones">
 				<textarea class="textarea" rows="2" {...form.fields.observaciones.as('text')}></textarea>
 			</FormFieldWrapper>
