@@ -232,7 +232,7 @@
 
 		<section class="card bg-base-100 shadow">
 			<div class="card-body">
-				<div class="grid grid-cols-4 gap-4">
+				<div class="grid gap-4 lg:grid-cols-7">
 					{#if cotizacion.cliente?.id}
 						<FormFieldWrapper label="Cliente" id="cliente">
 							<p class="font-medium">
@@ -243,11 +243,15 @@
 						</FormFieldWrapper>
 					{:else}
 						<p class="flex flex-col gap-1">
-							<span class="font-medium">{cotizacion.cliente_nombre}</span>
-							{#if cotizacion.cliente_telefono}<span>{cotizacion.cliente_telefono}</span>{/if}
-							<span class="text-base-content/50">No cargado como contacto</span>
+							<span class="font-medium">Contacto no disponible</span>
 						</p>
 					{/if}
+					<FormFieldWrapper label="Descripción" id="descripcion" class="lg:col-span-2">
+						<p class="whitespace-pre-wrap">{cotizacion.descripcion}</p>
+						{#if cotizacion.observaciones}
+							<p class="mt-2 text-sm text-base-content/60">📝 {cotizacion.observaciones}</p>
+						{/if}
+					</FormFieldWrapper>
 					<FormFieldWrapper label="Fecha" id="fecha">
 						<p>{formatearFecha(cotizacion.created_at)}</p>
 					</FormFieldWrapper>
@@ -304,12 +308,6 @@
 							<button class="btn btn-primary btn-sm" onclick={asignar}>Asignar</button>
 						</FormFieldWrapper>
 					</Can>
-					<FormFieldWrapper label="Descripción" id="descripcion" class="col-span-4">
-						<p class="whitespace-pre-wrap">{cotizacion.descripcion}</p>
-						{#if cotizacion.observaciones}
-							<p class="mt-2 text-sm text-base-content/60">📝 {cotizacion.observaciones}</p>
-						{/if}
-					</FormFieldWrapper>
 				</div>
 			</div>
 		</section>

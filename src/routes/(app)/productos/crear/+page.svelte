@@ -67,24 +67,27 @@
 					toast.error('Error del servidor');
 				}
 			})}
-			class="space-y-6"
+			class="space-y-3"
 		>
 			<input type="hidden" name="receta" value={JSON.stringify(receta)} />
 			<!-- Datos básicos -->
 			<fieldset class="fieldset rounded-box border border-base-300 bg-base-200 p-4">
 				<legend class="fieldset-legend">Datos básicos</legend>
 
-				<div class="grid grid-cols-1 gap-4 md:grid-cols-3 xl:grid-cols-6">
+				<div class="grid grid-cols-1 gap-4 md:grid-cols-7">
 					<FormFieldWrapper label="Código" id="codigo">
-						<input class="input" {...crearProducto.fields.codigo.as('text')} />
+						<input class="input input-sm" {...crearProducto.fields.codigo.as('text')} />
 					</FormFieldWrapper>
-					<FormFieldWrapper label="Nombre" id="nombre">
-						<input class="input" {...crearProducto.fields.nombre.as('text')} />
+					<FormFieldWrapper class="lg:col-span-2" label="Nombre" id="nombre">
+						<input class="input input-sm" {...crearProducto.fields.nombre.as('text')} />
 					</FormFieldWrapper>
 
 					<!-- Categoría de producto y precio -->
 					<FormFieldWrapper label="Categoría de producto" id="categoria_id">
-						<select {...crearProducto.fields.categoria_id.as('select')} class="select w-full">
+						<select
+							{...crearProducto.fields.categoria_id.as('select')}
+							class="select w-full select-sm"
+						>
 							<option value="">Seleccionar...</option>
 							{#each categorias as cat (cat.id)}
 								<option value={String(cat.id)}>{cat.nombre}</option>
@@ -93,7 +96,7 @@
 					</FormFieldWrapper>
 					<FormFieldWrapper label="Margen bruto (%)" id="margen_porcentaje">
 						<input
-							class="input"
+							class="input input-sm"
 							min="0"
 							max="99.99"
 							step="0.01"
@@ -117,101 +120,107 @@
 
 			<!-- Vehículo -->
 			{#if crearProducto.fields.categoria_id.value() === '1'}
-				<fieldset class="fieldset rounded-box border border-base-300 bg-base-200 p-4">
-					<legend class="fieldset-legend">Vehículo</legend>
+				<div class="grid grid-cols-1 gap-4 md:grid-cols-2">
+					<fieldset class="fieldset rounded-box border space-y-3 border-base-300 bg-base-200 p-4">
+						<legend class="fieldset-legend">Vehículo</legend>
 
-					<div class="grid grid-cols-1 gap-4 md:grid-cols-3">
-						<FormFieldWrapper label="Tipo" id="tipo_vehiculo_id">
-							<select {...crearProducto.fields.tipo_vehiculo_id.as('select')} class="select w-full">
-								<option value="">Seleccionar...</option>
-								{#each tiposVehiculo as tv (tv.id)}
-									<option value={String(tv.id)}>{tv.nombre}</option>
-								{/each}
-							</select>
-						</FormFieldWrapper>
-
-						<FormFieldWrapper label="Marca" id="marca_id">
-							<select
-								{...crearProducto.fields.marca_id.as('select')}
-								class="select w-full"
-								disabled={!crearProducto.fields.tipo_vehiculo_id}
-							>
-								<option value="">Seleccionar...</option>
-								{#each marcas as m (m.id)}
-									<option value={String(m.id)}>
-										{#if m.logo_url}<img
-												src={m.logo_url}
-												alt={m.nombre}
-												class="h-5 w-5 object-contain"
-											/>
-										{/if}
-										{m.nombre}</option
-									>
-								{/each}
-							</select>
-						</FormFieldWrapper>
-
-						<FormFieldWrapper label="Modelo" id="modelo_id">
-							<select
-								{...crearProducto.fields.modelo_id.as('select')}
-								class="select w-full"
-								disabled={!crearProducto.fields.marca_id}
-							>
-								<option value="">Seleccionar...</option>
-								{#each modelos as mod (mod.id)}
-									<option value={String(mod.id)}>{mod.nombre}</option>
-								{/each}
-							</select>
-						</FormFieldWrapper>
-					</div>
-
-					<div class="grid grid-cols-1 gap-4 md:grid-cols-2">
-						<FormFieldWrapper label="Tipo de uso" id="tipo_uso_id">
-							<select {...crearProducto.fields.tipo_uso_id.as('select')} class="select w-full">
-								<option value="">Seleccionar...</option>
-								{#each tiposDeUso as tu (tu.id)}
-									<option value={String(tu.id)}>{tu.nombre}</option>
-								{/each}
-							</select>
-						</FormFieldWrapper>
-
-						{#if crearProducto.fields.tipo_uso_id.value() === '2'}
-							<FormFieldWrapper label="Categoría de competencia" id="categoria_competencia_id">
+						<div class="grid grid-cols-1 gap-4 md:grid-cols-3">
+							<FormFieldWrapper label="Tipo" id="tipo_vehiculo_id">
 								<select
-									{...crearProducto.fields.categoria_competencia_id.as('select')}
-									class="select w-full"
+									{...crearProducto.fields.tipo_vehiculo_id.as('select')}
+									class="select w-full select-sm"
 								>
 									<option value="">Seleccionar...</option>
-									{#each await getCategoriasComp(parseInt(crearProducto.fields.tipo_vehiculo_id.value() as string)) as cat (cat.id)}
-										<option value={String(cat.id)}>{cat.nombre}</option>
+									{#each tiposVehiculo as tv (tv.id)}
+										<option value={String(tv.id)}>{tv.nombre}</option>
 									{/each}
 								</select>
 							</FormFieldWrapper>
-						{/if}
-					</div>
-				</fieldset>
 
-				<!-- Medidas (solo si categoría_id === 1) -->
-				{#if crearProducto.fields.categoria_id.value() === '1'}
+							<FormFieldWrapper label="Marca" id="marca_id">
+								<select
+									{...crearProducto.fields.marca_id.as('select')}
+									class="select w-full select-sm"
+									disabled={!crearProducto.fields.tipo_vehiculo_id}
+								>
+									<option value="">Seleccionar...</option>
+									{#each marcas as m (m.id)}
+										<option value={String(m.id)}>
+											{#if m.logo_url}<img
+													src={m.logo_url}
+													alt={m.nombre}
+													class="h-5 w-5 object-contain"
+												/>
+											{/if}
+											{m.nombre}</option
+										>
+									{/each}
+								</select>
+							</FormFieldWrapper>
+
+							<FormFieldWrapper label="Modelo" id="modelo_id">
+								<select
+									{...crearProducto.fields.modelo_id.as('select')}
+									class="select w-full select-sm"
+									disabled={!crearProducto.fields.marca_id}
+								>
+									<option value="">Seleccionar...</option>
+									{#each modelos as mod (mod.id)}
+										<option value={String(mod.id)}>{mod.nombre}</option>
+									{/each}
+								</select>
+							</FormFieldWrapper>
+						</div>
+
+						<div class="grid grid-cols-1 gap-4 md:grid-cols-2">
+							<FormFieldWrapper label="Tipo de uso" id="tipo_uso_id">
+								<select
+									{...crearProducto.fields.tipo_uso_id.as('select')}
+									class="select w-full select-sm"
+								>
+									<option value="">Seleccionar...</option>
+									{#each tiposDeUso as tu (tu.id)}
+										<option value={String(tu.id)}>{tu.nombre}</option>
+									{/each}
+								</select>
+							</FormFieldWrapper>
+
+							{#if crearProducto.fields.tipo_uso_id.value() === '2'}
+								<FormFieldWrapper label="Categoría de competencia" id="categoria_competencia_id">
+									<select
+										{...crearProducto.fields.categoria_competencia_id.as('select')}
+										class="select w-full select-sm"
+									>
+										<option value="">Seleccionar...</option>
+										{#each await getCategoriasComp(parseInt(crearProducto.fields.tipo_vehiculo_id.value() as string)) as cat (cat.id)}
+											<option value={String(cat.id)}>{cat.nombre}</option>
+										{/each}
+									</select>
+								</FormFieldWrapper>
+							{/if}
+						</div>
+					</fieldset>
+
+					<!-- Medidas (solo si categoría_id === 1) -->
 					<fieldset class="fieldset rounded-box border border-base-300 bg-base-200 p-4">
-						<legend class="fieldset-legend">Aspectos técnicos</legend>
+						<legend class="fieldset-legend">Medidas</legend>
 
-						<div class="flex flex-col gap-4 lg:flex-row">
+						<div class="grid grid-cols-1 gap-4 md:grid-cols-7">
 							<fieldset
-								class="fieldset rounded-box border border-base-300 bg-base-200 p-4 lg:w-1/3"
+								class="fieldset col-span-2 rounded-box border border-base-300 bg-base-200 p-4"
 							>
-								<legend class="fieldset-legend">Medidas Primario</legend>
+								<legend class="fieldset-legend">Primario</legend>
 
 								<div class="grid grid-cols-2 gap-4">
-									<FormFieldWrapper label="Diámetro" id="medidas_primario_diametro">
+									<FormFieldWrapper label="Ø" id="medidas_primario_diametro">
 										<input
-											class="remove-arrow input"
+											class="remove-arrow input input-sm"
 											{...crearProducto.fields.medidas_primario_diametro.as('number')}
 										/>
 									</FormFieldWrapper>
 									<FormFieldWrapper label="Largo" id="medidas_primario_largo">
 										<input
-											class="remove-arrow input"
+											class="remove-arrow input input-sm"
 											{...crearProducto.fields.medidas_primario_largo.as('number')}
 										/>
 									</FormFieldWrapper>
@@ -219,19 +228,19 @@
 							</fieldset>
 
 							<fieldset
-								class="fieldset rounded-box border border-base-300 bg-base-200 p-4 lg:w-1/3"
+								class="fieldset col-span-2 rounded-box border border-base-300 bg-base-200 p-4"
 							>
-								<legend class="fieldset-legend">Medidas Secundario</legend>
+								<legend class="fieldset-legend">Secundario</legend>
 								<div class="grid grid-cols-2 gap-4">
-									<FormFieldWrapper label="Diámetro" id="medidas_secundario_diametro">
+									<FormFieldWrapper label="Ø" id="medidas_secundario_diametro">
 										<input
-											class="remove-arrow input"
+											class="remove-arrow input input-sm"
 											{...crearProducto.fields.medidas_secundario_diametro.as('number')}
 										/>
 									</FormFieldWrapper>
 									<FormFieldWrapper label="Largo" id="medidas_secundario_largo">
 										<input
-											class="remove-arrow input"
+											class="remove-arrow input input-sm"
 											{...crearProducto.fields.medidas_secundario_largo.as('number')}
 										/>
 									</FormFieldWrapper>
@@ -239,26 +248,26 @@
 							</fieldset>
 
 							<fieldset
-								class="fieldset rounded-box border border-base-300 bg-base-200 p-4 lg:w-1/3"
+								class="fieldset col-span-3 rounded-box border border-base-300 bg-base-200 p-4"
 							>
 								<legend class="fieldset-legend">Trombon</legend>
-								<div class="grid grid-cols-2 gap-4">
-									<FormFieldWrapper label="Diámetro Inicial" id="trombon_diametro_inicial">
+								<div class="grid grid-cols-3 gap-4">
+									<FormFieldWrapper label="Ø Inicial" id="trombon_diametro_inicial">
 										<input
-											class="remove-arrow input"
+											class="remove-arrow input input-sm"
 											{...crearProducto.fields.trombon_diametro_inicial.as('number')}
-										/>
-									</FormFieldWrapper>
-									<FormFieldWrapper label="Diámetro Final" id="trombon_diametro_final">
-										<input
-											class="remove-arrow input"
-											{...crearProducto.fields.trombon_diametro_final.as('number')}
 										/>
 									</FormFieldWrapper>
 									<FormFieldWrapper label="Largo" id="trombon_largo">
 										<input
-											class="remove-arrow input"
-											{...crearProducto.fields.trombon_largo.as('number')}
+										class="remove-arrow input input-sm"
+										{...crearProducto.fields.trombon_largo.as('number')}
+										/>
+									</FormFieldWrapper>
+									<FormFieldWrapper label="Ø Final" id="trombon_diametro_final">
+										<input
+											class="remove-arrow input input-sm"
+											{...crearProducto.fields.trombon_diametro_final.as('number')}
 										/>
 									</FormFieldWrapper>
 								</div>
@@ -277,14 +286,14 @@
 							</FormFieldWrapper>
 						</fieldset>
 					</fieldset>
-				{/if}
+				</div>
 			{/if}
 
 			<fieldset class="fieldset rounded-box border border-base-300 bg-base-200 p-4">
 				<legend class="fieldset-legend">Receta del producto</legend>
-				<div class="space-y-3">
+				<div class="flex flex-col gap-2">
 					{#each receta as linea, indice (indice)}
-						<div class="mb-1 grid grid-cols-[1fr_auto_auto_auto] gap-1 sm:items-center">
+						<div class="mb-1 grid grid-cols-[minmax(0,1fr)_repeat(3,minmax(0,50px))] gap-2 sm:items-center">
 							<SearchSelect
 								label=""
 								id={`receta-create-${indice}`}
@@ -319,13 +328,13 @@
 								}}
 							/>
 							<input
-								class="remove-arrow input w-16"
+								class="remove-arrow input input-sm text-right w-full min-w-0"
 								type="number"
 								min="0"
 								step="0.01"
 								bind:value={linea.cantidad}
 							/>
-							<span class="label whitespace-nowrap">
+							<span class="label truncate whitespace-nowrap">
 								{insumos.find((insumo) => String(insumo.id) === linea.insumo_id)?.unidad ??
 									(linea.producto_id ? 'Producto' : '-')}
 							</span>
@@ -338,7 +347,7 @@
 							>
 						</div>
 					{/each}
-					<button type="button" class="btn btn-outline btn-sm" onclick={agregarInsumo}
+					<button type="button" class="btn btn-outline btn-sm w-fit" onclick={agregarInsumo}
 						>+ Agregar componente</button
 					>
 				</div>

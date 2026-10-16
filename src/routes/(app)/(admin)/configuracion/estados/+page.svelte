@@ -118,7 +118,13 @@
 			if (modalType === 'categorias') {
 				const data = { nombre, descripcion: descripcion || undefined };
 				if (editingId) await actualizarCategoriaProducto({ id: editingId, ...data });
-				else await crearCategoriaProducto(data);
+				else {
+					const resultado = await crearCategoriaProducto(data);
+					if (!resultado.creada) {
+						toast.warning('Ya existe una categoría con ese nombre');
+						return;
+					}
+				}
 			} else if (modalType === 'fabricacion') {
 				const data = { nombre, slug, grupo, orden: Number(orden), color, es_final: esFinal };
 				if (editingId) await actualizarEstadoFabricacion({ id: editingId, ...data });

@@ -4,7 +4,7 @@ import { pagos, pedidos } from '$lib/server/db/schema';
 import { desc, eq } from 'drizzle-orm';
 import * as v from 'valibot';
 import { getCurrentUser } from './usuarios.remote';
-import { getPedidoById } from './pedidos.remote';
+import { getHistorialPedido, getPedidoById } from './pedidos.remote';
 import { requirePermission } from '$lib/server/auth/permissions';
 
 const RegistrarPagoSchema = v.object({
@@ -77,6 +77,7 @@ export const registrarPago = form(RegistrarPagoSchema, async (data) => {
 	// Refrescar queries relacionadas
 	getPedidoById(data.pedido_id).refresh();
 	getPagosByPedido(data.pedido_id).refresh();
+	getHistorialPedido(data.pedido_id).refresh();
 
 	return { success: true };
 });

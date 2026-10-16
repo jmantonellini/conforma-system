@@ -19,7 +19,7 @@ import {
 	notificaciones,
 	insumos
 } from '$lib/server/db/schema';
-import { and, desc, eq, or } from 'drizzle-orm';
+import { and, desc, eq, getTableColumns, or } from 'drizzle-orm';
 import { unlink } from 'fs/promises';
 import path from 'path';
 import { env } from '$env/dynamic/private';
@@ -280,36 +280,15 @@ export const crearCotizacion = form(CotizacionSchema, async (data) => {
 	if (!estadoInicial) throw new Error('No existe el estado inicial "ingresada"');
 
 	const resultado = await db.transaction(async (tx) => {
-		let contactoId = data.contacto_id && data.contacto_id > 0 ? data.contacto_id : null;
-		let clienteCreado = false;
-
-		if (!contactoId) {
-			const [cliente] = await tx
-				.insert(contactos)
-				.values({
-					razon_social: data.cliente_nombre,
-					nombre: data.cliente_nombre,
-					email: data.cliente_email || null,
-					telefono: data.cliente_telefono || null,
-					es_cliente: true
-				})
-				.returning({ id: contactos.id });
-			contactoId = cliente.id;
-			clienteCreado = true;
-		}
-
 		const [cotizacion] = await tx
 			.insert(cotizaciones)
 			.values({
 				numero_cotizacion: await generarNumeroCotizacion(),
-				contacto_id: contactoId,
+				contacto_id: data.contacto_id,
 				contacto_distribuidor_id:
 					data.contacto_distribuidor_id && data.contacto_distribuidor_id > 0
 						? data.contacto_distribuidor_id
 						: null,
-				cliente_nombre: data.cliente_nombre,
-				cliente_telefono: data.cliente_telefono || null,
-				cliente_email: data.cliente_email || null,
 				canal: data.canal,
 				descripcion: data.descripcion,
 				observaciones: data.observaciones || null,
@@ -318,11 +297,11 @@ export const crearCotizacion = form(CotizacionSchema, async (data) => {
 			})
 			.returning();
 
-		return { cotizacion, clienteCreado };
+		return cotizacion;
 	});
 
 	getCotizaciones({ search: '', page: 1 }).refresh();
-	return { cotizacionId: resultado.cotizacion.id, clienteCreado: resultado.clienteCreado };
+	return { cotizacionId: resultado.id };
 });
 
 // ============================================================
@@ -342,8 +321,14 @@ export const asignarCotizacion = command(
 		const now = new Date();
 
 		const [cotizacion] = await db
-			.select()
+			.select({
+				numero_cotizacion: cotizaciones.numero_cotizacion,
+				contacto_id: cotizaciones.contacto_id,
+				estado_id: cotizaciones.estado_id,
+				clienteNombre: contactos.razon_social
+			})
 			.from(cotizaciones)
+			.innerJoin(contactos, eq(cotizaciones.contacto_id, contactos.id))
 			.where(eq(cotizaciones.id, cotizacion_id))
 			.limit(1);
 
@@ -592,8 +577,12 @@ export const cambiarEstadoCotizacion = command(
 		const now = new Date();
 
 		const [cotizacion] = await db
-			.select()
+			.select({
+				...getTableColumns(cotizaciones),
+				clienteNombre: contactos.razon_social
+			})
 			.from(cotizaciones)
+			.innerJoin(contactos, eq(cotizaciones.contacto_id, contactos.id))
 			.where(eq(cotizaciones.id, cotizacion_id))
 			.limit(1);
 
@@ -648,7 +637,7 @@ export const cambiarEstadoCotizacion = command(
 		await notificarCambioEstadoCotizacion({
 			cotizacionId: cotizacion_id,
 			numeroCotizacion: cotizacion.numero_cotizacion,
-			clienteNombre: cotizacion.cliente_nombre,
+			clienteNombre: cotizacion.clienteNombre,
 			estadoDestino: estadoDestino
 				? { slug: estadoDestino.slug, nombre: estadoDestino.nombre }
 				: undefined,

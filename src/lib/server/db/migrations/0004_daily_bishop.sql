@@ -1,1 +1,0 @@
-ALTER TABLE "pedidos" ALTER COLUMN "presupuesto" SET DATA TYPE text;

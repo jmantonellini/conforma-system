@@ -11,6 +11,9 @@ import {
 	unidades_fabricacion,
 	estados_fabricacion,
 	logs_cambios_estado,
+	pagos,
+	envios,
+	transportistas,
 	transiciones_estado,
 	empleados,
 	usuarios,
@@ -311,33 +314,148 @@ export async function getHistorialPedidoServicio(pedidoId: number) {
 	const estadoAnterior = aliasedTable(estados_pedido, 'estado_anterior');
 	const estadoNuevo = aliasedTable(estados_pedido, 'estado_nuevo');
 
-	return await db
-		.select({
-			id: logs_cambios_estado.id,
-			estado_anterior: {
-				nombre: estadoAnterior.nombre,
-				color: estadoAnterior.color
-			},
-			estado_nuevo: {
-				nombre: estadoNuevo.nombre,
-				color: estadoNuevo.color
-			},
-			comentario: logs_cambios_estado.comentario,
-			fecha: logs_cambios_estado.created_at,
-			empleado: empleados.nombre
-		})
-		.from(logs_cambios_estado)
-		.leftJoin(usuarios, eq(logs_cambios_estado.usuario_id, usuarios.id))
-		.leftJoin(empleados, eq(usuarios.empleado_id, empleados.id))
-		.leftJoin(estadoAnterior, eq(logs_cambios_estado.estado_anterior_id, estadoAnterior.id))
-		.leftJoin(estadoNuevo, eq(logs_cambios_estado.estado_nuevo_id, estadoNuevo.id))
-		.where(
-			and(
-				eq(logs_cambios_estado.entidad_tipo, 'pedido'),
-				eq(logs_cambios_estado.entidad_id, pedidoId)
+	const [cambiosEstado, pagosPedido, enviosPedido, pedidoInfo] = await Promise.all([
+		db
+			.select({
+				id: logs_cambios_estado.id,
+				estado_anterior: {
+					nombre: estadoAnterior.nombre,
+					color: estadoAnterior.color
+				},
+				estado_nuevo: {
+					nombre: estadoNuevo.nombre,
+					color: estadoNuevo.color
+				},
+				comentario: logs_cambios_estado.comentario,
+				fecha: logs_cambios_estado.created_at,
+				empleado: empleados.nombre
+			})
+			.from(logs_cambios_estado)
+			.leftJoin(usuarios, eq(logs_cambios_estado.usuario_id, usuarios.id))
+			.leftJoin(empleados, eq(usuarios.empleado_id, empleados.id))
+			.leftJoin(estadoAnterior, eq(logs_cambios_estado.estado_anterior_id, estadoAnterior.id))
+			.leftJoin(estadoNuevo, eq(logs_cambios_estado.estado_nuevo_id, estadoNuevo.id))
+			.where(
+				and(
+					eq(logs_cambios_estado.entidad_tipo, 'pedido'),
+					eq(logs_cambios_estado.entidad_id, pedidoId)
+				)
 			)
-		)
-		.orderBy(desc(logs_cambios_estado.created_at));
+			.orderBy(desc(logs_cambios_estado.created_at)),
+		db.select().from(pagos).where(eq(pagos.pedido_id, pedidoId)),
+		db
+			.select({
+				id: envios.id,
+				numero_guia: envios.numero_guia,
+				cantidad_bultos: envios.cantidad_bultos,
+				estado: envios.estado,
+				fecha_entrega: envios.fecha_entrega,
+				observaciones: envios.observaciones,
+				created_at: envios.created_at,
+				transportista: transportistas.nombre
+			})
+			.from(envios)
+			.innerJoin(transportistas, eq(envios.transportista_id, transportistas.id))
+			.where(eq(envios.pedido_id, pedidoId)),
+		db
+			.select({ anticipo: pedidos.anticipo, created_at: pedidos.created_at })
+			.from(pedidos)
+			.where(eq(pedidos.id, pedidoId))
+			.then((rows) => rows[0])
+	]);
+
+	type EventoHistorial = {
+		id: string;
+		tipo: 'estado' | 'pago' | 'envio' | 'entrega';
+		titulo: string;
+		fecha: Date | null;
+		detalle: string | null;
+		empleado: string | null;
+		estado_anterior: { nombre: string | null; color: string | null } | null;
+		estado_nuevo: { nombre: string | null; color: string | null } | null;
+	};
+
+	const eventos: EventoHistorial[] = [
+		...cambiosEstado.map((cambio) => ({
+			id: `estado-${cambio.id}`,
+			tipo: 'estado' as const,
+			titulo: 'Cambio de estado',
+			fecha: cambio.fecha,
+			detalle: cambio.comentario,
+			empleado: cambio.empleado,
+			estado_anterior: cambio.estado_anterior,
+			estado_nuevo: cambio.estado_nuevo
+		})),
+		...(pedidoInfo?.anticipo && pedidoInfo.anticipo > 0
+			? [
+					{
+						id: `anticipo-${pedidoId}`,
+						tipo: 'pago' as const,
+						titulo: 'Anticipo inicial',
+						fecha: pedidoInfo.created_at,
+						detalle: `$${pedidoInfo.anticipo.toLocaleString('es-AR', { minimumFractionDigits: 2 })}`,
+						empleado: null,
+						estado_anterior: null,
+						estado_nuevo: null
+					}
+				]
+			: []),
+		...pagosPedido.map((pago) => ({
+			id: `pago-${pago.id}`,
+			tipo: 'pago' as const,
+			titulo: 'Pago registrado',
+			fecha: pago.fecha_pago ?? pago.created_at,
+			detalle: [
+				`$${pago.monto.toLocaleString('es-AR', { minimumFractionDigits: 2 })}`,
+				pago.metodo_pago,
+				pago.observaciones
+			]
+				.filter(Boolean)
+				.join(' · '),
+			empleado: null,
+			estado_anterior: null,
+			estado_nuevo: null
+		})),
+		...enviosPedido.flatMap((envio) => {
+			const detalleEnvio = [
+				envio.transportista,
+				envio.numero_guia ? `Guía ${envio.numero_guia}` : null,
+				`${envio.cantidad_bultos ?? 1} bultos`,
+				envio.observaciones
+			]
+				.filter(Boolean)
+				.join(' · ');
+			const eventosEnvio: EventoHistorial[] = [
+				{
+					id: `envio-${envio.id}`,
+					tipo: 'envio',
+					titulo: 'Envío registrado',
+					fecha: envio.created_at,
+					detalle: detalleEnvio,
+					empleado: null,
+					estado_anterior: null,
+					estado_nuevo: null
+				}
+			];
+
+			if (envio.estado === 'entregado' && envio.fecha_entrega) {
+				eventosEnvio.push({
+					id: `entrega-${envio.id}`,
+					tipo: 'entrega',
+					titulo: 'Envío entregado',
+					fecha: envio.fecha_entrega,
+					detalle: envio.numero_guia ? `Guía ${envio.numero_guia}` : envio.transportista,
+					empleado: null,
+					estado_anterior: null,
+					estado_nuevo: null
+				});
+			}
+
+			return eventosEnvio;
+		})
+	];
+
+	return eventos.sort((a, b) => (b.fecha?.getTime() ?? 0) - (a.fecha?.getTime() ?? 0));
 }
 
 export async function crearPedidoServicio(data: {

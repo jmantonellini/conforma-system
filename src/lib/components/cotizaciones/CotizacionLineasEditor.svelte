@@ -432,7 +432,7 @@
 		<div class="flex flex-wrap items-center justify-end gap-4">
 			<label class="flex items-center gap-2 text-sm">
 				Validez (días)
-				<input class="remove-arrow input w-20" type="number" min="1" bind:value={validezDias} />
+				<input class="remove-arrow input input-sm w-20" type="number" min="1" bind:value={validezDias} />
 			</label>
 			<label class="label cursor-pointer gap-2">
 				<input
@@ -468,7 +468,8 @@
 				<label class="flex items-center gap-3 text-sm font-semibold">
 					<span>Total final</span>
 					<input
-						class="remove-arrow input w-40 text-right text-lg font-bold"
+						class="remove-arrow input input-sm w-40 text-right text-lg font-bold"
+						class:input-error={totalFinal < totalCalculado}
 						type="number"
 						min="0"
 						step="0.01"
@@ -485,15 +486,15 @@
 				</label>
 				{#if totalFinal < totalCalculado}
 					<div
-						class="tooltip tooltip-left"
+						class="tooltip tooltip-bottom"
 						data-tip={`El total final está por debajo de la base de cotización (${totalCalculado.toLocaleString('es-AR', { minimumFractionDigits: 2 })}).`}
 					>
 						<button
 							type="button"
-							class="btn btn-circle btn-ghost text-warning btn-xs"
+							class="btn btn-circle btn-outline btn-error btn-xs"
 							aria-label="El total final está por debajo de la base de venta"
 						>
-							i
+							!
 						</button>
 					</div>
 				{/if}

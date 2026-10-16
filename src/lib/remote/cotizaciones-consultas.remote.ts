@@ -36,8 +36,11 @@ const crearCondicionBusquedaCotizacion = ({
 		condiciones.push(
 			or(
 				ilike(cotizaciones.numero_cotizacion, termino),
-				ilike(cotizaciones.cliente_nombre, termino),
 				ilike(contactos.razon_social, termino),
+				ilike(contactos.nombre, termino),
+				ilike(contactos.apellido, termino),
+				ilike(contactos.telefono, termino),
+				ilike(contactos.email, termino),
 				ilike(contactos.cuit, termino)
 			)
 		);
@@ -66,11 +69,7 @@ export const getCotizaciones = query(
 			.select({
 				id: cotizaciones.id,
 				numero_cotizacion: cotizaciones.numero_cotizacion,
-				cliente_nombre: sql<string>`
-					COALESCE(
-						${contactos.razon_social},
-						${cotizaciones.cliente_nombre}
-					)`.as('cliente_nombre'),
+				cliente_nombre: contactos.razon_social,
 				canal: cotizaciones.canal,
 				created_at: cotizaciones.created_at,
 				precio_total: cotizaciones.precio_total,
@@ -120,15 +119,12 @@ export const getCotizacionById = query(v.number(), async (id) => {
 			pedido_id: cotizaciones.pedido_id,
 			cliente: {
 				id: contactos.id,
-				nombre: contactos.razon_social,
-				apellido: sql<string | null>`NULL`,
+				nombre: contactos.nombre,
+				apellido: contactos.apellido,
 				razon_social: contactos.razon_social,
 				telefono: contactos.telefono,
 				email: contactos.email
 			},
-			cliente_nombre: cotizaciones.cliente_nombre,
-			cliente_telefono: cotizaciones.cliente_telefono,
-			cliente_email: cotizaciones.cliente_email,
 			estado: {
 				id: cotizaciones.estado_id,
 				nombre: estados_cotizacion.nombre,

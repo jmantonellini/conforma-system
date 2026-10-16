@@ -1,1 +1,0 @@
-ALTER TABLE "productos" ADD COLUMN "trombon_diametro_final" integer;

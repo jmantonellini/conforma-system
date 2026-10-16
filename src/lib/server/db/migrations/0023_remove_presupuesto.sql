@@ -1,1 +1,0 @@
-ALTER TABLE "pedidos" DROP COLUMN IF EXISTS "presupuesto";

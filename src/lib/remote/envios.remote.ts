@@ -4,6 +4,7 @@ import { db } from '$lib/server/db';
 import { envios, transportistas, pedidos, contactos } from '$lib/server/db/schema';
 import { eq, desc, count } from 'drizzle-orm';
 import { requirePermission } from '$lib/server/auth/permissions';
+import { getHistorialPedido } from './pedidos.remote';
 
 export const getTransportistas = query(async () => {
 	return db.select().from(transportistas).where(eq(transportistas.activo, true));
@@ -92,6 +93,7 @@ export const crearEnvio = form(EnvioSchema, async (data) => {
 	});
 
 	await refrescarCachesEnvio(data.pedido_id);
+	getHistorialPedido(data.pedido_id).refresh();
 
 	return { success: true };
 });
@@ -112,6 +114,7 @@ export const marcarEntregado = command(
 			.where(eq(envios.id, envioId));
 
 		await refrescarCachesEnvio(envio?.pedido_id);
+		if (envio?.pedido_id) getHistorialPedido(envio.pedido_id).refresh();
 		return { success: true };
 	}
 );

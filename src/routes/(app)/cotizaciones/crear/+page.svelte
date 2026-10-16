@@ -64,15 +64,6 @@
 			value: c.id.toString(),
 			label: `${c.razon_social} (distribuidor)`
 		}));
-
-	function completarContacto(clienteId: string) {
-		const cliente = clientes.data.find((item) => item.id.toString() === clienteId);
-		if (!cliente) return;
-		const nombreCompleto = [cliente.nombre, cliente.apellido].filter(Boolean).join(' ');
-		form.fields.cliente_nombre.set(nombreCompleto || cliente.razon_social);
-		form.fields.cliente_telefono.set(cliente.telefono || '');
-		form.fields.cliente_email.set(cliente.email || '');
-	}
 </script>
 
 <PageLayout>
@@ -83,7 +74,6 @@
 					if (await form.submit()) {
 						const cotizacionId = form.result?.cotizacionId;
 						if (!cotizacionId) throw new Error('No se recibió el número de cotización');
-						if (form.result?.clienteCreado) toast.success('Cliente creado');
 						toast.success('Cotización creada');
 						subiendoArchivos = true;
 						try {
@@ -113,33 +103,11 @@
 				<div class="grid gap-4 md:grid-cols-4">
 					<SearchSelect
 						id="contacto_id"
-						label="Razón Social (opcional)"
+						label="Razón Social"
 						options={clientesOptions}
 						placeholder="Buscar razón social cargada..."
 						field={form.fields.contacto_id}
-						onChange={completarContacto}
 					/>
-
-					<FormFieldWrapper label="Nombre del contacto" id="cliente_nombre" required>
-						<input
-							id="cliente_nombre"
-							class="input"
-							placeholder="Nombre y Apellido"
-							{...form.fields.cliente_nombre.as('text')}
-						/>
-					</FormFieldWrapper>
-
-					<FormFieldWrapper label="Teléfono" id="cliente_telefono">
-						<input
-							class="input"
-							placeholder="Opcional"
-							{...form.fields.cliente_telefono.as('text')}
-						/>
-					</FormFieldWrapper>
-
-					<FormFieldWrapper label="Email" id="cliente_email">
-						<input class="input" placeholder="Opcional" {...form.fields.cliente_email.as('text')} />
-					</FormFieldWrapper>
 
 					<SearchSelect
 						id="contacto_distribuidor_id"

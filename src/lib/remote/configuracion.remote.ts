@@ -58,9 +58,13 @@ export const crearCategoriaProducto = command(
 	}),
 	async (data) => {
 		await requirePermission('configuracion', 'edit');
-		const [categoria] = await db.insert(categorias_productos).values(data).returning();
+		const [categoria] = await db
+			.insert(categorias_productos)
+			.values(data)
+			.onConflictDoNothing({ target: categorias_productos.nombre })
+			.returning();
 		getCategoriasProductoAdmin().refresh();
-		return categoria;
+		return { creada: Boolean(categoria) };
 	}
 );
 

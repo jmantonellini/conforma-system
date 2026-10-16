@@ -1,1 +1,0 @@
-ALTER TABLE "lineas_pedido" ADD COLUMN "insumos_snapshot" jsonb;

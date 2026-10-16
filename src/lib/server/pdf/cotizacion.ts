@@ -231,14 +231,12 @@ export async function generarPDFCotizacion(cotizacionId: number): Promise<{
 				descuento_global_porcentaje: cotizaciones.descuento_global_porcentaje,
 				incluir_iva: cotizaciones.incluir_iva,
 				condiciones_pago: cotizaciones.condiciones_pago,
-				cliente_nombre: cotizaciones.cliente_nombre,
-				cliente_telefono: cotizaciones.cliente_telefono,
 				descripcion: cotizaciones.descripcion,
 				validez_dias: cotizaciones.validez_dias,
 				created_at: cotizaciones.created_at,
 				cliente: {
-					nombre: contactos.razon_social,
-					apellido: sql<string | null>`NULL`,
+					nombre: contactos.nombre,
+					apellido: contactos.apellido,
 					razon_social: contactos.razon_social,
 					telefono: contactos.telefono,
 					direccion: contactos.calle
@@ -283,7 +281,7 @@ export async function generarPDFCotizacion(cotizacionId: number): Promise<{
 	const clienteNombre =
 		cot.cliente?.razon_social ||
 		`${cot.cliente?.nombre ?? ''} ${cot.cliente?.apellido ?? ''}`.trim() ||
-		cot.cliente_nombre;
+		'Cliente';
 
 	const fechaCotizacion = cot.created_at ?? new Date();
 	const vencimiento = new Date(fechaCotizacion);
@@ -307,7 +305,7 @@ export async function generarPDFCotizacion(cotizacionId: number): Promise<{
 			numero: cot.numero,
 			empresa: businessDetails,
 			clienteTitulo: 'CLIENTE',
-			cliente: `${clienteNombre}\n${cot.cliente?.telefono ?? cot.cliente_telefono ?? ''}\n${cot.cliente?.direccion ?? ''}`,
+			cliente: `${clienteNombre}\n${cot.cliente?.telefono ?? ''}\n${cot.cliente?.direccion ?? ''}`,
 			table: [
 				...lineas.map((l) => [
 					l.descripcion_snapshot,

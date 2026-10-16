@@ -1,1 +1,0 @@
-ALTER TABLE "pedidos" ADD COLUMN "presupuesto" integer;

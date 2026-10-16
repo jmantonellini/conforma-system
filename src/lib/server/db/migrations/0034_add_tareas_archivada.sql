@@ -1,1 +1,0 @@
-ALTER TABLE "tareas" ADD COLUMN "archivada" boolean DEFAULT false NOT NULL;

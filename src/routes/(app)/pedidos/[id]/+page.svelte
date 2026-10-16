@@ -228,7 +228,7 @@
 								{#if linea.produccion}
 									{@const p = linea.produccion}
 									<button
-										class={`badge-${p.es_final ? 'success' : p.total > 0 ? 'warning' : 'ghost'} badge cursor-pointer hover:opacity-80 text-nowrap`}
+										class={`badge-${p.es_final ? 'success' : p.total > 0 ? 'warning' : 'ghost'} badge cursor-pointer text-nowrap hover:opacity-80`}
 										onclick={() => irADetalleOrden(p.orden_id)}
 									>
 										({p.terminadas}/{p.total})
@@ -331,27 +331,32 @@
 					<h3 class="card-title">Historial</h3>
 					{#snippet headerHistorial()}
 						<th>Fecha</th>
-						<th>Estado anterior</th>
-						<th>Estado nuevo</th>
-						<th>Empleado</th>
-						<th>Comentario</th>
+						<th>Actividad</th>
+						<th>Detalle</th>
+						<th>Responsable</th>
 					{/snippet}
 					{#snippet rowHistorial(log: Awaited<ReturnType<typeof getHistorialPedido>>[number])}
+						{@const color =
+							log.tipo === 'estado'
+								? log.estado_nuevo?.color || 'ghost'
+								: log.tipo === 'envio'
+									? 'info'
+									: 'success'}
 						<td>
 							{log.fecha ? formatearFecha(new Date(log.fecha)) : '-'}
 						</td>
 						<td>
-							<span class="badge badge-sm badge-{log.estado_anterior?.color || 'ghost'}">
-								{log.estado_anterior?.nombre || '-'}
-							</span>
+							<span class="badge badge-sm badge-{color}">{log.titulo}</span>
 						</td>
 						<td>
-							<span class="badge badge-sm badge-{log.estado_nuevo?.color || 'ghost'}">
-								{log.estado_nuevo?.nombre || '-'}
-							</span>
+							{#if log.tipo === 'estado'}
+								{log.estado_anterior?.nombre || 'Creado'} → {log.estado_nuevo?.nombre || '-'}
+								{#if log.detalle}<p class="text-xs text-base-content/60">{log.detalle}</p>{/if}
+							{:else}
+								{log.detalle || '-'}
+							{/if}
 						</td>
 						<td>{log.empleado || '-'}</td>
-						<td>{log.comentario || '-'}</td>
 					{/snippet}
 					<Table
 						data={await getHistorialPedido(parseInt(page.params.id ?? ''))}

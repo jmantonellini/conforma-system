@@ -140,14 +140,12 @@ export const feedback = pgTable('feedback', {
 export const cotizaciones = pgTable('cotizaciones', {
 	id: serial('id').primaryKey(),
 	numero_cotizacion: text('numero_cotizacion').notNull().unique(),
-	contacto_id: integer('contacto_id').references(() => contactos.id, { onDelete: 'set null' }),
+	contacto_id: integer('contacto_id')
+		.references(() => contactos.id, { onDelete: 'restrict' })
+		.notNull(),
 	contacto_distribuidor_id: integer('contacto_distribuidor_id').references(() => contactos.id, {
 		onDelete: 'set null'
 	}),
-	// Contacto espontáneo (todavía no es cliente cargado)
-	cliente_nombre: text('cliente_nombre').notNull(),
-	cliente_telefono: text('cliente_telefono'),
-	cliente_email: text('cliente_email'),
 	canal: text('canal').notNull().default('whatsapp'), // whatsapp | llamada | email | presencial | otro
 	descripcion: text('descripcion').notNull(),
 	estado_id: integer('estado_id')

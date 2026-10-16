@@ -1,1 +1,0 @@
-ALTER TABLE "cotizaciones" ADD COLUMN "descuento_global_porcentaje" real DEFAULT 0 NOT NULL;

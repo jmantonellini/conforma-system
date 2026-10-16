@@ -1,1 +1,0 @@
-ALTER TABLE "insumos" ADD COLUMN "flete_porcentaje" real DEFAULT 0 NOT NULL;
