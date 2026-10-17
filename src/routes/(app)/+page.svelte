@@ -152,6 +152,7 @@
 
 			{#snippet headerOrdenes()}
 				<th>Prioridad</th>
+				<th>Estado</th>
 				<th>Trabajo</th>
 				<th>Cliente</th>
 				<th>Asignado</th>
@@ -168,6 +169,11 @@
 					{:else}
 						<span class="badge badge-ghost">Normal</span>
 					{/if}
+				</td>
+				<td>
+					<span class={`badge badge-${o.estado.color}`}>
+						{o.estado.nombre}
+					</span>
 				</td>
 				<td>
 					<a class="link link-primary" href={resolve(`/fabricacion/${o.id}`)}>

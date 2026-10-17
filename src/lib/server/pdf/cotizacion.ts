@@ -63,6 +63,7 @@ const template = {
 				name: 'footer',
 				type: 'text',
 				content: '{footer}',
+				readOnly: true,
 				position: { x: 20, y: 258 },
 				width: 170,
 				height: 16,
