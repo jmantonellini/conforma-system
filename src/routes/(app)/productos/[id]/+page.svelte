@@ -99,9 +99,10 @@
 					} else {
 						toast.error('Error de validación');
 					}
-				} catch (error) {
-					console.log(error);
-					toast.error('Error del servidor');
+				} catch {
+					toast.error(
+						'No se pudo actualizar el producto. Revisá los datos de la receta e intentá de nuevo.'
+					);
 				}
 			})}
 			class="space-y-6"

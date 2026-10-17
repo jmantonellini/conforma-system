@@ -95,27 +95,19 @@ export const handleError: HandleServerError = ({ error, event, status, message }
 	if (status < 500) return { message };
 
 	const cause = getRootCause(error);
-	console.error(
-		JSON.stringify({
-			type: 'unhandled_request_error',
-			method: event.request.method,
-			path: event.url.pathname,
-			status,
-			error: {
-				name: cause.name,
-				message: cause.message,
-				code: cause.code,
-				detail: cause.detail,
-				hint: cause.hint,
-				position: cause.position,
-				schema: cause.schema,
-				table: cause.table,
-				column: cause.column,
-				constraint: cause.constraint,
-				stack: cause.stack
-			}
-		})
-	);
+	const causeMessage = typeof cause.message === 'string' ? cause.message : message;
+	const databaseLocation = [cause.schema, cause.table, cause.column]
+		.filter((value): value is string => typeof value === 'string')
+		.join('.');
+	const details = [
+		`HTTP ${status} ${event.request.method} ${event.url.pathname}`,
+		`${cause.code ? `[PostgreSQL ${String(cause.code)}] ` : ''}${causeMessage}`,
+		databaseLocation ? `Database location: ${databaseLocation}` : undefined,
+		typeof cause.detail === 'string' ? `Detail: ${cause.detail}` : undefined,
+		typeof cause.hint === 'string' ? `Hint: ${cause.hint}` : undefined,
+		typeof cause.stack === 'string' ? cause.stack : undefined
+	].filter((line): line is string => Boolean(line));
+	console.error(details.join('\n'));
 
 	return { message: 'Error interno del servidor' };
 };

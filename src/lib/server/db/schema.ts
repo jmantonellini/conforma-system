@@ -553,7 +553,7 @@ export const producto_componentes = pgTable(
 		componente_id: integer('componente_id')
 			.references(() => productos.id, { onDelete: 'restrict' })
 			.notNull(),
-		cantidad: integer('cantidad').notNull().default(1),
+		cantidad: real('cantidad').notNull().default(1),
 		orden: integer('orden').notNull().default(0),
 		created_at: timestamp('created_at').defaultNow()
 	},

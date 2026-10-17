@@ -378,7 +378,7 @@ CREATE TABLE "producto_componentes" (
 	"id" serial PRIMARY KEY NOT NULL,
 	"producto_id" integer NOT NULL,
 	"componente_id" integer NOT NULL,
-	"cantidad" integer DEFAULT 1 NOT NULL,
+	"cantidad" real DEFAULT 1 NOT NULL,
 	"orden" integer DEFAULT 0 NOT NULL,
 	"created_at" timestamp DEFAULT now()
 );

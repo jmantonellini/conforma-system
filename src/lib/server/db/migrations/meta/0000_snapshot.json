@@ -2734,7 +2734,7 @@
 				},
 				"cantidad": {
 					"name": "cantidad",
-					"type": "integer",
+					"type": "real",
 					"primaryKey": false,
 					"notNull": true,
 					"default": 1
