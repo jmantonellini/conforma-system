@@ -1,5 +1,5 @@
 import { db } from '$lib/server/db';
-import type { HandleValidationError } from '@sveltejs/kit';
+import type { HandleServerError, HandleValidationError } from '@sveltejs/kit';
 
 import type { Handle } from '@sveltejs/kit';
 
@@ -72,6 +72,52 @@ export const handle: Handle = async ({ event, resolve }) => {
 
 		throw error;
 	}
+};
+
+function getRootCause(error: unknown): Record<string, unknown> {
+	let current = error;
+	const seen = new Set<object>();
+
+	while (current && typeof current === 'object' && 'cause' in current) {
+		if (seen.has(current)) break;
+		seen.add(current);
+		const cause = current.cause;
+		if (!cause || typeof cause !== 'object') break;
+		current = cause;
+	}
+
+	return current && typeof current === 'object'
+		? (current as Record<string, unknown>)
+		: { message: String(current) };
+}
+
+export const handleError: HandleServerError = ({ error, event, status, message }) => {
+	if (status < 500) return { message };
+
+	const cause = getRootCause(error);
+	console.error(
+		JSON.stringify({
+			type: 'unhandled_request_error',
+			method: event.request.method,
+			path: event.url.pathname,
+			status,
+			error: {
+				name: cause.name,
+				message: cause.message,
+				code: cause.code,
+				detail: cause.detail,
+				hint: cause.hint,
+				position: cause.position,
+				schema: cause.schema,
+				table: cause.table,
+				column: cause.column,
+				constraint: cause.constraint,
+				stack: cause.stack
+			}
+		})
+	);
+
+	return { message: 'Error interno del servidor' };
 };
 
 export const handleValidationError: HandleValidationError = ({ issues }) => ({

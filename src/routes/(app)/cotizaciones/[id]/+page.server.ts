@@ -1,3 +1,4 @@
+import { error } from '@sveltejs/kit';
 import {
 	getCotizacionById,
 	getHistorialCotizacion,
@@ -15,6 +16,7 @@ import type { PageServerLoad } from './$types';
 
 export const load: PageServerLoad = async ({ params }) => {
 	const id = Number(params.id);
+	if (!Number.isSafeInteger(id) || id < 1) error(404, 'Cotización no encontrada');
 	const { cotizacion, lineas, adjuntos } = await getCotizacionById(id);
 	const [historial, notas, empleados] = await Promise.all([
 		getHistorialCotizacion(id),

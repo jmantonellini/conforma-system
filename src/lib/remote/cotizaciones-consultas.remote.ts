@@ -1,4 +1,5 @@
 import * as v from 'valibot';
+import { error } from '@sveltejs/kit';
 import { query } from '$app/server';
 import { db } from '$lib/server/db';
 import {
@@ -147,7 +148,7 @@ export const getCotizacionById = query(v.number(), async (id) => {
 		.where(eq(cotizaciones.id, id))
 		.limit(1);
 
-	if (!cotizacion) throw new Error('Cotización no encontrada');
+	if (!cotizacion) error(404, 'Cotización no encontrada');
 
 	const [transiciones, lineasRaw, adjuntos, ordenes] = await Promise.all([
 		db
