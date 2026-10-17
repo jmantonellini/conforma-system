@@ -10,6 +10,7 @@
 		Table
 	} from '$lib/components/ui';
 	import CotizacionLineasEditor from '$lib/components/cotizaciones/CotizacionLineasEditor.svelte';
+	import CotizacionAdjuntos from '$lib/components/cotizaciones/CotizacionAdjuntos.svelte';
 	import { Document } from '$lib/components/ui/icons';
 	import { toast } from '$lib/stores/toast.svelte';
 	import {
@@ -17,7 +18,6 @@
 		asignarCotizacion,
 		cambiarEstadoCotizacion,
 		convertirCotizacionAPedido,
-		eliminarAdjunto,
 		eliminarCotizacion
 	} from '$lib/remote/cotizaciones.remote';
 	import { formatearFecha, formatearFechaHora } from '$lib/utils/fechas';
@@ -31,7 +31,6 @@
 	);
 	let notaEnRedaccion = $state('');
 	let guardandoNota = $state(false);
-	let subiendo = $state(false);
 	let showEliminar = $state(false);
 	let showMotivoRechazo = $state(false);
 	let motivoRechazo = $state('');
@@ -102,28 +101,6 @@
 		}
 	}
 
-	async function subirArchivos(event: Event) {
-		const input = event.currentTarget as HTMLInputElement;
-		if (!input.files?.length) return;
-		subiendo = true;
-		const archivos = new FormData();
-		for (const archivo of input.files) archivos.append('archivos', archivo);
-		try {
-			const response = await fetch(`/cotizaciones/${cotizacion.id}/adjuntos`, {
-				method: 'POST',
-				body: archivos
-			});
-			if (!response.ok) throw new Error();
-			toast.success('Archivos adjuntados');
-			input.value = '';
-			await invalidateAll();
-		} catch {
-			toast.error('Error al subir archivos');
-		} finally {
-			subiendo = false;
-		}
-	}
-
 	async function guardarNota() {
 		const contenido = notaEnRedaccion.trim();
 		if (!contenido) return;
@@ -149,18 +126,6 @@
 		} catch (error) {
 			toast.error(error instanceof Error ? error.message : 'No se pudo generar el pedido');
 		}
-	}
-
-	function esImagen(mimeType: string | null) {
-		return mimeType?.startsWith('image/') ?? false;
-	}
-
-	function esAudio(mimeType: string | null) {
-		return mimeType?.startsWith('audio/') ?? false;
-	}
-
-	function urlAdjunto(adjuntoId: number) {
-		return resolve(`/cotizaciones/${cotizacion.id}/adjuntos/${adjuntoId}`);
 	}
 
 	async function confirmarEliminar() {
@@ -329,54 +294,13 @@
 			/>
 		</Can>
 
-		<fieldset class="fieldset rounded-box border border-base-300 bg-base-200 p-4">
-			<legend class="fieldset-legend">Archivos adjuntos</legend>
-			<input
-				type="file"
-				multiple
-				accept="image/*,audio/*,video/*,application/pdf"
-				class="file-input mt-3 w-full max-w-md"
-				disabled={subiendo}
-				onchange={subirArchivos}
-			/>
-			<div class="flex flex-wrap gap-3">
-				{#each data.adjuntos as adjunto (adjunto.id)}
-					<div class="card bg-base-100">
-						{#if esImagen(adjunto.mime_type)}
-							<img
-								src={urlAdjunto(adjunto.id)}
-								alt={adjunto.nombre_original}
-								class="h-40 w-full rounded-t-xl object-cover"
-							/>
-						{:else if esAudio(adjunto.mime_type)}
-							<div class="p-3">
-								<audio controls src={urlAdjunto(adjunto.id)} class="w-full"></audio>
-							</div>
-						{/if}
-						<div class="flex items-center justify-between p-2 text-xs">
-							<span class="truncate underline">{adjunto.nombre_original}</span>
-							<Can modulo="cotizaciones" accion="edit">
-								<button
-									class="btn btn-ghost text-error btn-xs"
-									onclick={async () => {
-										await eliminarAdjunto(adjunto.id);
-										await invalidateAll();
-									}}>✕</button
-								>
-							</Can>
-						</div>
-					</div>
-				{:else}
-					<p class="text-sm text-base-content/50">Sin archivos adjuntos.</p>
-				{/each}
-			</div>
-		</fieldset>
+		<CotizacionAdjuntos cotizacionId={cotizacion.id} adjuntos={data.adjuntos} />
 
 		<fieldset class="fieldset rounded-box border border-base-300 bg-base-200 p-4">
 			<legend class="fieldset-legend">Seguimiento interno</legend>
 			<Can modulo="cotizaciones" accion="edit">
 				<textarea
-					class="textarea w-full"
+					class="textarea w-full resize-none"
 					rows="3"
 					maxlength="5000"
 					placeholder="Novedades del cliente, acuerdos o cambios solicitados..."

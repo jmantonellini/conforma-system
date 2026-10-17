@@ -91,7 +91,11 @@ export const getCotizaciones = query(
 			.limit(limit)
 			.offset(offset);
 
-		const [totalResult] = await db.select({ count: count() }).from(cotizaciones).where(where);
+		const [totalResult] = await db
+			.select({ count: count() })
+			.from(cotizaciones)
+			.leftJoin(contactos, eq(cotizaciones.contacto_id, contactos.id))
+			.where(where);
 
 		return {
 			data,

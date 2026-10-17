@@ -11,12 +11,12 @@
 		totalCalculado: number;
 		totalFinal: number;
 		precioTotalIngresado: string | null;
-		precioTotalEditado: boolean;
 		condicionesPago: string;
 		onCambiarValidez: (dias: number) => void;
 		onCambiarIva: (incluir: boolean) => void;
 		onCambiarDescuento: (porcentaje: number) => void;
 		onActualizarTotal: (valor: string) => void;
+		onFinalizarEdicionTotal: () => void;
 		onCambiarCondiciones: (condiciones: string) => void;
 		onGuardar: () => void;
 	};
@@ -30,12 +30,12 @@
 		totalCalculado,
 		totalFinal,
 		precioTotalIngresado,
-		precioTotalEditado,
 		condicionesPago,
 		onCambiarValidez,
 		onCambiarIva,
 		onCambiarDescuento,
 		onActualizarTotal,
+		onFinalizarEdicionTotal,
 		onCambiarCondiciones,
 		onGuardar
 	}: Props = $props();
@@ -91,8 +91,9 @@
 				min="0"
 				step="0.01"
 				aria-label="Precio final de la cotización"
-				value={precioTotalEditado ? (precioTotalIngresado ?? '') : totalFinal.toFixed(2)}
+				value={precioTotalIngresado ?? totalFinal.toFixed(2)}
 				oninput={(event) => onActualizarTotal(event.currentTarget.value)}
+				onblur={onFinalizarEdicionTotal}
 			/>
 		</label>
 		{#if totalFinal < totalCalculado}

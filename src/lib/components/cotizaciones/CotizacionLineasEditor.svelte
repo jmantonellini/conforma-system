@@ -117,9 +117,7 @@
 	let importeIva = $derived(incluirIva ? calcularIva21(baseImponible) : 0);
 	let totalCalculado = $derived(redondearPrecio(baseImponible + importeIva));
 	let precioTotalIngresado = $state<string | null>(null);
-	let precioTotalEditado = $state(false);
-	let ajusteManualIngresado = $state(0);
-	let ajusteManual = $derived(precioTotalEditado ? ajusteManualIngresado : ajusteManualInicial);
+	let ajusteManual = $state(ajusteManualInicial);
 	let totalFinal = $derived(redondearPrecio(totalCalculado + ajusteManual));
 
 	function lineaVacia(tipo: LineaEdicion['tipo'], idx: number): LineaEdicion {
@@ -131,7 +129,7 @@
 			insumo_id: undefined,
 			insumos_snapshot: [],
 			unidad: '',
-			descripcion: tipo === 'concepto' ? 'Trabajo o concepto para el cliente' : '',
+			descripcion: '',
 			cantidad: 1,
 			precio_unitario: 0,
 			precio_lista_unitario: 0,
@@ -288,8 +286,11 @@
 
 	function actualizarPrecioTotal(valor: string) {
 		precioTotalIngresado = valor;
-		precioTotalEditado = true;
-		ajusteManualIngresado = redondearPrecio((Number(valor) || 0) - totalCalculado);
+		ajusteManual = redondearPrecio((Number(valor) || 0) - totalCalculado);
+	}
+
+	function finalizarEdicionPrecioTotal() {
+		precioTotalIngresado = null;
 	}
 
 	async function guardarCotizacion() {
@@ -398,12 +399,12 @@
 			{totalCalculado}
 			{totalFinal}
 			{precioTotalIngresado}
-			{precioTotalEditado}
 			{condicionesPago}
 			onCambiarValidez={(dias) => (validezDias = dias)}
 			onCambiarIva={(incluir) => (incluirIva = incluir)}
 			onCambiarDescuento={(porcentaje) => (descuentoGlobal = porcentaje)}
 			onActualizarTotal={actualizarPrecioTotal}
+			onFinalizarEdicionTotal={finalizarEdicionPrecioTotal}
 			onCambiarCondiciones={(condiciones) => (condicionesPago = condiciones)}
 			onGuardar={guardarCotizacion}
 		/>
