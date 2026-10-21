@@ -18,6 +18,15 @@ export const LineaCotizacionSchema = v.object({
 	cantidad: v.pipe(v.number(), v.toMinValue(1)),
 	precio_unitario: v.pipe(v.number(), v.toMinValue(0)),
 	precio_lista_unitario: v.optional(v.pipe(v.number(), v.toMinValue(0))),
+	insumos_asociados: v.optional(
+		v.array(
+			v.object({
+				insumo_id: v.pipe(v.number(), v.toMinValue(1)),
+				cantidad: v.pipe(v.number(), v.toMinValue(0.000001))
+			})
+		),
+		[]
+	),
 	costo_materiales: v.optional(v.pipe(v.number(), v.toMinValue(0)), 0)
 });
 

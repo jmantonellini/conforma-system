@@ -1,11 +1,12 @@
 import * as v from 'valibot';
 import { command, form, query, requested } from '$app/server';
 import { db } from '$lib/server/db';
-import { pedidos, lineas_pedido, estados_pedido } from '$lib/server/db/schema';
+import { adjuntos, pedidos, lineas_pedido, estados_pedido } from '$lib/server/db/schema';
 import { redirect } from '@sveltejs/kit';
 import { resolve } from '$app/paths';
 import { eq } from 'drizzle-orm';
 import { requirePermission } from '$lib/server/auth/permissions';
+import { eliminarObjeto } from '$lib/server/services/object-storage.service';
 import {
 	PedidoSchema,
 	crearPedidoServicio,
@@ -117,8 +118,14 @@ export const cambiarEstadoPedido = command(
 
 export const eliminarPedido = command(v.number(), async (pedidoId) => {
 	await requirePermission('pedidos', 'delete');
+	const archivos = await db
+		.select({ archivo_key: adjuntos.archivo_key })
+		.from(adjuntos)
+		.where(eq(adjuntos.pedido_id, pedidoId));
+
 	await db.delete(pedidos).where(eq(pedidos.id, pedidoId));
 	await db.delete(lineas_pedido).where(eq(lineas_pedido.pedido_id, pedidoId));
+	await Promise.all(archivos.map((archivo) => eliminarObjeto(archivo.archivo_key)));
 
 	refrescarCachesPedido();
 	return { success: true };

@@ -22,8 +22,9 @@
 	import { formatearDosDecimales } from '$lib/utils/precios';
 	import PedidoEnvios from './PedidoEnvios.svelte';
 	import PedidoPagos from './PedidoPagos.svelte';
+	import ArchivosAdjuntos from '$lib/components/ArchivosAdjuntos.svelte';
 
-	let { pedido, lineas, insumosAdicionales } = $derived(
+	let { pedido, lineas, insumosAdicionales, adjuntos } = $derived(
 		await getPedidoById(parseInt(page.params.id ?? ''))
 	);
 
@@ -249,6 +250,8 @@
 					</div>
 				</div>
 			</div>
+
+			<ArchivosAdjuntos tipo="pedido" entidadId={pedido.id} {adjuntos} />
 
 			{#if insumosAdicionales.length}
 				<div class="card bg-base-100 shadow">

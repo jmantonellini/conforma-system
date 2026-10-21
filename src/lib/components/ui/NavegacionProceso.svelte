@@ -14,23 +14,22 @@
 	let next = $derived(steps[currentIndex + 1]);
 </script>
 
-
 {#if previous || next}
 	<nav class="join" aria-label="Navegación del proceso">
 		{#if previous?.href}
 			<a
-				class="btn join-item btn-outline btn-sm"
+				class="btn join-item btn-sm"
 				href={previous.href}
 				title={previous.status ?? undefined}
 			>
 				← {previous.label}
 			</a>
 		{/if}
-		<span class="btn join-item btn-sm" aria-current="page" title={current?.status ?? undefined}>
+		<span class="btn join-item btn-sm btn-outline" aria-current="page" title={current?.status ?? undefined}>
 			{current?.label}
 		</span>
 		{#if next?.href}
-			<a class="btn join-item btn-outline btn-sm" href={next.href} title={next.status ?? undefined}>
+			<a class="btn join-item btn-sm" href={next.href} title={next.status ?? undefined}>
 				{next.label} →
 			</a>
 		{/if}

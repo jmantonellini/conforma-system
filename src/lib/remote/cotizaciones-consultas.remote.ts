@@ -3,7 +3,7 @@ import { error } from '@sveltejs/kit';
 import { query } from '$app/server';
 import { db } from '$lib/server/db';
 import {
-	adjuntos_cotizacion,
+	adjuntos as adjuntosTable,
 	cotizaciones,
 	estados_cotizacion,
 	empleados,
@@ -13,12 +13,11 @@ import {
 	logs_cambios_estado,
 	notas_cotizacion,
 	ordenes_fabricacion,
-	productos,
 	transiciones_estado,
 	usuarios,
 	contactos
 } from '$lib/server/db/schema';
-import { and, aliasedTable, count, desc, eq, ilike, or, sql } from 'drizzle-orm';
+import { and, aliasedTable, count, desc, eq, ilike, inArray, or, sql } from 'drizzle-orm';
 import { requirePermission } from '$lib/server/auth/permissions';
 import type { MaterialSnapshot } from '$lib/types/cotizacion-editor';
 
@@ -154,7 +153,7 @@ export const getCotizacionById = query(v.number(), async (id) => {
 
 	if (!cotizacion) error(404, 'Cotización no encontrada');
 
-	const [transiciones, lineasRaw, adjuntos, ordenes] = await Promise.all([
+	const [transiciones, lineasRaw, ordenes] = await Promise.all([
 		db
 			.select({
 				id: transiciones_estado.id,
@@ -192,20 +191,51 @@ export const getCotizacionById = query(v.number(), async (id) => {
 			.leftJoin(insumos, eq(lineas_cotizacion.insumo_id, insumos.id))
 			.where(eq(lineas_cotizacion.cotizacion_id, id))
 			.orderBy(lineas_cotizacion.orden_linea),
-		db
-			.select()
-			.from(adjuntos_cotizacion)
-			.where(eq(adjuntos_cotizacion.cotizacion_id, id))
-			.orderBy(desc(adjuntos_cotizacion.id)),
 		cotizacion.pedido_id
 			? db
 					.select({ id: ordenes_fabricacion.id })
 					.from(ordenes_fabricacion)
 					.innerJoin(lineas_pedido, eq(ordenes_fabricacion.linea_pedido_id, lineas_pedido.id))
 					.where(eq(lineas_pedido.pedido_id, cotizacion.pedido_id))
-					.limit(2)
+					.orderBy(ordenes_fabricacion.id)
 			: Promise.resolve([])
 	]);
+	const condicionesAdjuntos = [eq(adjuntosTable.cotizacion_id, id)];
+	if (cotizacion.pedido_id) {
+		condicionesAdjuntos.push(eq(adjuntosTable.pedido_id, cotizacion.pedido_id));
+	}
+	const ordenIds = ordenes.map((orden) => orden.id);
+	if (ordenIds.length) {
+		condicionesAdjuntos.push(inArray(adjuntosTable.orden_fabricacion_id, ordenIds));
+	}
+	const adjuntosRelacionados = await db
+		.select({
+			id: adjuntosTable.id,
+			nombre_original: adjuntosTable.nombre_original,
+			mime_type: adjuntosTable.mime_type,
+			es_plano: adjuntosTable.es_plano,
+			tamano_bytes: adjuntosTable.tamano_bytes,
+			created_at: adjuntosTable.created_at,
+			cotizacion_id: adjuntosTable.cotizacion_id,
+			pedido_id: adjuntosTable.pedido_id,
+			orden_fabricacion_id: adjuntosTable.orden_fabricacion_id
+		})
+		.from(adjuntosTable)
+		.where(or(...condicionesAdjuntos))
+		.orderBy(desc(adjuntosTable.id));
+	const adjuntos = adjuntosRelacionados.map((adjunto) => ({
+		id: adjunto.id,
+		nombre_original: adjunto.nombre_original,
+		mime_type: adjunto.mime_type,
+		es_plano: adjunto.es_plano,
+		tamano_bytes: adjunto.tamano_bytes,
+		created_at: adjunto.created_at,
+		propietario: adjunto.cotizacion_id
+			? { tipo: 'cotizacion' as const, id: adjunto.cotizacion_id }
+			: adjunto.pedido_id
+				? { tipo: 'pedido' as const, id: adjunto.pedido_id }
+				: { tipo: 'fabricacion' as const, id: adjunto.orden_fabricacion_id! }
+	}));
 
 	const lineas = lineasRaw.map((linea) => ({
 		...linea,

@@ -31,5 +31,6 @@ vite.config.ts.timestamp-*
 
 # Archivos
 static/uploads
+uploads/fabricacion
 # Playwright
 test-results

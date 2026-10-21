@@ -1,0 +1,1 @@
+ALTER TABLE "adjuntos" ADD COLUMN "es_plano" boolean DEFAULT false NOT NULL;

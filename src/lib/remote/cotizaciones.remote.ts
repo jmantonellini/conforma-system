@@ -6,7 +6,7 @@ import {
 	cotizaciones,
 	contactos,
 	lineas_cotizacion,
-	adjuntos_cotizacion,
+	adjuntos as adjuntosTable,
 	notas_cotizacion,
 	estados_cotizacion,
 	usuarios,
@@ -20,15 +20,18 @@ import {
 	notificaciones,
 	insumos,
 	tipos_insumo,
-	categorias_insumos,
 	unidades_medida
 } from '$lib/server/db/schema';
-import { and, desc, eq, getTableColumns, or } from 'drizzle-orm';
-import { unlink } from 'fs/promises';
-import path from 'path';
-import { env } from '$env/dynamic/private';
+import { and, desc, eq, getTableColumns, inArray, or } from 'drizzle-orm';
+import {
+	calcularCostoComposicion,
+	calcularIva21,
+	precioNetoCubreCosto,
+	redondearPrecio
+} from '$lib/utils/precios';
 import { getCurrentUser } from './usuarios.remote';
 import { requirePermission } from '$lib/server/auth/permissions';
+import { eliminarObjeto } from '$lib/server/services/object-storage.service';
 import { generarNumeroPedido } from '../server/utils/pedidos';
 import { CotizacionSchema, LineaCotizacionSchema } from './cotizaciones.schema';
 import {
@@ -41,7 +44,6 @@ import type { MaterialSnapshot } from '$lib/types/cotizacion-editor';
 import { getProductoConReceta } from './productos.remote';
 import { getInsumos } from './insumos.remote';
 import { obtenerPrecioProducto } from '$lib/server/services/productos.service';
-import { calcularIva21 } from '$lib/utils/precios';
 import { es } from '$lib/i18n/es';
 import {
 	aplicarCambioDeEstado,
@@ -49,27 +51,6 @@ import {
 	redondearMoneda,
 	registrarCambioEstado
 } from '$lib/server/utils/estado-negocio';
-
-const UPLOAD_DIR = env.UPLOAD_DIR || 'static/uploads/cotizaciones';
-
-function obtenerRutaAdjunto(archivoUrl: string) {
-	const uploadDir = path.resolve(UPLOAD_DIR);
-	const filePath = path.resolve(uploadDir, path.basename(archivoUrl));
-
-	if (!filePath.startsWith(`${uploadDir}${path.sep}`)) {
-		throw new Error('Ruta de adjunto no válida');
-	}
-
-	return filePath;
-}
-
-async function eliminarArchivoAdjunto(archivoUrl: string) {
-	try {
-		await unlink(obtenerRutaAdjunto(archivoUrl));
-	} catch (error) {
-		if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
-	}
-}
 
 async function generarNumeroCotizacion() {
 	const existentes = await db
@@ -404,7 +385,7 @@ export const cotizarCotizacion = command(
 	async ({
 		cotizacion_id,
 		validez_dias,
-		precio_total: precioTotalFinal,
+		precio_total: precioTotalManual,
 		descuento_global_porcentaje: descuentoGlobalPorcentaje,
 		incluir_iva: incluirIva,
 		condiciones_pago: condicionesPago,
@@ -429,6 +410,7 @@ export const cotizarCotizacion = command(
 			await requirePermission('insumos', 'create');
 		}
 		let precio_total = 0;
+		let costo_total_materiales = 0;
 		let insumosCreados = false;
 
 		await db.transaction(async (tx) => {
@@ -437,7 +419,6 @@ export const cotizarCotizacion = command(
 			for (const [i, linea] of lineas.entries()) {
 				let descripcion = linea.descripcion;
 				let costo_materiales = linea.costo_materiales || 0;
-				let margen_porcentaje = 0;
 				let precio_lista_unitario = Number(linea.precio_unitario || 0);
 				let insumoId = linea.insumo_id ?? null;
 				let insumos_snapshot: MaterialSnapshot[] = [];
@@ -469,7 +450,7 @@ export const cotizarCotizacion = command(
 							unidad_id: nuevo.unidad_id,
 							tipo: tipo[0].codigo,
 							unidad: unidad[0].codigo,
-							costo_unitario: nuevo.costo_unitario,
+							costo_unitario: redondearPrecio(nuevo.costo_unitario),
 							flete_porcentaje: 0,
 							activo: true
 						})
@@ -490,8 +471,8 @@ export const cotizarCotizacion = command(
 							nombre: insumoCreado.nombre,
 							unidad: insumoCreado.unidad,
 							cantidad: 1,
-							costo_unitario: insumoCreado.costo_unitario,
-							subtotal: insumoCreado.costo_unitario
+							costo_unitario: redondearPrecio(insumoCreado.costo_unitario),
+							subtotal: redondearPrecio(insumoCreado.costo_unitario)
 						}
 					];
 					insumosCreados = true;
@@ -506,14 +487,15 @@ export const cotizarCotizacion = command(
 					const materialesReceta: MaterialSnapshot[] = recetaDirecta.map((lineaReceta) => {
 						if (lineaReceta.insumo_id) {
 							const material = receta.find((item) => item.insumo_id === lineaReceta.insumo_id);
+							const costoUnitario = redondearPrecio(material?.costo_unitario ?? 0);
 							return {
 								insumo_id: lineaReceta.insumo_id,
 								codigo: material?.codigo ?? null,
 								nombre: material?.nombre ?? 'Insumo',
 								cantidad: lineaReceta.cantidad,
-								costo_unitario: material?.costo_unitario ?? 0,
+								costo_unitario: costoUnitario,
 								unidad: material?.unidad ?? '',
-								subtotal: (lineaReceta.cantidad || 0) * (material?.costo_unitario ?? 0)
+								subtotal: redondearPrecio((lineaReceta.cantidad || 0) * costoUnitario)
 							};
 						}
 
@@ -530,11 +512,11 @@ export const cotizarCotizacion = command(
 						};
 					});
 					insumos_snapshot = materialesReceta;
-					costo_materiales = precioProducto.costo_materiales;
-					precio_lista_unitario = redondearMoneda(
+					costo_materiales = redondearPrecio(precioProducto.costo_materiales);
+					precio_lista_unitario = redondearPrecio(
 						linea.precio_lista_unitario ?? precioProducto.precio_venta
 					);
-					if (precio_lista_unitario < precioProducto.precio_venta) {
+					if (precio_lista_unitario < redondearPrecio(precioProducto.precio_venta)) {
 						throw new Error('El precio de lista no puede ser menor al precio base del producto');
 					}
 				} else if (insumoId) {
@@ -545,11 +527,11 @@ export const cotizarCotizacion = command(
 						.limit(1);
 					if (!material) throw new Error('Insumo no encontrado');
 					descripcion = material.nombre;
-					costo_materiales = material.costo_unitario;
-					precio_lista_unitario = redondearMoneda(
+					costo_materiales = redondearPrecio(material.costo_unitario);
+					precio_lista_unitario = redondearPrecio(
 						linea.precio_lista_unitario ?? material.costo_unitario
 					);
-					if (precio_lista_unitario < redondearMoneda(material.costo_unitario)) {
+					if (precio_lista_unitario < redondearPrecio(material.costo_unitario)) {
 						throw new Error('El precio del insumo no puede ser menor al costo unitario');
 					}
 					insumos_snapshot = [
@@ -559,22 +541,59 @@ export const cotizarCotizacion = command(
 							nombre: material.nombre,
 							cantidad: 1,
 							costo_unitario: material.costo_unitario,
-							subtotal: material.costo_unitario,
+							subtotal: redondearPrecio(material.costo_unitario),
 							unidad: material.unidad
 						}
 					];
 				} else if (linea.precio_lista_unitario != null) {
-					precio_lista_unitario = redondearMoneda(linea.precio_lista_unitario);
+					precio_lista_unitario = redondearPrecio(linea.precio_lista_unitario);
 				}
+
+				if (!linea.producto_id && !insumoId && linea.insumos_asociados.length) {
+					const idsInsumos = linea.insumos_asociados.map((material) => material.insumo_id);
+					if (new Set(idsInsumos).size !== idsInsumos.length) {
+						throw new Error('No repitas el mismo insumo en la composición');
+					}
+
+					const materiales = await tx
+						.select({
+							id: insumos.id,
+							codigo: insumos.codigo,
+							nombre: insumos.nombre,
+							unidad: insumos.unidad,
+							costo_unitario: insumos.costo_unitario
+						})
+						.from(insumos)
+						.where(inArray(insumos.id, idsInsumos));
+					const materialesPorId = new Map(materiales.map((material) => [material.id, material]));
+
+					insumos_snapshot = linea.insumos_asociados.map((asociado) => {
+						const material = materialesPorId.get(asociado.insumo_id);
+						if (!material) throw new Error('Uno de los insumos asociados ya no existe');
+						const costoUnitario = redondearPrecio(material.costo_unitario);
+
+						return {
+							insumo_id: material.id,
+							codigo: material.codigo,
+							nombre: material.nombre,
+							unidad: material.unidad,
+							cantidad: asociado.cantidad,
+							costo_unitario: costoUnitario,
+							subtotal: redondearPrecio(asociado.cantidad * costoUnitario)
+						};
+					});
+					costo_materiales = calcularCostoComposicion(insumos_snapshot);
+				}
+
 				const visible_cliente = linea.visible_cliente ?? true;
-				const precio_unitario = redondearMoneda(precio_lista_unitario);
-				const costoUnitarioTotal = costo_materiales;
-				margen_porcentaje =
+				const precio_unitario = redondearPrecio(precio_lista_unitario);
+				const costoUnitarioTotal = redondearPrecio(costo_materiales);
+				const margen_porcentaje =
 					visible_cliente && precio_unitario > 0
-						? redondearMoneda(((precio_unitario - costoUnitarioTotal) / precio_unitario) * 100)
+						? redondearPrecio(((precio_unitario - costoUnitarioTotal) / precio_unitario) * 100)
 						: 0;
 				if (visible_cliente) {
-					precio_total = redondearMoneda(precio_total + linea.cantidad * precio_unitario);
+					precio_total = redondearPrecio(precio_total + linea.cantidad * precio_unitario);
 				}
 
 				await tx.insert(lineas_cotizacion).values({
@@ -586,24 +605,34 @@ export const cotizarCotizacion = command(
 					descripcion,
 					cantidad: linea.cantidad,
 					precio_unitario,
-					precio_lista_unitario,
+					precio_lista_unitario: redondearPrecio(precio_lista_unitario),
 					margen_porcentaje,
-					costo_materiales: redondearMoneda(costo_materiales || 0),
+					costo_materiales: costoUnitarioTotal || 0,
 					insumos_snapshot,
 					orden_linea: i
 				});
+				costo_total_materiales = redondearPrecio(
+					costo_total_materiales + linea.cantidad * costoUnitarioTotal
+				);
 			}
 			if (insumosCreados) getInsumos({}).refresh();
 
-			const importeDescuento = redondearMoneda(precio_total * (descuentoGlobalPorcentaje / 100));
-			const baseImponible = redondearMoneda(precio_total - importeDescuento);
-			const totalCalculado = redondearMoneda(
+			const importeDescuento = redondearPrecio(precio_total * (descuentoGlobalPorcentaje / 100));
+			const baseImponible = redondearPrecio(precio_total - importeDescuento);
+			const totalCalculado = redondearPrecio(
 				baseImponible + (incluirIva ? calcularIva21(baseImponible) : 0)
 			);
+			const precioTotalGuardado = redondearPrecio(precioTotalManual ?? totalCalculado);
+			const netoTotalGuardado = incluirIva
+				? redondearPrecio(precioTotalGuardado / 1.21)
+				: precioTotalGuardado;
+			if (!precioNetoCubreCosto(netoTotalGuardado, costo_total_materiales)) {
+				throw new Error('El neto de la cotización no cubre el costo total de los materiales');
+			}
 			await tx
 				.update(cotizaciones)
 				.set({
-					precio_total: redondearMoneda(precioTotalFinal ?? totalCalculado),
+					precio_total: precioTotalGuardado,
 					descuento_global_porcentaje: descuentoGlobalPorcentaje,
 					incluir_iva: incluirIva,
 					condiciones_pago: condicionesPago?.trim() ?? null,
@@ -839,25 +868,6 @@ export const convertirCotizacionAPedido = command(v.number(), async (cotizacionI
 	return { pedidoId };
 });
 
-export const eliminarAdjunto = command(v.number(), async (adjuntoId) => {
-	await requirePermission('cotizaciones', 'edit');
-	const user = await getCurrentUser();
-	if (!user) throw new Error('No autorizado');
-
-	const [adjunto] = await db
-		.select({ archivo_url: adjuntos_cotizacion.archivo_url })
-		.from(adjuntos_cotizacion)
-		.where(eq(adjuntos_cotizacion.id, adjuntoId))
-		.limit(1);
-
-	if (!adjunto) throw new Error('Adjunto no encontrado');
-
-	await eliminarArchivoAdjunto(adjunto.archivo_url);
-	await db.delete(adjuntos_cotizacion).where(eq(adjuntos_cotizacion.id, adjuntoId));
-
-	return { success: true };
-});
-
 export const eliminarCotizacion = command(v.number(), async (cotizacionId) => {
 	await requirePermission('cotizaciones', 'delete');
 	const user = await getCurrentUser();
@@ -877,11 +887,11 @@ export const eliminarCotizacion = command(v.number(), async (cotizacionId) => {
 	}
 
 	const adjuntos = await db
-		.select({ archivo_url: adjuntos_cotizacion.archivo_url })
-		.from(adjuntos_cotizacion)
-		.where(eq(adjuntos_cotizacion.cotizacion_id, cotizacionId));
+		.select({ archivo_key: adjuntosTable.archivo_key })
+		.from(adjuntosTable)
+		.where(eq(adjuntosTable.cotizacion_id, cotizacionId));
 
-	await Promise.all(adjuntos.map((adjunto) => eliminarArchivoAdjunto(adjunto.archivo_url)));
+	await Promise.all(adjuntos.map((adjunto) => eliminarObjeto(adjunto.archivo_key)));
 	await db.delete(cotizaciones).where(eq(cotizaciones.id, cotizacionId));
 
 	getCotizaciones({ search: '', page: 1 }).refresh();

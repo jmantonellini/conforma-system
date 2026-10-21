@@ -44,6 +44,24 @@ pnpm db:generate
 pnpm db:migrate
 ```
 
+## Archivos adjuntos
+
+Los adjuntos de cotizaciones, pedidos y órdenes de fabricación usan el proveedor definido por `FILE_STORAGE_PROVIDER`. Para desarrollo local, dejalo en `local`; Docker persiste los archivos en volúmenes nombrados.
+
+Para usar DigitalOcean Spaces, crea un Space privado y configura en `.env`:
+
+```env
+FILE_STORAGE_PROVIDER=spaces
+SPACES_REGION=nyc3
+SPACES_BUCKET=nombre-del-space
+SPACES_KEY=access-key
+SPACES_SECRET=secret-key
+```
+
+Usa una clave de Spaces limitada a ese bucket y conserva los secretos solo en el servidor. Los archivos se sirven mediante rutas autenticadas de la aplicación; no habilites acceso público al bucket. Los archivos locales existentes siguen disponibles como fallback mientras se copian al Space; no borres los volúmenes locales hasta completar esa migración.
+
+También se aceptan `BUCKET_KEY_ID` y `BUCKET_KEY` como nombres alternativos para `SPACES_KEY` y `SPACES_SECRET`.
+
 ## Calidad y pruebas
 
 ```sh

@@ -10,7 +10,7 @@
 		Table
 	} from '$lib/components/ui';
 	import CotizacionLineasEditor from '$lib/components/cotizaciones/CotizacionLineasEditor.svelte';
-	import CotizacionAdjuntos from '$lib/components/cotizaciones/CotizacionAdjuntos.svelte';
+	import ArchivosAdjuntos from '$lib/components/ArchivosAdjuntos.svelte';
 	import { Document } from '$lib/components/ui/icons';
 	import { toast } from '$lib/stores/toast.svelte';
 	import {
@@ -294,7 +294,7 @@
 			/>
 		</Can>
 
-		<CotizacionAdjuntos cotizacionId={cotizacion.id} adjuntos={data.adjuntos} />
+		<ArchivosAdjuntos tipo="cotizacion" entidadId={cotizacion.id} adjuntos={data.adjuntos} />
 
 		<fieldset class="fieldset rounded-box border border-base-300 bg-base-200 p-4">
 			<legend class="fieldset-legend">Seguimiento interno</legend>

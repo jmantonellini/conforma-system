@@ -7,7 +7,7 @@ import {
 	lineas_cotizacion,
 	contactos
 } from '$lib/server/db/schema';
-import { and, eq, isNull, sql } from 'drizzle-orm';
+import { and, eq, isNull } from 'drizzle-orm';
 import { calcularIva21, formatearDosDecimales, redondearPrecio } from '$lib/utils/precios';
 import { readFile } from 'fs/promises';
 import path from 'path';
@@ -274,9 +274,7 @@ export async function generarPDFCotizacion(cotizacionId: number): Promise<{
 	const importeDescuento = redondearPrecio(totalBase * (descuentoGlobalPorcentaje / 100));
 	const baseImponible = redondearPrecio(totalBase - importeDescuento);
 	const importeIva = cot.incluir_iva ? calcularIva21(baseImponible) : 0;
-	const totalCalculado = redondearPrecio(baseImponible + importeIva);
-	const total = cot.precio_total ?? totalCalculado;
-	const ajusteComercial = Number((total - totalCalculado).toFixed(2));
+	const total = cot.precio_total ?? redondearPrecio(baseImponible + importeIva);
 	const condicionesPago =
 		cot.condiciones_pago === null
 			? '50% de anticipo al aprobar, saldo contra entrega.'
@@ -329,22 +327,12 @@ export async function generarPDFCotizacion(cotizacionId: number): Promise<{
 							]
 						]
 					: []),
-				...(cot.incluir_iva ? [['IVA (21%)', '', '', formatearImporte(importeIva)]] : []),
-				...(ajusteComercial !== 0
-					? [
-							[
-								'Ajuste comercial',
-								'1',
-								formatearImporte(ajusteComercial),
-								formatearImporte(ajusteComercial)
-							]
-						]
-					: [])
+				...(cot.incluir_iva ? [['IVA (21%)', '', '', formatearImporte(importeIva)]] : [])
 			],
 			totalLabel: 'TOTAL:',
 			total: formatearImporte(total),
 			condicionesPago: condicionesPago ? `Condiciones de pago:\n${condicionesPago}` : '',
-			footer: `Precios expresados en pesos argentinos. Cotización válida hasta el ${vencimiento.toLocaleDateString('es-AR')}. Gracias por consultar.`
+			footer: `Precios expresados en pesos argentinos. Cotización válida hasta el ${vencimiento.toLocaleDateString('es-AR')}. Gracias por consultar. Se toma el valor del dólar oficial del día de la cotización.`
 		}
 	];
 

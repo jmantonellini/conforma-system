@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { FormFieldWrapper, Modal } from '$lib/components/ui';
 	import type { LineaEdicion } from '$lib/types/cotizacion-editor';
+	import { parsearNumeroDecimal } from '$lib/utils/precios';
 
 	type Opcion = { id: number; nombre: string };
 	type Props = {
@@ -13,13 +14,13 @@
 
 	let { open = $bindable(false), tipos, categorias, unidades, onAgregar }: Props = $props();
 	let nuevoInsumo = $state(formularioVacio());
+	let costoUnitario = $derived(parsearNumeroDecimal(nuevoInsumo.costo_unitario));
 	let valido = $derived(
 		!!nuevoInsumo.nombre.trim() &&
 			!!tipos.find((tipo) => tipo.id === Number(nuevoInsumo.tipo_id)) &&
 			!!unidades.find((unidad) => unidad.id === Number(nuevoInsumo.unidad_id)) &&
-			nuevoInsumo.costo_unitario !== '' &&
-			Number.isFinite(Number(nuevoInsumo.costo_unitario)) &&
-			Number(nuevoInsumo.costo_unitario) >= 0
+			costoUnitario !== null &&
+			costoUnitario >= 0
 	);
 
 	function formularioVacio() {
@@ -33,7 +34,7 @@
 	}
 
 	function confirmar() {
-		if (!valido) return;
+		if (!valido || costoUnitario === null) return;
 		const tipo = tipos.find((opcion) => opcion.id === Number(nuevoInsumo.tipo_id));
 		const unidad = unidades.find((opcion) => opcion.id === Number(nuevoInsumo.unidad_id));
 		if (!tipo || !unidad) return;
@@ -44,7 +45,7 @@
 			categoria_id: Number(nuevoInsumo.categoria_id) || undefined,
 			unidad_id: unidad.id,
 			unidad: unidad.nombre,
-			costo_unitario: Number(nuevoInsumo.costo_unitario)
+			costo_unitario: costoUnitario
 		});
 		cerrar();
 	}
@@ -104,9 +105,8 @@
 			<input
 				id="nuevo-insumo-costo"
 				class="remove-arrow input w-full input-sm"
-				type="number"
-				min="0"
-				step="0.01"
+				type="text"
+				inputmode="decimal"
 				bind:value={nuevoInsumo.costo_unitario}
 			/>
 		</FormFieldWrapper>

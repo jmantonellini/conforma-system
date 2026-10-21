@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { SearchSelect } from '$lib/components/ui';
 	import type { InsumoOpcion, LineaEdicion, ProductoOpcion } from '$lib/types/cotizacion-editor';
-	import { formatearDosDecimales } from '$lib/utils/precios';
+	import { formatearDosDecimales, parsearNumeroDecimal, redondearPrecio } from '$lib/utils/precios';
 	import { describeMaterialReceta, esMaterialSubproducto } from '$lib/utils/receta-producto';
 
 	type Props = {
@@ -18,6 +18,8 @@
 		onActualizarPrecio: (lineaId: number, precio: string) => void;
 		onCambiarVisibilidad: (lineaId: number, visible: boolean) => void;
 		onActualizarCostoInterno: (lineaId: number, costo: number) => void;
+		onAgregarInsumoAsociado: (lineaId: number, insumoId: number, cantidad: number) => void;
+		onQuitarInsumoAsociado: (lineaId: number, indice: number) => void;
 	};
 
 	let {
@@ -33,8 +35,22 @@
 		onActualizarDescripcion,
 		onActualizarPrecio,
 		onCambiarVisibilidad,
-		onActualizarCostoInterno
+		onActualizarCostoInterno,
+		onAgregarInsumoAsociado,
+		onQuitarInsumoAsociado
 	}: Props = $props();
+	let costoBorrador = $state<string | null>(null);
+	let precioBorrador = $state<string | null>(null);
+	let insumoSeleccionado = $state('');
+	let cantidadInsumo = $state(1);
+
+	function agregarMaterialAsociado() {
+		const insumoId = Number(insumoSeleccionado);
+		if (!insumoId || !Number.isFinite(cantidadInsumo) || cantidadInsumo <= 0) return;
+		onAgregarInsumoAsociado(linea.idx, insumoId, cantidadInsumo);
+		insumoSeleccionado = '';
+		cantidadInsumo = 1;
+	}
 </script>
 
 <tr
@@ -110,25 +126,32 @@
 		{#if !linea.visible_cliente}
 			<input
 				class="remove-arrow input w-32 text-right input-sm"
-				type="number"
-				min="0"
-				step="0.01"
+				type="text"
+				inputmode="decimal"
 				disabled={bloqueada}
-				value={linea.costo_materiales}
+				value={costoBorrador ?? formatearDosDecimales(linea.costo_materiales)}
 				aria-label="Costo unitario interno"
-				oninput={(event) =>
-					onActualizarCostoInterno(linea.idx, Number(event.currentTarget.value) || 0)}
+				oninput={(event) => {
+					costoBorrador = event.currentTarget.value;
+					const costo = parsearNumeroDecimal(costoBorrador);
+					if (costo !== null)
+						onActualizarCostoInterno(linea.idx, Math.max(redondearPrecio(costo), 0));
+				}}
+				onblur={() => (costoBorrador = null)}
 			/>
 		{:else}
 			<input
 				class="remove-arrow input w-32 text-right input-sm"
-				type="number"
-				min={linea.precio_minimo_unitario}
-				step="0.01"
+				type="text"
+				inputmode="decimal"
 				disabled={bloqueada}
-				value={linea.precio_lista_unitario}
+				value={precioBorrador ?? formatearDosDecimales(linea.precio_lista_unitario)}
 				aria-label="Precio unitario"
-				oninput={(event) => onActualizarPrecio(linea.idx, event.currentTarget.value)}
+				oninput={(event) => {
+					precioBorrador = event.currentTarget.value;
+					onActualizarPrecio(linea.idx, precioBorrador);
+				}}
+				onblur={() => (precioBorrador = null)}
 			/>
 		{/if}
 	</td>
@@ -158,7 +181,93 @@
 	</td>
 </tr>
 
-{#if Array.isArray(linea.insumos_snapshot) && linea.insumos_snapshot.length > 0}
+{#if linea.tipo === 'concepto'}
+	<tr class="relative z-0 border-x-2 border-b-2 border-base-300/80 focus-within:z-50">
+		<td colspan="6" class="p-0">
+			<details class="collapse-arrow collapse w-full rounded-none bg-base-200/40">
+				<summary class="collapse-title w-full px-3 py-2 text-xs font-medium text-base-content/80">
+					{linea.insumos_snapshot.length
+						? `Composición interna (${linea.insumos_snapshot.length})`
+						: 'Agregar composición interna (opcional)'}
+				</summary>
+				<div class="collapse-content flex flex-col gap-3 px-3 pb-3">
+					<div class="flex flex-wrap items-end gap-2">
+						<div class="min-w-56 flex-1">
+							<SearchSelect
+								label=""
+								id={`composicion-${linea.idx}`}
+								placeholder="Buscar insumo..."
+								disabled={bloqueada}
+								field={{
+									value: () => insumoSeleccionado,
+									set: (value: string) => (insumoSeleccionado = value)
+								}}
+								options={insumos
+									.map((insumo) => ({
+										value: String(insumo.id),
+										label: `${insumo.codigo} - ${insumo.nombre}`
+									}))
+									.filter(
+										(option) =>
+											!linea.insumos_snapshot.some(
+												(material) => String(material.insumo_id) === option.value
+											)
+									)}
+								onChange={(value: string) => (insumoSeleccionado = value)}
+							/>
+						</div>
+						<label class="flex items-center gap-2 text-xs">
+							Cantidad
+							<input
+								class="remove-arrow input w-24 input-sm"
+								type="number"
+								min="0.000001"
+								step="any"
+								disabled={bloqueada}
+								bind:value={cantidadInsumo}
+							/>
+						</label>
+						<button
+							type="button"
+							class="btn btn-outline btn-sm"
+							disabled={bloqueada || !insumoSeleccionado}
+							onclick={agregarMaterialAsociado}
+						>
+							Agregar
+						</button>
+					</div>
+					{#if linea.insumos_snapshot.length}
+						<ul class="divide-y divide-base-300 text-sm">
+							{#each linea.insumos_snapshot as material, index (`${material.insumo_id ?? material.producto_id ?? 'material'}-${index}`)}
+								<li class="flex items-center justify-between gap-3 py-2">
+									<span>
+										{material.cantidad}
+										{material.unidad ?? ''} · {material.nombre}
+										<span class="text-base-content/60">
+											${formatearDosDecimales(material.subtotal)}
+										</span>
+									</span>
+									<button
+										type="button"
+										class="btn btn-square btn-ghost btn-xs"
+										disabled={bloqueada}
+										aria-label={`Quitar ${material.nombre} de la composición`}
+										title="Quitar insumo"
+										onclick={() => onQuitarInsumoAsociado(linea.idx, index)}
+									>
+										✕
+									</button>
+								</li>
+							{/each}
+						</ul>
+					{/if}
+				</div>
+			</details>
+		</td>
+	</tr>
+{/if}
+
+{#if linea.tipo === 'producto' && Array.isArray(linea.insumos_snapshot) && linea.insumos_snapshot.length > 1}
 	<tr class="border-x-2 border-b-2 border-base-300/80">
 		<td colspan="6" class="p-0">
 			<details class="collapse-arrow collapse w-full rounded-none bg-base-200/40">

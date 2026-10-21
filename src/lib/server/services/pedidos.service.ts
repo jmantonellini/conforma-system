@@ -18,6 +18,7 @@ import {
 	empleados,
 	usuarios,
 	cotizaciones,
+	adjuntos as adjuntosTable,
 	contactos
 } from '$lib/server/db/schema';
 import {
@@ -239,6 +240,47 @@ export async function obtenerPedidoDetalle(id: number) {
 		.from(cotizaciones)
 		.where(eq(cotizaciones.pedido_id, id))
 		.limit(1);
+	const condicionesAdjuntos = [eq(adjuntosTable.pedido_id, id)];
+	if (cotizacion?.id) condicionesAdjuntos.push(eq(adjuntosTable.cotizacion_id, cotizacion.id));
+	const ordenesRelacionadas = lineasConProduccion.flatMap((linea) =>
+		linea.produccion ? [linea.produccion.orden_id] : []
+	);
+	if (ordenesRelacionadas.length) {
+		condicionesAdjuntos.push(inArray(adjuntosTable.orden_fabricacion_id, ordenesRelacionadas));
+	}
+	const adjuntosRelacionados = await db
+		.select({
+			id: adjuntosTable.id,
+			nombre_original: adjuntosTable.nombre_original,
+			mime_type: adjuntosTable.mime_type,
+			es_plano: adjuntosTable.es_plano,
+			tamano_bytes: adjuntosTable.tamano_bytes,
+			created_at: adjuntosTable.created_at,
+			cotizacion_id: adjuntosTable.cotizacion_id,
+			pedido_id: adjuntosTable.pedido_id,
+			orden_fabricacion_id: adjuntosTable.orden_fabricacion_id
+		})
+		.from(adjuntosTable)
+		.where(or(...condicionesAdjuntos))
+		.orderBy(desc(adjuntosTable.id));
+	const adjuntos = adjuntosRelacionados
+		.map((adjunto) => ({
+			id: adjunto.id,
+			nombre_original: adjunto.nombre_original,
+			mime_type: adjunto.mime_type,
+			es_plano: adjunto.es_plano,
+			tamano_bytes: adjunto.tamano_bytes,
+			created_at: adjunto.created_at,
+			propietario: adjunto.cotizacion_id
+				? { tipo: 'cotizacion' as const, id: adjunto.cotizacion_id }
+				: adjunto.pedido_id
+					? { tipo: 'pedido' as const, id: adjunto.pedido_id }
+					: { tipo: 'fabricacion' as const, id: adjunto.orden_fabricacion_id! }
+		}))
+		.sort(
+			(primero, segundo) =>
+				new Date(segundo.created_at ?? 0).getTime() - new Date(primero.created_at ?? 0).getTime()
+		);
 	const ordenes = lineasConProduccion
 		.filter((linea) => linea.produccion)
 		.map((linea) => linea.produccion!.orden_id);
@@ -253,7 +295,8 @@ export async function obtenerPedidoDetalle(id: number) {
 			}
 		},
 		lineas: lineasConProduccion,
-		insumosAdicionales
+		insumosAdicionales,
+		adjuntos
 	};
 }
 

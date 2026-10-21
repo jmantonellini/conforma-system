@@ -16,14 +16,19 @@
 		onClose?: () => void;
 	} = $props();
 
+	function showDialog(dialog: HTMLDialogElement) {
+		if (!dialog.open) dialog.showModal();
+	}
+
 	function handleClose() {
+		const wasOpen = open;
 		open = false;
-		onClose?.();
+		if (wasOpen) onClose?.();
 	}
 </script>
 
 {#if open}
-	<dialog class="modal" open>
+	<dialog {@attach showDialog} class="modal" onclose={handleClose} oncancel={handleClose}>
 		<div class="modal-box" transition:fly={{ y: 20, duration: 200 }}>
 			{#if title}
 				<h3 class="mb-4 text-lg font-bold">{title}</h3>

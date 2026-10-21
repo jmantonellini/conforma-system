@@ -13,6 +13,8 @@
 		importeDescuento: number;
 		incluirIva: boolean;
 		importeIva: number;
+		onAgregarInsumoAsociado: (lineaId: number, insumoId: number, cantidad: number) => void;
+		onQuitarInsumoAsociado: (lineaId: number, indice: number) => void;
 		onEliminar: (lineaId: number) => void;
 		onSeleccionarProducto: (lineaId: number, productoId: string) => void;
 		onSeleccionarInsumo: (lineaId: number, insumoId: string) => void;
@@ -33,6 +35,8 @@
 		importeDescuento,
 		incluirIva,
 		importeIva,
+		onAgregarInsumoAsociado,
+		onQuitarInsumoAsociado,
 		onEliminar,
 		onSeleccionarProducto,
 		onSeleccionarInsumo,
@@ -72,6 +76,8 @@
 					{onActualizarPrecio}
 					{onCambiarVisibilidad}
 					{onActualizarCostoInterno}
+					{onAgregarInsumoAsociado}
+					{onQuitarInsumoAsociado}
 				/>
 			{/each}
 			{#if descuentoGlobal > 0}

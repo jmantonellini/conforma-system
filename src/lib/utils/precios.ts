@@ -4,17 +4,49 @@ export function redondearPrecio(valor: number) {
 	return Number(valor.toFixed(2));
 }
 
+export function parsearNumeroDecimal(valor: string): number | null {
+	const texto = valor.trim();
+	if (!texto) return null;
+
+	const normalizado = texto.includes(',') ? texto.replace(/\./g, '').replace(',', '.') : texto;
+	const numero = Number(normalizado);
+	return Number.isFinite(numero) ? numero : null;
+}
+
 const formatoDosDecimales = new Intl.NumberFormat('es-AR', {
 	minimumFractionDigits: 2,
 	maximumFractionDigits: 2
 });
 
 export function formatearDosDecimales(valor: number | null | undefined) {
-	return formatoDosDecimales.format(redondearPrecio(Number(valor ?? 0)));
+	return formatoDosDecimales.format(Number(valor ?? 0));
 }
 
 export function calcularIva21(base: number) {
 	return redondearPrecio(base * 0.21);
+}
+
+export function calcularCostoComposicion(
+	materiales: readonly { cantidad: number; costo_unitario?: number | null }[]
+) {
+	return redondearPrecio(
+		materiales.reduce(
+			(total, material) => total + material.cantidad * (material.costo_unitario ?? 0),
+			0
+		)
+	);
+}
+
+export function ajustarPrecioPorCambioDeCosto(
+	precioUnitario: number,
+	costoAnterior: number,
+	costoNuevo: number
+) {
+	return redondearPrecio(Math.max(precioUnitario + costoNuevo - costoAnterior, 0));
+}
+
+export function precioNetoCubreCosto(precioNeto: number, costoMateriales: number) {
+	return redondearPrecio(precioNeto) >= redondearPrecio(costoMateriales);
 }
 
 export function calcularPrecioVenta(costo: number, margenPorcentaje: number) {

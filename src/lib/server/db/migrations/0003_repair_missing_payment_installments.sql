@@ -1,0 +1,1 @@
+ALTER TABLE "pagos" ADD COLUMN IF NOT EXISTS "cantidad_cuotas" integer;

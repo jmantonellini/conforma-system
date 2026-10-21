@@ -2,7 +2,7 @@ import * as v from 'valibot';
 import { query } from '$app/server';
 import { db } from '$lib/server/db';
 import {
-	adjuntos_cotizacion,
+	adjuntos as adjuntosTable,
 	cotizaciones,
 	estados_fabricacion,
 	empleados,
@@ -203,6 +203,7 @@ export const getOrdenFabricacion = query(v.number(), async (id) => {
 				fecha_inicio: ordenes_fabricacion.fecha_inicio,
 				fecha_fin_estimada: ordenes_fabricacion.fecha_fin_estimada,
 				fecha_fin_real: ordenes_fabricacion.fecha_fin_real,
+				created_at: ordenes_fabricacion.created_at,
 				asignado_a: ordenes_fabricacion.asignado_a,
 				linea_pedido_id: ordenes_fabricacion.linea_pedido_id,
 				observaciones: ordenes_fabricacion.observaciones
@@ -307,19 +308,39 @@ export const getOrdenFabricacion = query(v.number(), async (id) => {
 				.innerJoin(insumos, eq(pedido_insumos.insumo_id, insumos.id))
 				.where(eq(pedido_insumos.pedido_id, lineaTrabajo.pedido_id))
 		: [];
-	const adjuntos = lineaTrabajo?.pedido_id
-		? await db
-				.select({
-					id: adjuntos_cotizacion.id,
-					nombre_original: adjuntos_cotizacion.nombre_original,
-					archivo_url: adjuntos_cotizacion.archivo_url,
-					mime_type: adjuntos_cotizacion.mime_type
-				})
-				.from(adjuntos_cotizacion)
-				.innerJoin(cotizaciones, eq(cotizaciones.id, adjuntos_cotizacion.cotizacion_id))
-				.where(eq(cotizaciones.pedido_id, lineaTrabajo.pedido_id))
-				.orderBy(desc(adjuntos_cotizacion.id))
-		: [];
+	const condicionesAdjuntos = [eq(adjuntosTable.orden_fabricacion_id, id)];
+	if (lineaTrabajo?.pedido_id) {
+		condicionesAdjuntos.push(eq(adjuntosTable.pedido_id, lineaTrabajo.pedido_id));
+	}
+	if (cotizacion?.id) condicionesAdjuntos.push(eq(adjuntosTable.cotizacion_id, cotizacion.id));
+	const adjuntosRelacionados = await db
+		.select({
+			id: adjuntosTable.id,
+			nombre_original: adjuntosTable.nombre_original,
+			mime_type: adjuntosTable.mime_type,
+			es_plano: adjuntosTable.es_plano,
+			tamano_bytes: adjuntosTable.tamano_bytes,
+			created_at: adjuntosTable.created_at,
+			cotizacion_id: adjuntosTable.cotizacion_id,
+			pedido_id: adjuntosTable.pedido_id,
+			orden_fabricacion_id: adjuntosTable.orden_fabricacion_id
+		})
+		.from(adjuntosTable)
+		.where(or(...condicionesAdjuntos))
+		.orderBy(desc(adjuntosTable.id));
+	const adjuntos = adjuntosRelacionados.map((adjunto) => ({
+		id: adjunto.id,
+		nombre_original: adjunto.nombre_original,
+		mime_type: adjunto.mime_type,
+		es_plano: adjunto.es_plano,
+		tamano_bytes: adjunto.tamano_bytes,
+		created_at: adjunto.created_at,
+		propietario: adjunto.cotizacion_id
+			? { tipo: 'cotizacion' as const, id: adjunto.cotizacion_id }
+			: adjunto.pedido_id
+				? { tipo: 'pedido' as const, id: adjunto.pedido_id }
+				: { tipo: 'fabricacion' as const, id: adjunto.orden_fabricacion_id! }
+	}));
 
 	type MaterialRequerido = {
 		insumo_id: number;
@@ -381,6 +402,7 @@ export const getOrdenFabricacion = query(v.number(), async (id) => {
 		},
 		cantidad_producida: cantidadProducida,
 		pedido_numero: relacionados?.pedido_numero,
+		pedido_id: lineaTrabajo?.pedido_id ?? null,
 		navegacion: {
 			cotizacion_id: cotizacion?.id ?? null,
 			pedido_id: relacionados?.pedido_id ?? null,

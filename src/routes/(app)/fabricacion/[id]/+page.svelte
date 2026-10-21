@@ -9,6 +9,7 @@
 		getHistorialUnidades
 	} from '$lib/remote/fabricacion-consultas.remote';
 	import { NavegacionProceso, PageLayout, Modal, Table } from '$lib/components/ui';
+	import ArchivosAdjuntos from '$lib/components/ArchivosAdjuntos.svelte';
 	import { toast } from '$lib/stores/toast.svelte';
 	import { goto, invalidateAll } from '$app/navigation';
 	import { resolve } from '$app/paths';
@@ -39,8 +40,6 @@
 	});
 
 	let comentario = $state('');
-
-	const esImagen = (mimeType: string | null) => mimeType?.startsWith('image/');
 
 	async function cambiarEstado(unidadId: number, estadoDestinoId: number, comentarioText?: string) {
 		if (isLoading) return;
@@ -117,7 +116,7 @@
 </script>
 
 <PageLayout>
-	<div class="flex flex-col gap-4">
+	<div class="screen-view flex flex-col gap-4">
 		<div class="grid grid-cols-[auto_1fr_auto] items-center gap-3">
 			<button onclick={() => history.back()} class="btn btn-ghost btn-sm">← Volver</button>
 			<div class="flex justify-center">
@@ -146,7 +145,19 @@
 					]}
 				/>
 			</div>
-			<button class="btn btn-outline btn-error btn-sm" onclick={manejarEliminar}> Eliminar </button>
+			<div class="flex items-center gap-2">
+				<a
+					class="btn btn-outline btn-sm"
+					href={resolve(`/fabricacion/${orden.id}/pdf`)}
+					target="_blank"
+					rel="noreferrer"
+				>
+					Imprimir orden
+				</a>
+				<button class="btn btn-outline btn-error btn-sm" onclick={manejarEliminar}>
+					Eliminar
+				</button>
+			</div>
 		</div>
 
 		<!-- Cards de resumen -->
@@ -282,40 +293,7 @@
 					</div>
 				</div>
 
-				{#if orden.adjuntos?.length}
-					<div>
-						<h4 class="mb-3 font-semibold">Planos y referencias visuales</h4>
-						<div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-							{#each orden.adjuntos as adjunto (adjunto.id)}
-								<!-- eslint-disable svelte/no-navigation-without-resolve -->
-								<a
-									href={adjunto.archivo_url}
-									target="_blank"
-									rel="noreferrer"
-									class="overflow-hidden rounded-box border border-base-300"
-								>
-									{#if esImagen(adjunto.mime_type)}
-										<img
-											src={adjunto.archivo_url}
-											alt={adjunto.nombre_original}
-											class="h-40 w-full object-cover"
-										/>
-									{:else}
-										<div
-											class="flex h-40 items-center justify-center bg-base-200 p-3 text-center text-sm"
-										>
-											{adjunto.nombre_original}
-										</div>
-									{/if}
-									<div class="truncate border-t border-base-300 p-2 text-xs">
-										{adjunto.nombre_original}
-									</div>
-								</a>
-								<!-- eslint-enable svelte/no-navigation-without-resolve -->
-							{/each}
-						</div>
-					</div>
-				{/if}
+				<ArchivosAdjuntos tipo="fabricacion" entidadId={orden.id} adjuntos={orden.adjuntos} />
 			</div>
 		</div>
 

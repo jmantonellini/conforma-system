@@ -191,22 +191,6 @@ export const lineas_cotizacion = pgTable(
 	(table) => [index('idx_lineas_cotizacion').on(table.cotizacion_id)]
 );
 
-export const adjuntos_cotizacion = pgTable(
-	'adjuntos_cotizacion',
-	{
-		id: serial('id').primaryKey(),
-		cotizacion_id: integer('cotizacion_id')
-			.references(() => cotizaciones.id, { onDelete: 'cascade' })
-			.notNull(),
-		nombre_original: text('nombre_original').notNull(),
-		archivo_url: text('archivo_url').notNull(),
-		mime_type: text('mime_type'),
-		tamano_bytes: integer('tamano_bytes'),
-		created_at: timestamp('created_at').defaultNow()
-	},
-	(table) => [index('idx_adjuntos_cotizacion').on(table.cotizacion_id)]
-);
-
 export const notas_cotizacion = pgTable(
 	'notas_cotizacion',
 	{
@@ -589,6 +573,35 @@ export const ordenes_fabricacion = pgTable(
 	]
 );
 
+export const adjuntos = pgTable(
+	'adjuntos',
+	{
+		id: serial('id').primaryKey(),
+		cotizacion_id: integer('cotizacion_id').references(() => cotizaciones.id, {
+			onDelete: 'cascade'
+		}),
+		pedido_id: integer('pedido_id').references(() => pedidos.id, { onDelete: 'cascade' }),
+		orden_fabricacion_id: integer('orden_fabricacion_id').references(() => ordenes_fabricacion.id, {
+			onDelete: 'cascade'
+		}),
+		nombre_original: text('nombre_original').notNull(),
+		archivo_key: text('archivo_key').notNull(),
+		mime_type: text('mime_type'),
+		es_plano: boolean('es_plano').notNull().default(false),
+		tamano_bytes: integer('tamano_bytes'),
+		created_at: timestamp('created_at').defaultNow()
+	},
+	(table) => [
+		index('idx_adjuntos_owner_cotizacion').on(table.cotizacion_id),
+		index('idx_adjuntos_owner_pedido').on(table.pedido_id),
+		index('idx_adjuntos_owner_fabricacion').on(table.orden_fabricacion_id),
+		check(
+			'adjuntos_un_solo_propietario',
+			sql`num_nonnulls(cotizacion_id, pedido_id, orden_fabricacion_id) = 1`
+		)
+	]
+);
+
 // UNIDAD
 export const unidades_fabricacion = pgTable(
 	'unidades_fabricacion',
@@ -767,7 +780,7 @@ export type EstadoPedido = typeof estados_pedido.$inferSelect;
 export type EstadoCotizacion = typeof estados_cotizacion.$inferSelect;
 export type Cotizacion = typeof cotizaciones.$inferSelect;
 export type LineaCotizacion = typeof lineas_cotizacion.$inferSelect;
-export type AdjuntoCotizacion = typeof adjuntos_cotizacion.$inferSelect;
+export type Adjunto = typeof adjuntos.$inferSelect;
 export type NotaCotizacion = typeof notas_cotizacion.$inferSelect;
 export type Notificacion = typeof notificaciones.$inferSelect;
 export type TransicionEstado = typeof transiciones_estado.$inferSelect;

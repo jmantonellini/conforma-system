@@ -243,7 +243,7 @@ export const obtenerContactos = query(
 export const obtenerContactosCliente = query(
 	v.object({
 		search: v.optional(v.string()),
-		limit: v.optional(v.number(), 100),
+		limit: v.optional(v.number()),
 		soloDistribuidores: v.optional(v.boolean(), false)
 	}),
 	async ({ search, limit, soloDistribuidores }) => {
@@ -251,12 +251,8 @@ export const obtenerContactosCliente = query(
 		const where = soloDistribuidores
 			? and(condicionBase, eq(contactos.es_distribuidor, true))
 			: condicionBase;
-		const datos = await db
-			.select()
-			.from(contactos)
-			.where(where)
-			.orderBy(contactos.razon_social)
-			.limit(limit);
+		const datosQuery = db.select().from(contactos).where(where).orderBy(contactos.razon_social);
+		const datos = limit === undefined ? await datosQuery : await datosQuery.limit(limit);
 		const [{ total }] = await db.select({ total: count() }).from(contactos).where(where);
 		return { data: datos, total };
 	}

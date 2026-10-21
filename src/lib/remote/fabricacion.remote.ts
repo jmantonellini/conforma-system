@@ -2,6 +2,7 @@ import * as v from 'valibot';
 import { form, command, requested } from '$app/server';
 import { db } from '$lib/server/db';
 import {
+	adjuntos,
 	ordenes_fabricacion,
 	unidades_fabricacion,
 	lineas_pedido,
@@ -21,6 +22,7 @@ import {
 	getHistorialUnidades
 } from './fabricacion-consultas.remote';
 import { PEDIDO_SLUG } from '$lib/types';
+import { eliminarObjeto } from '$lib/server/services/object-storage.service';
 
 // ============================================================
 // FORMS
@@ -326,6 +328,10 @@ export const eliminarOrdenFabricacion = command(
 		if (algunaFinal) {
 			throw new Error('No se puede eliminar una orden con unidades terminadas');
 		}
+		const archivos = await db
+			.select({ archivo_key: adjuntos.archivo_key })
+			.from(adjuntos)
+			.where(eq(adjuntos.orden_fabricacion_id, id));
 
 		await db.transaction(async (tx) => {
 			await tx
@@ -333,7 +339,7 @@ export const eliminarOrdenFabricacion = command(
 				.where(eq(unidades_fabricacion.orden_fabricacion_id, id));
 			await tx.delete(ordenes_fabricacion).where(eq(ordenes_fabricacion.id, id));
 		});
-
+		await Promise.all(archivos.map((archivo) => eliminarObjeto(archivo.archivo_key)));
 		requested(getOrdenesFabricacion, 1).refreshAll();
 
 		return { success: true };

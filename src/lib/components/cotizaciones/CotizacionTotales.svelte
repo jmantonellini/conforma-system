@@ -6,11 +6,12 @@
 		bloqueada: boolean;
 		guardando: boolean;
 		validezDias: number;
-		incluirIva: boolean;
-		descuentoGlobal: number;
-		totalCalculado: number;
 		totalFinal: number;
 		precioTotalIngresado: string | null;
+		totalValido: boolean;
+		incluirIva: boolean;
+		descuentoGlobal: number;
+		cubreCostos: boolean;
 		condicionesPago: string;
 		onCambiarValidez: (dias: number) => void;
 		onCambiarIva: (incluir: boolean) => void;
@@ -25,11 +26,12 @@
 		bloqueada,
 		guardando,
 		validezDias,
-		incluirIva,
-		descuentoGlobal,
-		totalCalculado,
 		totalFinal,
 		precioTotalIngresado,
+		totalValido,
+		incluirIva,
+		descuentoGlobal,
+		cubreCostos,
 		condicionesPago,
 		onCambiarValidez,
 		onCambiarIva,
@@ -80,40 +82,47 @@
 		</label>
 	</Can>
 	<div class="flex items-center gap-2">
-		<label class="flex items-center gap-3 text-sm font-semibold">
+		<label class="flex items-center gap-2 text-sm font-semibold">
 			<span>Total final</span>
 			<input
-				class={[
-					'remove-arrow input w-40 text-right text-lg font-bold input-sm',
-					{ 'input-error': totalFinal < totalCalculado }
-				]}
-				type="number"
-				min="0"
-				step="0.01"
+				class="remove-arrow input w-40 text-right text-lg font-bold input-sm"
+				type="text"
+				inputmode="decimal"
 				aria-label="Precio final de la cotización"
-				value={precioTotalIngresado ?? totalFinal.toFixed(2)}
+        class:input-error={!totalValido || !cubreCostos}
+				value={precioTotalIngresado ?? formatearDosDecimales(totalFinal)}
+				disabled={bloqueada}
 				oninput={(event) => onActualizarTotal(event.currentTarget.value)}
 				onblur={onFinalizarEdicionTotal}
 			/>
 		</label>
-		{#if totalFinal < totalCalculado}
+		{#if !cubreCostos || !totalValido}
 			<div
 				class="tooltip tooltip-bottom"
-				data-tip={`El total final está por debajo de la base de cotización (${formatearDosDecimales(totalCalculado)}).`}
+				data-tip={!totalValido
+					? 'Ingresá un total válido con hasta dos decimales.'
+					: 'El neto de la cotización no cubre los costos.'}
 			>
 				<button
 					type="button"
 					class="btn btn-circle btn-outline btn-error btn-xs"
-					aria-label="El total final está por debajo de la base de venta"
+					aria-label={!totalValido
+						? 'Ingresá un total válido con hasta dos decimales'
+						: 'El neto de la cotización no cubre los costos'}
 				>
 					!
 				</button>
 			</div>
 		{/if}
+		<button
+			class="btn btn-primary btn-sm"
+			disabled={bloqueada || guardando}
+			title={!cubreCostos ? 'El neto debe cubrir el costo de los materiales' : undefined}
+			onclick={onGuardar}
+		>
+			{guardando ? 'Guardando...' : bloqueada ? 'Convertida en pedido' : 'Guardar cotización'}
+		</button>
 	</div>
-	<button class="btn btn-primary btn-sm" disabled={bloqueada || guardando} onclick={onGuardar}>
-		{guardando ? 'Guardando...' : bloqueada ? 'Convertida en pedido' : 'Guardar cotización'}
-	</button>
 </div>
 <label class="fieldset w-full">
 	<span class="fieldset-legend">Condiciones de pago</span>

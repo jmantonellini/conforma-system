@@ -52,7 +52,7 @@
 								disabled
 							/>
 						{:else}
-							<select {...form.fields.linea_pedido_id.as('select')} class="select">
+							<select {...form.fields.linea_pedido_id.as('select')} class="select" required>
 								<option value="">Seleccionar...</option>
 								{#each lineasPendientes as lp (lp.id)}
 									<option value={String(lp.id)}>
