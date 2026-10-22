@@ -4,8 +4,9 @@
 	import { quintOut } from 'svelte/easing';
 	import type { Tarea } from '$lib/server/db/schema';
 	import type { EstadosTarea } from '$lib/types';
-	import { Calendar, User } from './icons';
+	import { Calendar, Delete, Edit, User } from './icons';
 	import { formatearFecha } from '$lib/utils/fechas';
+	import Archive from './icons/Archive.svelte';
 
 	type TareaConEmpleado = Tarea & {
 		empleado: { id: number; nombre: string; apellido: string } | null;
@@ -108,7 +109,7 @@
 </script>
 
 <div
-	class="flex min-w-[20rem] flex-col rounded-lg p-4 transition-colors duration-200 {isDragOver
+	class="flex min-w-[20rem] flex-col gap-2 rounded-lg p-4 transition-colors duration-200 {isDragOver
 		? 'bg-base-300 ring-2 ring-primary/50'
 		: 'bg-base-200'}"
 	ondragover={(e) => onDragOver(e)}
@@ -117,8 +118,8 @@
 	role="list"
 	aria-label={titulo}
 >
-	<div class="mb-4 flex items-center justify-between">
-		<h2 class="text-center text-xl font-bold">{titulo}</h2>
+	<div class="flex items-center justify-between">
+		<h2 class="text-center text-lg font-bold">{titulo}</h2>
 		<span class="badge badge-{color} badge-sm">{tareas.length}</span>
 	</div>
 
@@ -146,9 +147,9 @@
 					ondragleave={onDragLeave}
 					ondrop={(e) => onDropReordenar(e, tarea)}
 				>
-					<div class="card-body p-4">
+					<div class="card-body py-2 px-4">
 						<div class="flex items-start justify-between gap-2">
-							<h3 class="card-title text-base">{tarea.titulo}</h3>
+							<h3 class="card-title text-sm">{tarea.titulo}</h3>
 							<div
 								class="flex items-center gap-1 opacity-0 transition-opacity group-hover:opacity-100"
 							>
@@ -158,7 +159,7 @@
 									onclick={() => onEditar(tarea)}
 									title="Editar tarea"
 								>
-									✎
+									<Edit class="size-4" />
 								</button>
 								<button
 									type="button"
@@ -166,7 +167,7 @@
 									onclick={() => onArchivar(tarea.id)}
 									title="Archivar tarea"
 								>
-									🗄
+									<Archive class="size-4" />
 								</button>
 								<button
 									type="button"
@@ -174,17 +175,17 @@
 									onclick={() => onEliminar(tarea.id)}
 									title="Eliminar tarea"
 								>
-									✕
+									<Delete class="size-4" />
 								</button>
 							</div>
 						</div>
 
 						{#if tarea.descripcion}
-							<p class="line-clamp-2 text-sm text-base-content/70">{tarea.descripcion}</p>
+							<p class="line-clamp-2 text-xs text-base-content/70">{tarea.descripcion}</p>
 						{/if}
 
 						<div
-							class="mt-2 flex flex-wrap items-center justify-between gap-1 text-xs text-base-content/50"
+							class="flex flex-wrap items-center justify-between gap-1 text-xs text-base-content/50"
 						>
 							{#if tarea.empleado?.nombre}
 								<span class="flex items-center gap-1">

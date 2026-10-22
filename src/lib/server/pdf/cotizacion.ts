@@ -259,7 +259,9 @@ export async function generarPDFCotizacion(
 	pdf: Uint8Array;
 	clienteNombre: string;
 	fechaCotizacion: Date;
+	timing: { preparationMs: number; renderMs: number };
 }> {
+	const preparationStartedAt = performance.now();
 	const businessConfigPromise = Promise.resolve(
 		db.select().from(configuracion_empresa).where(eq(configuracion_empresa.id, 1)).limit(1)
 	);
@@ -309,6 +311,7 @@ export async function generarPDFCotizacion(
 	]);
 
 	if (!cot) throw new Error('Cotización no encontrada');
+	const preparationMs = performance.now() - preparationStartedAt;
 
 	const totalBase = redondearPrecio(lineas.reduce((sum, linea) => sum + (linea.subtotal ?? 0), 0));
 	const descuentoGlobalPorcentaje = cot.descuento_global_porcentaje ?? 0;
@@ -398,6 +401,12 @@ export async function generarPDFCotizacion(
 	];
 
 	// generate devuelve Uint8Array, no Buffer
+	const renderStartedAt = performance.now();
 	const pdf = await generate({ template, inputs, plugins: { text, table, image } });
-	return { pdf, clienteNombre, fechaCotizacion };
+	return {
+		pdf,
+		clienteNombre,
+		fechaCotizacion,
+		timing: { preparationMs, renderMs: performance.now() - renderStartedAt }
+	};
 }

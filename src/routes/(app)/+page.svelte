@@ -126,90 +126,92 @@
 </script>
 
 <PageLayout>
-	<div class="mb-6 flex items-center justify-end">
-		<button class="btn btn-primary btn-sm" onclick={abrirNuevaTarea}> + Nueva Tarea </button>
-	</div>
+	<div class="flex flex-col gap-4">
+		<div class="flex items-center justify-end">
+			<button class="btn btn-primary btn-sm" onclick={abrirNuevaTarea}> + Nueva Tarea </button>
+		</div>
 
-	<!-- KANBAN: Tareas accionables -->
-	<KanBanBoard
-		{tareas}
-		onEstadoChange={handleEstadoChange}
-		onReorder={handleReorder}
-		onEliminar={handleEliminar}
-		onEditar={abrirEditarTarea}
-		onArchivar={handleArchivar}
-	/>
+		<!-- KANBAN: Tareas accionables -->
+		<KanBanBoard
+			{tareas}
+			onEstadoChange={handleEstadoChange}
+			onReorder={handleReorder}
+			onEliminar={handleEliminar}
+			onEditar={abrirEditarTarea}
+			onArchivar={handleArchivar}
+		/>
 
-	<!-- PEDIDOS ACTIVOS: Contexto de negocio -->
-	<div class="card mt-8 bg-base-100 shadow">
-		<div class="card-body">
-			<div class="mb-4 flex items-center justify-between">
-				<h2 class="card-title">Órdenes activas</h2>
-				<span class="text-sm text-base-content/60">
-					{ordenesActivas.length} orden{ordenesActivas.length === 1 ? '' : 'es'} en curso
-				</span>
-			</div>
-
-			{#snippet headerOrdenes()}
-				<th>Prioridad</th>
-				<th>Estado</th>
-				<th>Trabajo</th>
-				<th>Cliente</th>
-				<th>Asignado</th>
-				<th>Entrega</th>
-				<th>Progreso</th>
-			{/snippet}
-
-			{#snippet rowOrden(o: (typeof ordenesActivas)[number])}
-				<td>
-					{#if o.prioridad === 2}
-						<span class="badge badge-error">Crítica</span>
-					{:else if o.prioridad === 1}
-						<span class="badge badge-warning">Urgente</span>
-					{:else}
-						<span class="badge badge-ghost">Normal</span>
-					{/if}
-				</td>
-				<td>
-					<span class={`badge badge-${o.estado.color}`}>
-						{o.estado.nombre}
+		<!-- PEDIDOS ACTIVOS: Contexto de negocio -->
+		<div class="card bg-base-100 shadow">
+			<div class="card-body">
+				<div class="mb-4 flex items-center justify-between">
+					<h2 class="card-title">Órdenes activas</h2>
+					<span class="text-sm text-base-content/60">
+						{ordenesActivas.length} orden{ordenesActivas.length === 1 ? '' : 'es'} en curso
 					</span>
-				</td>
-				<td>
-					<a class="link link-primary" href={resolve(`/fabricacion/${o.id}`)}>
-						{o.nombre_trabajo}
-					</a>
-					<div class="text-xs text-base-content/50">Pedido {o.pedido?.numero || '-'}</div>
-				</td>
-				<td>{o.cliente_nombre || '-'}</td>
-				<td
-					>{o.empleado?.nombre
-						? `${o.empleado.nombre} ${o.empleado.apellido || ''}`
-						: 'Sin asignar'}</td
-				>
-				<td>
-					{#if o.fecha_fin_estimada}
-						{@const vencido = estaVencido(o.fecha_fin_estimada)}
-						<span class:text-error={vencido} class:font-bold={vencido}>
-							{formatearFecha(new Date(o.fecha_fin_estimada))}
-						</span>
-					{:else}
-						-
-					{/if}
-				</td>
-				<td>
-					<progress class="progress w-20" value={o.cantidad_producida} max={o.cantidad_total}
-					></progress>
-					<span class="ml-2 text-xs">{o.cantidad_producida}/{o.cantidad_total}</span>
-				</td>
-			{/snippet}
+				</div>
 
-			<Table
-				data={ordenesActivas}
-				header={headerOrdenes}
-				row={rowOrden}
-				emptyMessage="No hay órdenes activas"
-			/>
+				{#snippet headerOrdenes()}
+					<th>Prioridad</th>
+					<th>Estado</th>
+					<th>Trabajo</th>
+					<th>Cliente</th>
+					<th>Asignado</th>
+					<th>Entrega</th>
+					<th>Progreso</th>
+				{/snippet}
+
+				{#snippet rowOrden(o: (typeof ordenesActivas)[number])}
+					<td>
+						{#if o.prioridad === 2}
+							<span class="badge badge-error">Crítica</span>
+						{:else if o.prioridad === 1}
+							<span class="badge badge-warning">Urgente</span>
+						{:else}
+							<span class="badge badge-ghost">Normal</span>
+						{/if}
+					</td>
+					<td>
+						<span class={`badge badge-${o.estado.color}`}>
+							{o.estado.nombre}
+						</span>
+					</td>
+					<td>
+						<a class="link link-primary" href={resolve(`/fabricacion/${o.id}`)}>
+							{o.nombre_trabajo}
+						</a>
+						<div class="text-xs text-base-content/50">Pedido {o.pedido?.numero || '-'}</div>
+					</td>
+					<td>{o.cliente_nombre || '-'}</td>
+					<td
+						>{o.empleado?.nombre
+							? `${o.empleado.nombre} ${o.empleado.apellido || ''}`
+							: 'Sin asignar'}</td
+					>
+					<td>
+						{#if o.fecha_fin_estimada}
+							{@const vencido = estaVencido(o.fecha_fin_estimada)}
+							<span class:text-error={vencido} class:font-bold={vencido}>
+								{formatearFecha(new Date(o.fecha_fin_estimada))}
+							</span>
+						{:else}
+							-
+						{/if}
+					</td>
+					<td>
+						<progress class="progress w-20" value={o.cantidad_producida} max={o.cantidad_total}
+						></progress>
+						<span class="ml-2 text-xs">{o.cantidad_producida}/{o.cantidad_total}</span>
+					</td>
+				{/snippet}
+
+				<Table
+					data={ordenesActivas}
+					header={headerOrdenes}
+					row={rowOrden}
+					emptyMessage="No hay órdenes activas"
+				/>
+			</div>
 		</div>
 	</div>
 </PageLayout>
@@ -251,7 +253,7 @@
 				</FormFieldWrapper>
 
 				<FormFieldWrapper id="descripcion" label="Descripción">
-					<textarea class="textarea w-full" rows="3" {...form.fields.descripcion.as('text')}>
+					<textarea class="textarea w-full resize-none" rows="3" {...form.fields.descripcion.as('text')}>
 					</textarea>
 				</FormFieldWrapper>
 

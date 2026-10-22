@@ -1,4 +1,5 @@
 const URL_COTIZACION_BNA = 'https://www.bna.com.ar/Personas';
+const DURACION_CACHE_MS = 5 * 60 * 1000;
 
 export class CotizacionBNAError extends Error {
 	constructor(message: string, options?: ErrorOptions) {
@@ -12,6 +13,9 @@ export type CotizacionDolarBNA = {
 	fecha: string;
 	hora: string;
 };
+
+let cotizacionCache: { valor: CotizacionDolarBNA; vence: number } | null = null;
+let solicitudEnCurso: Promise<CotizacionDolarBNA> | null = null;
 
 function parsearImporte(texto: string) {
 	const normalizado = texto.trim().replace(/\./g, '').replace(',', '.');
@@ -45,6 +49,19 @@ export function parsearCotizacionDolarBNA(html: string): CotizacionDolarBNA {
 }
 
 export async function obtenerCotizacionDolarBNA(): Promise<CotizacionDolarBNA> {
+	if (cotizacionCache && cotizacionCache.vence > Date.now()) return cotizacionCache.valor;
+	if (!solicitudEnCurso) solicitudEnCurso = consultarCotizacionDolarBNA();
+
+	try {
+		const valor = await solicitudEnCurso;
+		cotizacionCache = { valor, vence: Date.now() + DURACION_CACHE_MS };
+		return valor;
+	} finally {
+		solicitudEnCurso = null;
+	}
+}
+
+async function consultarCotizacionDolarBNA(): Promise<CotizacionDolarBNA> {
 	try {
 		const response = await fetch(URL_COTIZACION_BNA, {
 			headers: { accept: 'text/html' },

@@ -16,3 +16,4 @@ export { default as Document } from './Document.svelte';
 export { default as Excel } from './Excel.svelte';
 export { default as Puzzle } from './Puzzle.svelte';
 export { default as Graph } from './Graph.svelte';
+export { default as Archive } from './Archive.svelte';
