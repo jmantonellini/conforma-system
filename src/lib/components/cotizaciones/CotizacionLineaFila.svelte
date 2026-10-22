@@ -75,6 +75,11 @@
 				}))}
 				onChange={(value: string) => onSeleccionarProducto(linea.idx, value)}
 			/>
+		{:else if linea.nuevo_insumo}
+			<div class="flex min-h-8 flex-col justify-center">
+				<span class="font-medium">{linea.nuevo_insumo.nombre}</span>
+				<span class="text-xs text-base-content/60">Nuevo insumo · {linea.nuevo_insumo.unidad}</span>
+			</div>
 		{:else if linea.tipo === 'insumo'}
 			<SearchSelect
 				label=""
@@ -90,11 +95,6 @@
 				}))}
 				onChange={(value: string) => onSeleccionarInsumo(linea.idx, value)}
 			/>
-		{:else if linea.nuevo_insumo}
-			<div class="flex min-h-8 flex-col justify-center">
-				<span class="font-medium">{linea.nuevo_insumo.nombre}</span>
-				<span class="text-xs text-base-content/60">Nuevo insumo · {linea.nuevo_insumo.unidad}</span>
-			</div>
 		{:else}
 			<input
 				class="input w-full input-sm"

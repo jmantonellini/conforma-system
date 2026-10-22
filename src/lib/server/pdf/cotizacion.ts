@@ -9,6 +9,7 @@ import {
 } from '$lib/server/db/schema';
 import { and, eq, isNull } from 'drizzle-orm';
 import { calcularIva21, formatearDosDecimales, redondearPrecio } from '$lib/utils/precios';
+import { obtenerCotizacionDolarBNA } from '$lib/server/services/tipo-cambio-bna.service';
 import { readFile } from 'fs/promises';
 import path from 'path';
 import logoUrl from '$lib/assets/Logo.png';
@@ -42,7 +43,6 @@ async function cargarLogo(configuredUrl?: string | null) {
 		})();
 		logoCache.set(cacheKey, logo);
 	}
-
 	try {
 		return await logo;
 	} catch (error) {
@@ -117,8 +117,8 @@ const template = {
 			// Datos cliente
 			{
 				type: 'text',
-				position: { x: 120, y: 50 },
-				width: 70,
+				position: { x: 110, y: 50 },
+				width: 80,
 				height: 6,
 				fontSize: 10,
 				fontColor: BRAND_RED,
@@ -127,11 +127,12 @@ const template = {
 			},
 			{
 				type: 'text',
-				position: { x: 120, y: 57 },
-				width: 70,
+				position: { x: 110, y: 57 },
+				width: 80,
 				height: 25,
 				fontSize: 9,
 				lineHeight: 1.4,
+				dynamicFontSize: { min: 7, max: 9, fit: 'vertical' },
 				name: 'cliente'
 			},
 
@@ -143,7 +144,7 @@ const template = {
 				height: 60,
 				showHead: true,
 				head: ['Descripción', 'Cant.', 'P. Unit.', 'Subtotal'],
-				headWidthPercentages: [58.8, 11.8, 14.7, 14.7],
+				headWidthPercentages: [53, 10, 18.5, 18.5],
 				tableStyles: { borderWidth: 0.1, borderColor: '#e5e7eb' },
 				headStyles: {
 					alignment: 'left',
@@ -177,8 +178,8 @@ const template = {
 			// Total
 			{
 				type: 'text',
-				position: { x: 130, y: 160 },
-				width: 30,
+				position: { x: 120, y: 160 },
+				width: 28,
 				height: 8,
 				fontSize: 12,
 				fontStyle: 'bold',
@@ -187,8 +188,8 @@ const template = {
 			},
 			{
 				type: 'text',
-				position: { x: 165, y: 160 },
-				width: 25,
+				position: { x: 150, y: 160 },
+				width: 40,
 				height: 8,
 				fontSize: 14,
 				fontStyle: 'bold',
@@ -202,19 +203,59 @@ const template = {
 				type: 'text',
 				position: { x: 20, y: 178 },
 				width: 170,
-				height: 65,
+				height: 11,
+				fontSize: 12,
+				fontStyle: 'bold',
+				fontColor: BRAND_RED,
+				lineHeight: 1.1,
+				verticalAlignment: 'top',
+				name: 'vigencia'
+			},
+			{
+				name: 'monedaInfo',
+				type: 'text',
+				position: { x: 20, y: 192 },
+				width: 170,
+				height: 18,
+				fontSize: 9,
+				dynamicFontSize: { min: 7, max: 9, fit: 'vertical' },
+				fontColor: '#333',
+				lineHeight: 1.2,
+				verticalAlignment: 'top'
+			},
+			{
+				name: 'condicionesTitulo',
+				type: 'text',
+				position: { x: 20, y: 215 },
+				width: 170,
+				height: 8,
+				fontSize: 9,
+				fontStyle: 'bold',
+				fontColor: '#333',
+				verticalAlignment: 'top'
+			},
+			{
+				name: 'condicionesPago',
+				type: 'text',
+				position: { x: 20, y: 224 },
+				width: 170,
+				height: 28,
 				fontSize: 9,
 				dynamicFontSize: { min: 6, max: 9, fit: 'vertical' },
-				fontColor: '#666',
-				lineHeight: 1.3,
-				verticalAlignment: 'top',
-				name: 'condicionesPago'
+				fontColor: '#555',
+				lineHeight: 1.2,
+				verticalAlignment: 'top'
 			}
 		]
 	]
 };
 
-export async function generarPDFCotizacion(cotizacionId: number): Promise<{
+export type MonedaPDFCotizacion = 'USD' | 'ARS';
+
+export async function generarPDFCotizacion(
+	cotizacionId: number,
+	moneda: MonedaPDFCotizacion = 'USD'
+): Promise<{
 	pdf: Uint8Array;
 	clienteNombre: string;
 	fechaCotizacion: Date;
@@ -223,7 +264,8 @@ export async function generarPDFCotizacion(cotizacionId: number): Promise<{
 		db.select().from(configuracion_empresa).where(eq(configuracion_empresa.id, 1)).limit(1)
 	);
 	const logoPromise = businessConfigPromise.then(([config]) => cargarLogo(config?.logo_url));
-	const [[cot], [businessConfig], lineas, logo] = await Promise.all([
+	const tipoCambioPromise = moneda === 'ARS' ? obtenerCotizacionDolarBNA() : Promise.resolve(null);
+	const [[cot], [businessConfig], lineas, logo, tipoCambio] = await Promise.all([
 		db
 			.select({
 				id: cotizaciones.id,
@@ -235,13 +277,11 @@ export async function generarPDFCotizacion(cotizacionId: number): Promise<{
 				descripcion: cotizaciones.descripcion,
 				validez_dias: cotizaciones.validez_dias,
 				created_at: cotizaciones.created_at,
-				cliente: {
-					nombre: contactos.nombre,
-					apellido: contactos.apellido,
-					razon_social: contactos.razon_social,
-					telefono: contactos.telefono,
-					direccion: contactos.calle
-				}
+				cliente_razon_social: contactos.razon_social,
+				cliente_nombre: contactos.nombre,
+				cliente_apellido: contactos.apellido,
+				cliente_telefono: contactos.telefono,
+				cliente_direccion: contactos.calle
 			})
 			.from(cotizaciones)
 			.leftJoin(contactos, eq(cotizaciones.contacto_id, contactos.id))
@@ -264,7 +304,8 @@ export async function generarPDFCotizacion(cotizacionId: number): Promise<{
 					isNull(lineas_cotizacion.insumo_id)
 				)
 			),
-		logoPromise
+		logoPromise,
+		tipoCambioPromise
 	]);
 
 	if (!cot) throw new Error('Cotización no encontrada');
@@ -279,16 +320,30 @@ export async function generarPDFCotizacion(cotizacionId: number): Promise<{
 		cot.condiciones_pago === null
 			? '50% de anticipo al aprobar, saldo contra entrega.'
 			: cot.condiciones_pago.trim();
+	const simboloMoneda = moneda === 'USD' ? 'US$' : '$';
+	const factorConversion = tipoCambio?.venta ?? 1;
 	const formatearImporte = (importe: number) =>
-		`${importe < 0 ? '-$' : '$'}${formatearDosDecimales(Math.abs(importe))}`;
-	const clienteNombre =
-		cot.cliente?.razon_social ||
-		`${cot.cliente?.nombre ?? ''} ${cot.cliente?.apellido ?? ''}`.trim() ||
-		'Cliente';
+		`${importe < 0 ? '-' : ''}${simboloMoneda}${formatearDosDecimales(Math.abs(importe) * factorConversion)}`;
+	const nombreCompleto = [cot.cliente_nombre, cot.cliente_apellido]
+		.filter(Boolean)
+		.join(' ')
+		.trim();
+	const clienteNombre = cot.cliente_razon_social?.trim() || nombreCompleto || 'Cliente';
+	const clienteDatos = [
+		clienteNombre,
+		...(nombreCompleto && nombreCompleto !== clienteNombre ? [nombreCompleto] : []),
+		cot.cliente_telefono,
+		cot.cliente_direccion
+	]
+		.filter(Boolean)
+		.join('\n');
 
 	const fechaCotizacion = cot.created_at ?? new Date();
 	const vencimiento = new Date(fechaCotizacion);
 	vencimiento.setDate(vencimiento.getDate() + (cot.validez_dias ?? 15));
+	const fechaValidez = vencimiento.toLocaleDateString('es-AR', {
+		timeZone: 'America/Argentina/Buenos_Aires'
+	});
 
 	const businessName = businessConfig?.razon_social || 'Conforma';
 	const businessDetails = [
@@ -304,17 +359,17 @@ export async function generarPDFCotizacion(cotizacionId: number): Promise<{
 	const inputs = [
 		{
 			logo,
-			titulo: 'COTIZACIÓN',
+			titulo: moneda === 'USD' ? 'COTIZACIÓN USD' : 'COTIZACIÓN ARS',
 			numero: cot.numero,
 			empresa: businessDetails,
 			clienteTitulo: 'CLIENTE',
-			cliente: `${clienteNombre}\n${cot.cliente?.telefono ?? ''}\n${cot.cliente?.direccion ?? ''}`,
+			cliente: clienteDatos,
 			table: [
 				...lineas.map((l) => [
 					l.descripcion_snapshot,
 					String(l.cantidad),
-					`$${formatearDosDecimales(l.precio)}`,
-					`$${formatearDosDecimales(l.subtotal)}`
+					formatearImporte(l.precio),
+					formatearImporte(l.subtotal ?? l.cantidad * l.precio)
 				]),
 				...(descuentoGlobalPorcentaje > 0
 					? [
@@ -331,8 +386,14 @@ export async function generarPDFCotizacion(cotizacionId: number): Promise<{
 			],
 			totalLabel: 'TOTAL:',
 			total: formatearImporte(total),
-			condicionesPago: condicionesPago ? `Condiciones de pago:\n${condicionesPago}` : '',
-			footer: `Precios expresados en pesos argentinos. Cotización válida hasta el ${vencimiento.toLocaleDateString('es-AR')}. Gracias por consultar. Se toma el valor del dólar oficial del día de la cotización.`
+			vigencia: `VIGENCIA: válida hasta el ${fechaValidez}`,
+			monedaInfo:
+				moneda === 'USD'
+					? 'Importes expresados en dólares estadounidenses (USD). No se aplicó conversión a pesos.'
+					: `Importes convertidos a pesos argentinos (ARS). Tipo de cambio aplicado: dólar billete vendedor del Banco Nación, $${formatearDosDecimales(tipoCambio!.venta)} por US$1.`,
+			condicionesTitulo: condicionesPago ? 'CONDICIONES DE PAGO' : '',
+			condicionesPago,
+			footer: 'Conforma · Gracias por consultar.'
 		}
 	];
 

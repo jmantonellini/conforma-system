@@ -1,13 +1,10 @@
-export type MaterialSnapshot = {
-	insumo_id?: number | null;
-	producto_id?: number | null;
-	codigo?: string | null;
-	nombre: string;
-	cantidad: number;
-	costo_unitario?: number;
-	unidad?: string;
-	subtotal?: number;
-};
+import type {
+	MaterialSnapshot,
+	NuevoInsumoComercial,
+	TipoLineaComercial
+} from '$lib/types/linea-comercial';
+
+export type { MaterialSnapshot } from '$lib/types/linea-comercial';
 
 export type LineaInicial = {
 	id: number;
@@ -40,18 +37,11 @@ export type InsumoOpcion = {
 
 export type LineaEdicion = {
 	idx: number;
-	tipo: 'producto' | 'insumo' | 'concepto';
+	tipo: TipoLineaComercial;
 	visible_cliente: boolean;
 	producto_id: string;
 	insumo_id: number | string | undefined;
-	nuevo_insumo?: {
-		nombre: string;
-		tipo_id: number;
-		categoria_id?: number;
-		unidad_id: number;
-		unidad: string;
-		costo_unitario: number;
-	};
+	nuevo_insumo?: NuevoInsumoComercial;
 	insumos_snapshot: MaterialSnapshot[];
 	unidad: string;
 	descripcion: string;

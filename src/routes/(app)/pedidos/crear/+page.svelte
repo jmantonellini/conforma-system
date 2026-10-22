@@ -1,40 +1,103 @@
 <script lang="ts">
+	import { onDestroy } from 'svelte';
+	import { goto } from '$app/navigation';
+	import { resolve } from '$app/paths';
 	import { crearPedido } from '$lib/remote/pedidos.remote';
 	import { obtenerContactosCliente } from '$lib/remote/contactos.remote';
 	import { getProductos } from '$lib/remote/productos.remote';
+	import {
+		getCategoriasInsumo,
+		getInsumos,
+		getTiposInsumo,
+		getUnidadesInsumo
+	} from '$lib/remote/insumos.remote';
+	import LineasConceptosEditor from '$lib/components/cotizaciones/LineasConceptosEditor.svelte';
 	import SearchSelect from '$lib/components/ui/SearchSelect.svelte';
 	import FormFieldWrapper from '$lib/components/ui/FormFieldWrapper.svelte';
-	import { Can, FormActions, FormErrors, PageLayout } from '$lib/components/ui';
+	import { FormActions, FormErrors, PageLayout } from '$lib/components/ui';
 	import { toast } from '$lib/stores/toast.svelte';
 	import { Paths } from '$lib/types';
+	import type { InsumoOpcion, LineaEdicion, ProductoOpcion } from '$lib/types/cotizacion-editor';
 	import { formatearDosDecimales, redondearPrecio } from '$lib/utils/precios';
 
 	let form = crearPedido;
-	let clientes = await obtenerContactosCliente({});
-	let productos = await getProductos({});
-	let producto: (typeof productos.data)[number] | undefined = $state();
+	let clientes = await obtenerContactosCliente({ limit: 100 });
+	let productosResultado = await getProductos({ limit: 100 });
+	let insumosResultado = await getInsumos({ limit: 100 });
+	let tiposInsumo = await getTiposInsumo();
+	let categoriasInsumo = await getCategoriasInsumo();
+	let unidadesInsumo = await getUnidadesInsumo();
+	const productos: ProductoOpcion[] = productosResultado.data.map((producto) => ({
+		id: producto.id,
+		nombre: producto.nombre,
+		costo_materiales: producto.costo_materiales,
+		precio_venta: producto.precio_venta
+	}));
+	const insumos: InsumoOpcion[] = insumosResultado.data.map((insumo) => ({
+		id: insumo.id,
+		codigo: insumo.codigo,
+		nombre: insumo.nombre,
+		unidad: insumo.unidad,
+		costo_unitario: insumo.costo_unitario
+	}));
 	let usarCreditoDistribuidor = $state(false);
 	let clienteSeleccionadoId = $state('');
 	let distribuidorSeleccionadoId = $state('');
 	let porcentajeComisionDistribuidor = $state(0);
+	let archivosSeleccionados = $state<File[]>([]);
+	let vistasPrevias = $state<{ archivo: File; url: string }[]>([]);
+	let subiendoArchivos = $state(false);
 
-	let lineas = $state([
-		{
-			idx: 0,
-			producto_id: '',
-			cantidad: 1,
-			precio: 0,
-			precio_lista: 0,
-			precio_lista_minimo: 0,
-			costo_materiales: 0,
-			descripcion: ''
-		}
-	]);
+	function serializarLineas(lineas: LineaEdicion[]) {
+		return JSON.stringify(
+			lineas.map((linea) => ({
+				tipo: linea.tipo,
+				visible_cliente: linea.visible_cliente,
+				producto_id: linea.producto_id || undefined,
+				insumo_id: linea.tipo === 'insumo' ? Number(linea.insumo_id) || undefined : undefined,
+				nuevo_insumo: linea.nuevo_insumo,
+				cantidad: linea.cantidad,
+				precio: linea.precio_unitario,
+				precio_lista: linea.precio_lista_unitario,
+				costo_materiales: linea.costo_materiales,
+				descripcion: linea.descripcion,
+				insumos_asociados:
+					linea.tipo === 'concepto'
+						? linea.insumos_snapshot
+								.filter((material) => material.insumo_id != null)
+								.map((material) => ({
+									insumo_id: Number(material.insumo_id),
+									cantidad: material.cantidad
+								}))
+						: []
+			}))
+		);
+	}
+
+	const lineaInicial: LineaEdicion = {
+		idx: 0,
+		tipo: 'producto',
+		visible_cliente: true,
+		producto_id: '',
+		insumo_id: undefined,
+		insumos_snapshot: [],
+		unidad: '',
+		descripcion: '',
+		cantidad: 1,
+		precio_unitario: 0,
+		precio_lista_unitario: 0,
+		precio_minimo_unitario: 0,
+		costo_materiales: 0
+	};
+	let lineas = $state<LineaEdicion[]>([lineaInicial]);
+	form.fields.lineas.set(serializarLineas([lineaInicial]));
 
 	let total = $derived(
-		form.fields.lineas
-			?.value()
-			?.reduce((sum: number, l: any) => sum + (l.cantidad || 0) * (l.precio || 0), 0) ?? 0
+		redondearPrecio(
+			lineas
+				.filter((linea) => linea.visible_cliente)
+				.reduce((sum, linea) => sum + linea.cantidad * linea.precio_unitario, 0)
+		)
 	);
 	// Opciones para el SearchSelect
 	const clientesOptions =
@@ -54,63 +117,39 @@
 					}))
 			: [];
 
-	function agregarLinea() {
-		lineas = [
-			...lineas,
-			{
-				idx: lineas.length,
-				producto_id: '',
-				cantidad: 1,
-				precio: 0,
-				precio_lista: 0,
-				precio_lista_minimo: 0,
-				costo_materiales: 0,
-				descripcion: ''
-			}
-		];
+	function seleccionarArchivos(event: Event) {
+		for (const vista of vistasPrevias) if (vista.url) URL.revokeObjectURL(vista.url);
+		const input = event.currentTarget as HTMLInputElement;
+		archivosSeleccionados = Array.from(input.files ?? []);
+		vistasPrevias = archivosSeleccionados.map((archivo) => ({
+			archivo,
+			url: archivo.type.startsWith('image/') ? URL.createObjectURL(archivo) : ''
+		}));
 	}
 
-	function eliminarLinea(idxAEliminar: number) {
-		if (lineas.length > 1) {
-			lineas = lineas.filter((l) => l.idx !== idxAEliminar);
-			lineas = lineas.map((l, i) => ({ ...l, id: i }));
+	function quitarArchivo(archivo: File) {
+		const vista = vistasPrevias.find((item) => item.archivo === archivo);
+		if (vista?.url) URL.revokeObjectURL(vista.url);
+		archivosSeleccionados = archivosSeleccionados.filter((item) => item !== archivo);
+		vistasPrevias = vistasPrevias.filter((item) => item.archivo !== archivo);
+	}
+
+	async function subirArchivos(pedidoId: number) {
+		if (!archivosSeleccionados.length) return;
+		const datos = new FormData();
+		datos.set('tipo', 'pedido');
+		datos.set('entidad_id', String(pedidoId));
+		for (const archivo of archivosSeleccionados) datos.append('archivos', archivo);
+		const response = await fetch(resolve('/adjuntos'), { method: 'POST', body: datos });
+		const resultado: { error?: string; resultados?: { error?: string }[] } = await response.json();
+		if (!response.ok || resultado.resultados?.some((item) => item.error)) {
+			throw new Error(resultado.error || 'No se pudieron subir todos los archivos');
 		}
 	}
 
-	function onProductoChange(idx: number, productoId: string) {
-		producto = productos.data.find((p) => p.id.toString() === productoId);
-		const esPersonalizado = productoId === 'personalizado';
-		const precioLista = esPersonalizado ? 0 : (producto?.precio_venta ?? 0);
-		const costo = esPersonalizado ? 0 : (producto?.costo_materiales ?? 0);
-		lineas = lineas.map((linea, index) =>
-			index === idx
-				? {
-						...linea,
-						producto_id: productoId,
-						precio_lista: precioLista,
-						precio_lista_minimo: precioLista,
-						precio: precioLista,
-						costo_materiales: costo
-					}
-				: linea
-		);
-		form.fields.lineas[idx].precio_lista.set(precioLista);
-		form.fields.lineas[idx].precio.set(precioLista);
-	}
-
-	function actualizarPrecioLinea(idx: number, campo: 'precio_lista', valor: string) {
-		const linea = lineas[idx];
-		const precio_lista =
-			campo === 'precio_lista'
-				? Math.max(Number(valor) || 0, Number(linea.precio_lista_minimo || 0))
-				: linea.precio_lista;
-		const precio = redondearPrecio(precio_lista);
-		lineas = lineas.map((item, index) =>
-			index === idx ? { ...item, precio_lista, precio } : item
-		);
-		form.fields.lineas[idx].precio_lista.set(precio_lista);
-		form.fields.lineas[idx].precio.set(precio);
-	}
+	onDestroy(() => {
+		for (const vista of vistasPrevias) if (vista.url) URL.revokeObjectURL(vista.url);
+	});
 
 	let clienteSeleccionado = $derived(
 		clientes.data.find((cliente) => cliente.id.toString() === clienteSeleccionadoId)
@@ -143,9 +182,22 @@
 		{...form.enhance(async (form) => {
 			try {
 				if (await form.submit()) {
-					form.element.reset();
-
-					toast.success('Pedido creado!');
+					const pedidoId = form.result?.pedidoId;
+					if (!pedidoId) throw new Error('No se recibió el número de pedido');
+					toast.success('Pedido creado');
+					if (archivosSeleccionados.length) {
+						subiendoArchivos = true;
+						try {
+							await subirArchivos(pedidoId);
+						} catch {
+							toast.warning(
+								'El pedido se creó, pero no se pudieron subir todos los archivos. Podés reintentarlo desde el detalle.'
+							);
+						} finally {
+							subiendoArchivos = false;
+						}
+					}
+					await goto(resolve(`/pedidos/${pedidoId}`));
 				} else {
 					toast.error('Error de validación');
 				}
@@ -266,115 +318,29 @@
 			{/if}
 		</fieldset>
 
-		<!-- Productos -->
-		<fieldset class="fieldset rounded-box border border-base-300 bg-base-200 p-4">
-			<legend class="fieldset-legend">Productos</legend>
-
-			<div class="space-y-3">
-				{#each lineas as linea, idx (linea.idx)}
-					<div class="relative border-b border-base-300 py-4 first:pt-0 last:border-b-0">
-						<button
-							type="button"
-							onclick={() => eliminarLinea(linea.idx)}
-							class="btn absolute top-1 right-1 btn-circle btn-ghost btn-xs"
-							class:hidden={lineas.length === 1}
-						>
-							✕
-						</button>
-
-						<div class="grid gap-4 md:grid-cols-12">
-							<!-- Producto -->
-							<SearchSelect
-								label="Producto"
-								class="md:col-span-4"
-								id={`lineas[${idx}].producto_id`}
-								field={form.fields.lineas[idx].producto_id}
-								options={[
-									{ value: 'personalizado', label: '📝 Personalizado' },
-									...productos.data.map((p) => ({ value: p.id.toString(), label: p.nombre }))
-								]}
-								onChange={(val: string) => onProductoChange(idx, val)}
-							/>
-
-							<!-- Descripción (si es personalizado) -->
-							<FormFieldWrapper
-								label="Descripción"
-								id={`lineas[${idx}].descripcion`}
-								class="md:col-span-3"
-							>
-								<input
-									class="input input-sm"
-									id={`lineas[${idx}].descripcion`}
-									{...form.fields.lineas[idx].descripcion.as('text')}
-								/>
-							</FormFieldWrapper>
-
-							<!-- Cantidad -->
-							<FormFieldWrapper label="Cantidad" id={`lineas[${idx}].cantidad`}>
-								<input
-									class="remove-arrow input input-sm"
-									id={`lineas[${idx}].cantidad`}
-									{...form.fields.lineas[idx].cantidad.as('number')}
-									min="1"
-								/>
-							</FormFieldWrapper>
-
-							<FormFieldWrapper label="Costo" id={`lineas[${idx}].costo`}>
-								<div class="input flex items-center bg-base-200 input-sm">
-									${formatearDosDecimales(linea.costo_materiales)}
-								</div>
-							</FormFieldWrapper>
-							{#if linea.producto_id === 'personalizado'}
-								<FormFieldWrapper label="Precio de lista" id={`lineas[${idx}].precio_lista`}>
-									<input
-										class="remove-arrow input input-sm"
-										type="number"
-										min="0"
-										step="0.01"
-										value={linea.precio_lista}
-										oninput={(event) =>
-											actualizarPrecioLinea(idx, 'precio_lista', event.currentTarget.value)}
-									/>
-								</FormFieldWrapper>
-							{:else}
-								<FormFieldWrapper label="Precio de lista" id={`lineas[${idx}].precio_lista`}>
-									<input
-										class="remove-arrow input input-sm"
-										type="number"
-										min={linea.precio_lista_minimo}
-										step="0.01"
-										value={linea.precio_lista}
-										oninput={(event) =>
-											actualizarPrecioLinea(idx, 'precio_lista', event.currentTarget.value)}
-									/>
-								</FormFieldWrapper>
-							{/if}
-							<FormFieldWrapper label="Precio neto" id={`lineas[${idx}].precio`}>
-								<div class="input flex items-center bg-base-200 font-semibold input-sm">
-									${formatearDosDecimales(linea.precio)}
-								</div>
-							</FormFieldWrapper>
-						</div>
-					</div>
-				{/each}
-				<div class="flex w-full items-center justify-end">
-					<button type="button" onclick={agregarLinea} class="btn btn-outline btn-sm">
-						+ Agregar producto
-					</button>
-				</div>
+		<LineasConceptosEditor
+			bind:lineas
+			{productos}
+			{insumos}
+			{tiposInsumo}
+			{categoriasInsumo}
+			{unidadesInsumo}
+			bloqueada={!!form.pending}
+			contexto="pedido"
+			descuentoGlobal={0}
+			totalBase={total}
+			importeDescuento={0}
+			incluirIva={false}
+			importeIva={0}
+			onChange={(nuevasLineas) => form.fields.lineas.set(serializarLineas(nuevasLineas))}
+		/>
+		<div class="divider"></div>
+		<div class="flex justify-end">
+			<div class="text-right">
+				<p class="text-sm text-base-content/70">Total</p>
+				<p class="text-3xl font-bold">${formatearDosDecimales(total)}</p>
 			</div>
-
-			<!-- Total -->
-			<div class="divider"></div>
-			<div class="flex justify-end">
-				<div class="text-right">
-					<p class="text-sm text-base-content/70">Total</p>
-					<p class="text-3xl font-bold">
-						${formatearDosDecimales(total)}
-					</p>
-				</div>
-			</div>
-		</fieldset>
+		</div>
 
 		<!-- Observaciones -->
 		<fieldset class="fieldset rounded-box border border-base-300 bg-base-200 p-4">
@@ -391,12 +357,45 @@
 			</FormFieldWrapper>
 		</fieldset>
 
+		<fieldset class="fieldset rounded-box border border-base-300 bg-base-200 p-4">
+			<legend class="fieldset-legend">Archivos adjuntos</legend>
+			<FormFieldWrapper label="Archivos adjuntos" id="archivos">
+				<input
+					type="file"
+					multiple
+					accept="image/jpeg,image/png,image/webp,audio/ogg,audio/mpeg,audio/mp4,audio/x-m4a,audio/wav,audio/x-wav,video/mp4,application/pdf"
+					class="file-input w-full"
+					disabled={subiendoArchivos || !!form.pending}
+					onchange={seleccionarArchivos}
+				/>
+			</FormFieldWrapper>
+			{#if vistasPrevias.length}
+				<div class="flex flex-wrap gap-3">
+					{#each vistasPrevias as vista (vista.archivo)}
+						<div class="flex items-center gap-2 rounded border border-base-300 p-2">
+							{#if vista.url}
+								<img src={vista.url} alt={vista.archivo.name} class="h-16 w-16 object-cover" />
+							{/if}
+							<span class="max-w-48 truncate text-sm">{vista.archivo.name}</span>
+							<button
+								type="button"
+								class="btn btn-ghost btn-xs"
+								aria-label={`Quitar ${vista.archivo.name}`}
+								disabled={subiendoArchivos || !!form.pending}
+								onclick={() => quitarArchivo(vista.archivo)}>✕</button
+							>
+						</div>
+					{/each}
+				</div>
+			{/if}
+		</fieldset>
+
 		<FormErrors {form} />
 
 		<!-- Actions -->
 		<FormActions
 			cancelHref={Paths.PEDIDOS}
-			pending={!!form.pending}
+			pending={!!form.pending || subiendoArchivos}
 			pendingText="Creando pedido..."
 			submitText="Crear Pedido"
 		/>

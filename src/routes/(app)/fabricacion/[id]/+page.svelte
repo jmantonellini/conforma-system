@@ -14,22 +14,15 @@
 	import { goto, invalidateAll } from '$app/navigation';
 	import { resolve } from '$app/paths';
 	import { formatearFecha } from '$lib/utils/fechas.js';
+	import type { MaterialSnapshot } from '$lib/types/linea-comercial';
 
 	let { params } = $props();
 	const orden = $derived(await getOrdenFabricacion(Number(params.id)));
 	const historial = $derived(await getHistorialUnidades(Number(params.id)));
 
 	let isLoading = $state(false);
-	type InsumoRequerido = {
-		insumo_id?: number;
-		codigo: string;
-		nombre: string;
-		cantidad: number;
-		unidad: string;
-		costo_unitario?: number;
-	};
-	const insumosRequeridos = $derived((orden.insumos_requeridos ?? []) as InsumoRequerido[]);
-	const insumosAdicionales = $derived((orden.insumos_adicionales ?? []) as InsumoRequerido[]);
+	const insumosRequeridos = $derived((orden.insumos_requeridos ?? []) as MaterialSnapshot[]);
+	const insumosAdicionales = $derived((orden.insumos_adicionales ?? []) as MaterialSnapshot[]);
 
 	let modal = $state({
 		open: false,
@@ -262,11 +255,11 @@
 								{#each insumosRequeridos as insumo, key (key)}
 									<li class="flex items-center justify-between gap-3 p-3">
 										<span>
-											<span class="font-mono text-sm">{insumo.codigo}</span>
+											<span class="font-mono text-sm">{insumo.codigo ?? '—'}</span>
 											<span class="ml-2">{insumo.nombre}</span>
 										</span>
 										<span class="font-semibold whitespace-nowrap"
-											>{insumo.cantidad} {insumo.unidad}</span
+											>{insumo.cantidad} {insumo.unidad ?? ''}</span
 										>
 									</li>
 								{/each}

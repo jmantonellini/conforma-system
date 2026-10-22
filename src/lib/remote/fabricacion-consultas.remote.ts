@@ -20,6 +20,7 @@ import {
 } from '$lib/server/db/schema';
 import { and, aliasedTable, count, desc, eq, ilike, or, sql } from 'drizzle-orm';
 import { getProductoConReceta } from './productos.remote';
+import type { MaterialSnapshot } from '$lib/types/linea-comercial';
 
 export const getEstadosFabricacion = query(async () =>
 	db.select().from(estados_fabricacion).orderBy(estados_fabricacion.orden)
@@ -342,18 +343,9 @@ export const getOrdenFabricacion = query(v.number(), async (id) => {
 				: { tipo: 'fabricacion' as const, id: adjunto.orden_fabricacion_id! }
 	}));
 
-	type MaterialRequerido = {
-		insumo_id: number;
-		codigo: string;
-		nombre: string;
-		cantidad: number;
-		unidad: string;
-		costo_unitario?: number | null;
-		subtotal?: number;
-	};
 	const recetaBase = (
 		Array.isArray(lineaTrabajo?.insumos_snapshot) ? lineaTrabajo.insumos_snapshot : recetaActual
-	) as MaterialRequerido[];
+	) as MaterialSnapshot[];
 	const insumosRequeridos = recetaBase.map((material) => ({
 		...material,
 		cantidad: material.cantidad * orden.cantidad_total,

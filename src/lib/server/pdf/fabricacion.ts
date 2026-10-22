@@ -20,7 +20,6 @@ const PAGE_WIDTH = 210;
 const PAGE_HEIGHT = 297;
 const MARGIN = 14;
 const CONTENT_WIDTH = PAGE_WIDTH - MARGIN * 2;
-const LIMITE_Y = PAGE_HEIGHT - MARGIN;
 
 const RED = '#ed1c24';
 const OSCURO = '#2b2b2b';
@@ -29,7 +28,6 @@ const ETIQUETA = '#6b6b6b';
 const FILA_CLARA = '#f1f1f1';
 const BLANCO = '#ffffff';
 
-const ALTO_FILA_INSUMO = 11;
 const ALTO_CABECERA_TABLA = 8;
 
 type OpcionesTexto = {
@@ -158,10 +156,6 @@ async function prepararImagenPlano(contenido: Buffer) {
 }
 
 export async function generarPDFFabricacion(orden: OrdenFabricacion, planos: Plano[]) {
-	const materiales = [
-		...(orden.insumos_requeridos ?? []).map((insumo) => ({ ...insumo, tipo: 'Requerido' })),
-		...(orden.insumos_adicionales ?? []).map((insumo) => ({ ...insumo, tipo: 'Adicional' }))
-	];
 	const medidas = orden.medidas;
 	const observaciones = [orden.observaciones, medidas?.trombon_observaciones]
 		.filter(Boolean)
@@ -175,7 +169,7 @@ export async function generarPDFFabricacion(orden: OrdenFabricacion, planos: Pla
 	};
 
 	// ───────── Página 1: encabezado ─────────
-	let p = nuevaPagina();
+	const p = nuevaPagina();
 	p.rect(MARGIN, 10, CONTENT_WIDTH, 16, RED);
 	p.texto(MARGIN + 5, 10, 110, 16, 'ORDEN DE FABRICACIÓN', { size: 18, color: BLANCO });
 	p.texto(PAGE_WIDTH - MARGIN - 5 - 56, 10, 56, 16, `OF-${orden.id}`, {
@@ -187,6 +181,7 @@ export async function generarPDFFabricacion(orden: OrdenFabricacion, planos: Pla
 
 	// ───────── Datos del pedido (grilla de 4 columnas x 2 filas) ─────────
 	const anchosGrilla = [38, 62, 38, 44];
+	const anchosSegundaFila = [62, 52, 68];
 	const fechaCreacion = formatearFecha(new Date(orden.created_at ?? Date.now()));
 	const fechaEntrega = orden.fecha_fin_estimada
 		? formatearFecha(new Date(orden.fecha_fin_estimada))
@@ -200,7 +195,6 @@ export async function generarPDFFabricacion(orden: OrdenFabricacion, planos: Pla
 		],
 		[
 			['CANTIDAD / PRODUCIDAS', `${orden.cantidad_total} / ${orden.cantidad_producida}`],
-			['ESTADO', orden.estado?.nombre || '—'],
 			['PRIORIDAD', prioridad(orden.prioridad)],
 			['ASIGNADO', orden.empleado?.nombre || 'Sin asignar']
 		]
@@ -211,12 +205,14 @@ export async function generarPDFFabricacion(orden: OrdenFabricacion, planos: Pla
 		let x = MARGIN;
 		fila.forEach(([etiqueta, dato], indiceColumna) => {
 			const yFila = yGrilla + 2 + indiceFila * 14;
-			p.texto(x + 3, yFila, anchosGrilla[indiceColumna] - 5, 4.5, etiqueta, {
+			const ancho =
+				indiceFila === 0 ? anchosGrilla[indiceColumna] : anchosSegundaFila[indiceColumna];
+			p.texto(x + 3, yFila, ancho - 5, 4.5, etiqueta, {
 				size: 8,
 				color: ETIQUETA
 			});
-			p.texto(x + 3, yFila + 4.5, anchosGrilla[indiceColumna] - 5, 8, dato, { size: 12 });
-			x += anchosGrilla[indiceColumna];
+			p.texto(x + 3, yFila + 4.5, ancho - 5, 8, dato, { size: 12 });
+			x += ancho;
 		});
 	});
 
@@ -235,16 +231,27 @@ export async function generarPDFFabricacion(orden: OrdenFabricacion, planos: Pla
 		{ titulo: 'DIÁMETRO', ancho: 56 },
 		{ titulo: 'LARGO', ancho: 56 }
 	];
-	filaTabla(p, y, ALTO_CABECERA_TABLA, columnasMedidas, columnasMedidas.map((c) => c.titulo), {
-		fondo: OSCURO,
-		color: BLANCO,
-		size: 10
-	});
+	filaTabla(
+		p,
+		y,
+		ALTO_CABECERA_TABLA,
+		columnasMedidas,
+		columnasMedidas.map((c) => c.titulo),
+		{
+			fondo: OSCURO,
+			color: BLANCO,
+			size: 10
+		}
+	);
 	y += ALTO_CABECERA_TABLA;
 	const filasMedidas = [
 		['Primario', valor(medidas?.primario_diametro), valor(medidas?.primario_largo)],
 		['Secundario', valor(medidas?.secundario_diametro), valor(medidas?.secundario_largo)],
-		['Trombón (diámetro inicial)', valor(medidas?.trombon_diametro_inicial), valor(medidas?.trombon_largo)]
+		[
+			'Trombón (diámetro inicial)',
+			valor(medidas?.trombon_diametro_inicial),
+			valor(medidas?.trombon_largo)
+		]
 	];
 	filasMedidas.forEach((fila, indice) => {
 		filaTabla(p, y, 9, columnasMedidas, fila, {
@@ -266,56 +273,6 @@ export async function generarPDFFabricacion(orden: OrdenFabricacion, planos: Pla
 		y += alto + 6;
 	}
 
-	// ───────── Insumos (tabla grande, continúa en otra página solo si hace falta) ─────────
-	const columnasInsumos: Columna[] = [
-		{ titulo: 'TIPO', ancho: 28 },
-		{ titulo: 'CÓDIGO', ancho: 24 },
-		{ titulo: 'INSUMO', ancho: 94 },
-		{ titulo: 'CANTIDAD', ancho: 36 }
-	];
-	const cabeceraInsumos = (pagina: Pagina, yCabecera: number) =>
-		filaTabla(pagina, yCabecera, ALTO_CABECERA_TABLA, columnasInsumos, columnasInsumos.map((c) => c.titulo), {
-			fondo: OSCURO,
-			color: BLANCO,
-			size: 10
-		});
-	const continuarInsumos = () => {
-		p = nuevaPagina();
-		p.rect(MARGIN, 10, CONTENT_WIDTH, 10, RED);
-		p.texto(MARGIN + 5, 10, CONTENT_WIDTH - 10, 10, `OF-${orden.id} · ${orden.nombre_trabajo} · INSUMOS (continuación)`, {
-			size: 10,
-			color: BLANCO
-		});
-		cabeceraInsumos(p, 24);
-		y = 24 + ALTO_CABECERA_TABLA;
-	};
-
-	if (y + 10 + ALTO_CABECERA_TABLA + ALTO_FILA_INSUMO > LIMITE_Y) {
-		continuarInsumos();
-	} else {
-		y = seccion(p, 'INSUMOS REQUERIDOS Y ADICIONALES', y);
-		cabeceraInsumos(p, y);
-		y += ALTO_CABECERA_TABLA;
-	}
-
-	if (materiales.length === 0) {
-		filaTabla(p, y, ALTO_FILA_INSUMO, [{ titulo: '', ancho: CONTENT_WIDTH }], ['Sin insumos cargados'], {
-			size: 11
-		});
-	}
-	materiales.forEach((insumo, indice) => {
-		if (y + ALTO_FILA_INSUMO > LIMITE_Y) continuarInsumos();
-		filaTabla(
-			p,
-			y,
-			ALTO_FILA_INSUMO,
-			columnasInsumos,
-			[insumo.tipo, insumo.codigo || '—', insumo.nombre, `${insumo.cantidad} ${insumo.unidad}`],
-			{ fondo: indice % 2 === 1 ? FILA_CLARA : undefined, size: 11 }
-		);
-		y += ALTO_FILA_INSUMO;
-	});
-
 	// ───────── Planos: una página por plano, solo la imagen ─────────
 	for (const plano of planos) {
 		const pagina = nuevaPagina();
@@ -327,10 +284,17 @@ export async function generarPDFFabricacion(orden: OrdenFabricacion, planos: Pla
 			console.error(`No se pudo incluir el plano ${plano.id} (${plano.nombre_original}):`, cause);
 			pagina.schemas = [];
 			pagina.input = {};
-			pagina.texto(MARGIN, MARGIN, CONTENT_WIDTH, 10, 'No se pudo cargar el plano (formato no soportado o archivo dañado).', {
-				size: 11,
-				valign: 'top'
-			});
+			pagina.texto(
+				MARGIN,
+				MARGIN,
+				CONTENT_WIDTH,
+				10,
+				'No se pudo cargar el plano (formato no soportado o archivo dañado).',
+				{
+					size: 11,
+					valign: 'top'
+				}
+			);
 		}
 	}
 

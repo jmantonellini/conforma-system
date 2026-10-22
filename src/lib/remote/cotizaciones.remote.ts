@@ -1,5 +1,4 @@
 import * as v from 'valibot';
-import { randomUUID } from 'node:crypto';
 import { command, form, query } from '$app/server';
 import { db } from '$lib/server/db';
 import {
@@ -18,21 +17,15 @@ import {
 	pedido_insumos,
 	estados_pedido,
 	notificaciones,
-	insumos,
-	tipos_insumo,
-	unidades_medida
+	insumos
 } from '$lib/server/db/schema';
-import { and, desc, eq, getTableColumns, inArray, or } from 'drizzle-orm';
-import {
-	calcularCostoComposicion,
-	calcularIva21,
-	precioNetoCubreCosto,
-	redondearPrecio
-} from '$lib/utils/precios';
+import { and, desc, eq, getTableColumns, or } from 'drizzle-orm';
+import { calcularIva21, precioNetoCubreCosto, redondearPrecio } from '$lib/utils/precios';
 import { getCurrentUser } from './usuarios.remote';
 import { requirePermission } from '$lib/server/auth/permissions';
 import { eliminarObjeto } from '$lib/server/services/object-storage.service';
 import { generarNumeroPedido } from '../server/utils/pedidos';
+import { resolverLineaComercial } from '$lib/server/services/lineas-comerciales.service';
 import { CotizacionSchema, LineaCotizacionSchema } from './cotizaciones.schema';
 import {
 	getCotizacionById,
@@ -40,10 +33,7 @@ import {
 	getHistorialCotizacion,
 	getNotasCotizacion
 } from './cotizaciones-consultas.remote';
-import type { MaterialSnapshot } from '$lib/types/cotizacion-editor';
-import { getProductoConReceta } from './productos.remote';
 import { getInsumos } from './insumos.remote';
-import { obtenerPrecioProducto } from '$lib/server/services/productos.service';
 import { es } from '$lib/i18n/es';
 import {
 	aplicarCambioDeEstado,
@@ -417,177 +407,32 @@ export const cotizarCotizacion = command(
 			await tx.delete(lineas_cotizacion).where(eq(lineas_cotizacion.cotizacion_id, cotizacion_id));
 
 			for (const [i, linea] of lineas.entries()) {
-				let descripcion = linea.descripcion;
-				let costo_materiales = linea.costo_materiales || 0;
-				let precio_lista_unitario = Number(linea.precio_unitario || 0);
-				let insumoId = linea.insumo_id ?? null;
-				let insumos_snapshot: MaterialSnapshot[] = [];
+				const lineaResuelta = await resolverLineaComercial(
+					tx,
+					{
+						tipo: linea.producto_id
+							? 'producto'
+							: linea.insumo_id || linea.nuevo_insumo
+								? 'insumo'
+								: 'concepto',
+						producto_id: linea.producto_id,
+						insumo_id: linea.insumo_id,
+						nuevo_insumo: linea.nuevo_insumo,
+						descripcion: linea.descripcion,
+						visible_cliente: linea.visible_cliente,
+						cantidad: linea.cantidad,
+						precio_unitario: linea.precio_unitario,
+						precio_lista_unitario: linea.precio_lista_unitario,
+						costo_materiales: linea.costo_materiales,
+						insumos_asociados: linea.insumos_asociados
+					},
+					'COT'
+				);
+				if (linea.nuevo_insumo) insumosCreados = true;
 
-				if (linea.nuevo_insumo) {
-					const nuevo = linea.nuevo_insumo;
-					const [tipo, unidad] = await Promise.all([
-						tx
-							.select({ codigo: tipos_insumo.codigo })
-							.from(tipos_insumo)
-							.where(eq(tipos_insumo.id, nuevo.tipo_id))
-							.limit(1),
-						tx
-							.select({ codigo: unidades_medida.codigo })
-							.from(unidades_medida)
-							.where(eq(unidades_medida.id, nuevo.unidad_id))
-							.limit(1)
-					]);
-					if (!tipo[0] || !unidad[0])
-						throw new Error('El tipo o la unidad seleccionados no existen');
-
-					const [insumoCreado] = await tx
-						.insert(insumos)
-						.values({
-							codigo: `COT-${randomUUID().replaceAll('-', '').slice(0, 16).toUpperCase()}`,
-							nombre: nuevo.nombre.trim(),
-							tipo_id: nuevo.tipo_id,
-							categoria_id: nuevo.categoria_id ?? null,
-							unidad_id: nuevo.unidad_id,
-							tipo: tipo[0].codigo,
-							unidad: unidad[0].codigo,
-							costo_unitario: redondearPrecio(nuevo.costo_unitario),
-							flete_porcentaje: 0,
-							activo: true
-						})
-						.returning({
-							id: insumos.id,
-							codigo: insumos.codigo,
-							nombre: insumos.nombre,
-							unidad: insumos.unidad,
-							costo_unitario: insumos.costo_unitario
-						});
-					insumoId = insumoCreado.id;
-					descripcion = insumoCreado.nombre;
-					costo_materiales = insumoCreado.costo_unitario;
-					insumos_snapshot = [
-						{
-							insumo_id: insumoCreado.id,
-							codigo: insumoCreado.codigo,
-							nombre: insumoCreado.nombre,
-							unidad: insumoCreado.unidad,
-							cantidad: 1,
-							costo_unitario: redondearPrecio(insumoCreado.costo_unitario),
-							subtotal: redondearPrecio(insumoCreado.costo_unitario)
-						}
-					];
-					insumosCreados = true;
-				}
-
-				if (linea.producto_id) {
-					const [{ receta, recetaDirecta, componentes }, precioProducto] = await Promise.all([
-						getProductoConReceta(Number(linea.producto_id)),
-						obtenerPrecioProducto(Number(linea.producto_id))
-					]);
-
-					const materialesReceta: MaterialSnapshot[] = recetaDirecta.map((lineaReceta) => {
-						if (lineaReceta.insumo_id) {
-							const material = receta.find((item) => item.insumo_id === lineaReceta.insumo_id);
-							const costoUnitario = redondearPrecio(material?.costo_unitario ?? 0);
-							return {
-								insumo_id: lineaReceta.insumo_id,
-								codigo: material?.codigo ?? null,
-								nombre: material?.nombre ?? 'Insumo',
-								cantidad: lineaReceta.cantidad,
-								costo_unitario: costoUnitario,
-								unidad: material?.unidad ?? '',
-								subtotal: redondearPrecio((lineaReceta.cantidad || 0) * costoUnitario)
-							};
-						}
-
-						const nombre =
-							componentes.find((componente) => componente.componente_id === lineaReceta.producto_id)
-								?.nombre ?? 'Componente';
-						return {
-							producto_id: lineaReceta.producto_id ?? null,
-							nombre: `${nombre} (${lineaReceta.cantidad}x)`,
-							cantidad: lineaReceta.cantidad,
-							unidad: 'subproducto',
-							costo_unitario: 0,
-							subtotal: 0
-						};
-					});
-					insumos_snapshot = materialesReceta;
-					costo_materiales = redondearPrecio(precioProducto.costo_materiales);
-					precio_lista_unitario = redondearPrecio(
-						linea.precio_lista_unitario ?? precioProducto.precio_venta
-					);
-					if (precio_lista_unitario < redondearPrecio(precioProducto.precio_venta)) {
-						throw new Error('El precio de lista no puede ser menor al precio base del producto');
-					}
-				} else if (insumoId) {
-					const [material] = await tx
-						.select()
-						.from(insumos)
-						.where(eq(insumos.id, insumoId))
-						.limit(1);
-					if (!material) throw new Error('Insumo no encontrado');
-					descripcion = material.nombre;
-					costo_materiales = redondearPrecio(material.costo_unitario);
-					precio_lista_unitario = redondearPrecio(
-						linea.precio_lista_unitario ?? material.costo_unitario
-					);
-					if (precio_lista_unitario < redondearPrecio(material.costo_unitario)) {
-						throw new Error('El precio del insumo no puede ser menor al costo unitario');
-					}
-					insumos_snapshot = [
-						{
-							insumo_id: material.id,
-							codigo: material.codigo,
-							nombre: material.nombre,
-							cantidad: 1,
-							costo_unitario: material.costo_unitario,
-							subtotal: redondearPrecio(material.costo_unitario),
-							unidad: material.unidad
-						}
-					];
-				} else if (linea.precio_lista_unitario != null) {
-					precio_lista_unitario = redondearPrecio(linea.precio_lista_unitario);
-				}
-
-				if (!linea.producto_id && !insumoId && linea.insumos_asociados.length) {
-					const idsInsumos = linea.insumos_asociados.map((material) => material.insumo_id);
-					if (new Set(idsInsumos).size !== idsInsumos.length) {
-						throw new Error('No repitas el mismo insumo en la composición');
-					}
-
-					const materiales = await tx
-						.select({
-							id: insumos.id,
-							codigo: insumos.codigo,
-							nombre: insumos.nombre,
-							unidad: insumos.unidad,
-							costo_unitario: insumos.costo_unitario
-						})
-						.from(insumos)
-						.where(inArray(insumos.id, idsInsumos));
-					const materialesPorId = new Map(materiales.map((material) => [material.id, material]));
-
-					insumos_snapshot = linea.insumos_asociados.map((asociado) => {
-						const material = materialesPorId.get(asociado.insumo_id);
-						if (!material) throw new Error('Uno de los insumos asociados ya no existe');
-						const costoUnitario = redondearPrecio(material.costo_unitario);
-
-						return {
-							insumo_id: material.id,
-							codigo: material.codigo,
-							nombre: material.nombre,
-							unidad: material.unidad,
-							cantidad: asociado.cantidad,
-							costo_unitario: costoUnitario,
-							subtotal: redondearPrecio(asociado.cantidad * costoUnitario)
-						};
-					});
-					costo_materiales = calcularCostoComposicion(insumos_snapshot);
-				}
-
-				const visible_cliente = linea.visible_cliente ?? true;
-				const precio_unitario = redondearPrecio(precio_lista_unitario);
-				const costoUnitarioTotal = redondearPrecio(costo_materiales);
+				const { visible_cliente } = lineaResuelta;
+				const precio_unitario = lineaResuelta.precio_unitario;
+				const costoUnitarioTotal = redondearPrecio(lineaResuelta.costo_materiales);
 				const margen_porcentaje =
 					visible_cliente && precio_unitario > 0
 						? redondearPrecio(((precio_unitario - costoUnitarioTotal) / precio_unitario) * 100)
@@ -598,17 +443,17 @@ export const cotizarCotizacion = command(
 
 				await tx.insert(lineas_cotizacion).values({
 					cotizacion_id,
-					producto_id: linea.producto_id ?? null,
-					insumo_id: insumoId,
-					es_personalizado: !linea.producto_id && !insumoId,
+					producto_id: lineaResuelta.producto_id,
+					insumo_id: lineaResuelta.insumo_id,
+					es_personalizado: lineaResuelta.es_personalizado,
 					visible_cliente,
-					descripcion,
+					descripcion: lineaResuelta.descripcion,
 					cantidad: linea.cantidad,
 					precio_unitario,
-					precio_lista_unitario: redondearPrecio(precio_lista_unitario),
+					precio_lista_unitario: lineaResuelta.precio_lista_unitario,
 					margen_porcentaje,
 					costo_materiales: costoUnitarioTotal || 0,
-					insumos_snapshot,
+					insumos_snapshot: lineaResuelta.insumos_snapshot,
 					orden_linea: i
 				});
 				costo_total_materiales = redondearPrecio(

@@ -180,13 +180,39 @@
 						</button>
 					</Can>
 				{/if}
-				<a
+				<button
+					type="button"
 					class="btn btn-outline btn-sm"
-					href={resolve(`/cotizaciones/${cotizacion.id}/pdf`)}
-					target="_blank"
+					popovertarget="cotizacion-pdf-menu"
+					style="anchor-name: --cotizacion-pdf-menu"
 				>
-					<Document /> PDF
-				</a>
+					<Document /> Descargar PDF
+				</button>
+				<ul
+					id="cotizacion-pdf-menu"
+					popover="auto"
+					style="position-anchor: --cotizacion-pdf-menu"
+					class="menu dropdown z-10 mt-2 w-64 rounded-box border border-base-300 bg-base-100 p-2 shadow"
+				>
+					<li>
+						<a
+							href={resolve(`/cotizaciones/${cotizacion.id}/pdf?moneda=USD`)}
+							target="_blank"
+							rel="noreferrer"
+						>
+							Dólares (USD)
+						</a>
+					</li>
+					<li>
+						<a
+							href={resolve(`/cotizaciones/${cotizacion.id}/pdf?moneda=ARS`)}
+							target="_blank"
+							rel="noreferrer"
+						>
+							Pesos (ARS)
+						</a>
+					</li>
+				</ul>
 				<Can modulo="cotizaciones" accion="delete">
 					<button class="btn btn-outline btn-error btn-sm" onclick={() => (showEliminar = true)}>
 						Eliminar

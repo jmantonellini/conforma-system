@@ -6,13 +6,20 @@
 	type Opcion = { id: number; nombre: string };
 	type Props = {
 		open?: boolean;
+		contexto?: string;
 		tipos: Opcion[];
 		categorias: Opcion[];
 		unidades: Opcion[];
 		onAgregar: (insumo: NonNullable<LineaEdicion['nuevo_insumo']>) => void;
 	};
-
-	let { open = $bindable(false), tipos, categorias, unidades, onAgregar }: Props = $props();
+	let {
+		open = $bindable(false),
+		contexto = 'cotización',
+		tipos,
+		categorias,
+		unidades,
+		onAgregar
+	}: Props = $props();
 	let nuevoInsumo = $state(formularioVacio());
 	let costoUnitario = $derived(parsearNumeroDecimal(nuevoInsumo.costo_unitario));
 	let valido = $derived(
@@ -112,7 +119,7 @@
 		</FormFieldWrapper>
 	</div>
 	<p class="mt-3 text-sm text-base-content/60">
-		Se incorpora al catálogo al guardar la cotización.
+		Se incorpora al catálogo al guardar el {contexto}.
 	</p>
 	{#snippet actions()}
 		<button type="button" class="btn btn-ghost" onclick={cerrar}>Cancelar</button>

@@ -44,15 +44,42 @@ import {
 	obtenerTransicionPedidoPermitida,
 	aplicarCambioPedidoEstado
 } from '$lib/server/services/pedidos-estado.service';
-import { obtenerPrecioProducto } from '$lib/server/services/productos.service';
-import { formatearDosDecimales, redondearPrecio } from '$lib/utils/precios';
+import {
+	resolverLineaComercial,
+	type LineaComercialEntrada,
+	type LineaComercialResuelta
+} from '$lib/server/services/lineas-comerciales.service';
+import { formatearDosDecimales } from '$lib/utils/precios';
 
 export const LineaPedidoSchema = v.object({
-	producto_id: v.string(),
+	tipo: v.optional(v.picklist(['producto', 'insumo', 'concepto']), 'producto'),
+	visible_cliente: v.optional(v.boolean(), true),
+	producto_id: v.optional(v.string()),
+	insumo_id: v.optional(v.number()),
+	nuevo_insumo: v.optional(
+		v.object({
+			nombre: v.pipe(v.string(), v.nonEmpty('El nombre del insumo es requerido')),
+			tipo_id: v.pipe(v.number(), v.toMinValue(1)),
+			categoria_id: v.optional(v.pipe(v.number(), v.toMinValue(1))),
+			unidad_id: v.pipe(v.number(), v.toMinValue(1)),
+			unidad: v.pipe(v.string(), v.nonEmpty('La unidad es requerida')),
+			costo_unitario: v.pipe(v.number(), v.toMinValue(0))
+		})
+	),
 	cantidad: v.pipe(v.number(), v.toMinValue(1)),
 	precio: v.pipe(v.number(), v.toMinValue(0)),
 	precio_lista: v.optional(v.pipe(v.number(), v.toMinValue(0)), 0),
-	descripcion: v.optional(v.string())
+	costo_materiales: v.optional(v.pipe(v.number(), v.toMinValue(0)), 0),
+	descripcion: v.optional(v.string()),
+	insumos_asociados: v.optional(
+		v.array(
+			v.object({
+				insumo_id: v.pipe(v.number(), v.toMinValue(1)),
+				cantidad: v.pipe(v.number(), v.toMinValue(0.000001))
+			})
+		),
+		[]
+	)
 });
 
 export const PedidoSchema = v.object({
@@ -64,7 +91,19 @@ export const PedidoSchema = v.object({
 		v.pipe(v.number(), v.minValue(0), v.maxValue(100)),
 		0
 	),
-	lineas: v.pipe(v.array(LineaPedidoSchema), v.minLength(1)),
+	lineas: v.pipe(
+		v.string(),
+		v.check((raw) => {
+			try {
+				return Array.isArray(JSON.parse(raw));
+			} catch {
+				return false;
+			}
+		}, 'Agregá al menos un concepto válido'),
+		v.transform((raw) => JSON.parse(raw) as unknown),
+		v.array(LineaPedidoSchema),
+		v.minLength(1)
+	),
 	fecha_entrega_prometida: v.optional(v.string()),
 	anticipo: v.optional(v.pipe(v.number(), v.toMinValue(0)), 0),
 	observaciones: v.optional(v.string())
@@ -99,14 +138,17 @@ export const calcularTotalesPedido = ({
 	usarCreditoDistribuidor,
 	montoCreditoDistribuidor
 }: {
-	lineas: { cantidad: number; precio: number }[];
+	lineas: { cantidad: number; precio: number; visible_cliente?: boolean }[];
 	anticipo: number;
 	empresaDistribuidorId?: number | null;
 	usarCreditoDistribuidor?: boolean;
 	montoCreditoDistribuidor?: number;
 }) => {
 	const precio_total = Number(
-		lineas.reduce((suma, linea) => suma + linea.cantidad * linea.precio, 0).toFixed(2)
+		lineas
+			.filter((linea) => linea.visible_cliente !== false)
+			.reduce((suma, linea) => suma + linea.cantidad * linea.precio, 0)
+			.toFixed(2)
 	);
 	const monto_credito =
 		empresaDistribuidorId && usarCreditoDistribuidor
@@ -497,13 +539,7 @@ export async function crearPedidoServicio(data: {
 	usar_credito_distribuidor?: boolean;
 	monto_credito_distribuidor?: number;
 	porcentaje_comision_distribuidor?: number;
-	lineas: {
-		producto_id: string;
-		cantidad: number;
-		precio: number;
-		precio_lista?: number;
-		descripcion?: string;
-	}[];
+	lineas: (LineaComercialEntrada & { precio: number; precio_lista?: number })[];
 	fecha_entrega_prometida?: string;
 	anticipo?: number;
 	observaciones?: string;
@@ -512,96 +548,109 @@ export async function crearPedidoServicio(data: {
 	if (!user) throw new Error('Usuario no autenticado');
 
 	await requirePermission('pedidos', 'create');
-	const lineasConPrecio = await Promise.all(
-		data.lineas.map(async (linea) => {
-			let precio_lista_unitario = redondearPrecio(linea.precio_lista ?? linea.precio);
-			let margen_porcentaje = 0;
-			let costo_materiales = 0;
-			if (linea.producto_id !== 'personalizado') {
-				const precioProducto = await obtenerPrecioProducto(Number(linea.producto_id));
-				precio_lista_unitario = redondearPrecio(linea.precio_lista ?? precioProducto.precio_venta);
-				if (precio_lista_unitario < precioProducto.precio_venta) {
-					throw new Error(
-						'El precio de lista no puede ser menor al precio del producto; aplicá un descuento justificado'
-					);
-				}
-				margen_porcentaje = precioProducto.margen_porcentaje;
-				costo_materiales = precioProducto.costo_materiales;
-			}
-			const precio = redondearPrecio(precio_lista_unitario);
-			return {
-				...linea,
-				precio,
-				precio_lista_unitario,
-				margen_porcentaje,
-				costo_materiales
-			};
-		})
-	);
-
-	const numero_pedido = await generarNumeroPedido();
-	const { precio_total, monto_credito, saldo_pendiente } = calcularTotalesPedido({
-		lineas: lineasConPrecio,
-		anticipo: data.anticipo ?? 0,
-		empresaDistribuidorId: data.contacto_distribuidor_id,
-		usarCreditoDistribuidor: data.usar_credito_distribuidor,
-		montoCreditoDistribuidor: data.monto_credito_distribuidor
-	});
-	const porcentajeComision = Number(data.porcentaje_comision_distribuidor ?? 0);
-	const montoComision = Number((precio_total * (porcentajeComision / 100)).toFixed(2));
-
-	const [pedido] = await db
-		.insert(pedidos)
-		.values({
-			contacto_id: data.contacto_id,
-			contacto_distribuidor_id:
-				data.contacto_distribuidor_id && data.contacto_distribuidor_id > 0
-					? data.contacto_distribuidor_id
-					: null,
-			usar_credito_distribuidor: Boolean(
-				data.contacto_distribuidor_id && data.usar_credito_distribuidor
-			),
-			monto_credito_distribuidor: monto_credito,
-			porcentaje_comision_distribuidor: porcentajeComision,
-			monto_comision_distribuidor: montoComision,
-			numero_pedido,
-			fecha_pedido: new Date(),
-			fecha_entrega_prometida: data.fecha_entrega_prometida
-				? new Date(data.fecha_entrega_prometida)
-				: null,
-			estado_id: 1,
-			precio_total,
-			anticipo: data.anticipo ?? 0,
-			saldo_pendiente,
-			observaciones: data.observaciones
-		})
-		.returning();
-
-	for (const linea of lineasConPrecio) {
-		await db.insert(lineas_pedido).values({
-			pedido_id: pedido.id,
-			producto_id: linea.producto_id === 'personalizado' ? null : parseInt(linea.producto_id),
-			cantidad: linea.cantidad,
-			precio_unitario: linea.precio,
-			precio_lista_unitario: linea.precio_lista_unitario,
-			margen_porcentaje: linea.margen_porcentaje,
-			costo_materiales: linea.costo_materiales,
-			es_personalizado: linea.producto_id === 'personalizado',
-			descripcion_personalizada: linea.descripcion
-		});
+	if (data.lineas.some((linea) => linea.nuevo_insumo)) {
+		await requirePermission('insumos', 'create');
 	}
+	const numero_pedido = await generarNumeroPedido();
+	return db.transaction(async (tx) => {
+		const lineasResueltas: (LineaComercialResuelta & { precio: number; orden_linea: number })[] =
+			[];
+		for (const [orden_linea, linea] of data.lineas.entries()) {
+			const resuelta = await resolverLineaComercial(
+				tx,
+				{
+					...linea,
+					precio_unitario: linea.precio_lista ?? linea.precio,
+					precio_lista_unitario: linea.precio_lista ?? linea.precio
+				},
+				'PED'
+			);
+			lineasResueltas.push({
+				...resuelta,
+				precio: resuelta.precio_unitario,
+				orden_linea
+			});
+		}
 
-	await db.insert(logs_cambios_estado).values({
-		entidad_tipo: 'pedido',
-		entidad_id: pedido.id,
-		usuario_id: user.id,
-		estado_anterior_id: pedido.estado_id,
-		estado_nuevo_id: pedido.estado_id,
-		comentario: 'Pedido creado',
-		created_at: new Date()
+		const { precio_total, monto_credito, saldo_pendiente } = calcularTotalesPedido({
+			lineas: lineasResueltas,
+			anticipo: data.anticipo ?? 0,
+			empresaDistribuidorId: data.contacto_distribuidor_id,
+			usarCreditoDistribuidor: data.usar_credito_distribuidor,
+			montoCreditoDistribuidor: data.monto_credito_distribuidor
+		});
+		const porcentajeComision = Number(data.porcentaje_comision_distribuidor ?? 0);
+		const montoComision = Number((precio_total * (porcentajeComision / 100)).toFixed(2));
+		const [pedido] = await tx
+			.insert(pedidos)
+			.values({
+				contacto_id: data.contacto_id,
+				contacto_distribuidor_id:
+					data.contacto_distribuidor_id && data.contacto_distribuidor_id > 0
+						? data.contacto_distribuidor_id
+						: null,
+				usar_credito_distribuidor: Boolean(
+					data.contacto_distribuidor_id && data.usar_credito_distribuidor
+				),
+				monto_credito_distribuidor: monto_credito,
+				porcentaje_comision_distribuidor: porcentajeComision,
+				monto_comision_distribuidor: montoComision,
+				numero_pedido,
+				fecha_pedido: new Date(),
+				fecha_entrega_prometida: data.fecha_entrega_prometida
+					? new Date(data.fecha_entrega_prometida)
+					: null,
+				estado_id: 1,
+				precio_total,
+				anticipo: data.anticipo ?? 0,
+				saldo_pendiente,
+				observaciones: data.observaciones
+			})
+			.returning();
+
+		for (const linea of lineasResueltas) {
+			if (linea.tipo === 'insumo') {
+				if (!linea.insumo_id) throw new Error('Insumo no encontrado');
+				await tx.insert(pedido_insumos).values({
+					pedido_id: pedido.id,
+					insumo_id: linea.insumo_id,
+					cantidad: linea.cantidad,
+					unidad: linea.insumos_snapshot[0]?.unidad ?? 'unidad',
+					costo_unitario: linea.costo_materiales,
+					precio_lista_unitario: linea.precio_lista_unitario,
+					precio_unitario: linea.visible_cliente ? linea.precio_unitario : 0,
+					observaciones: `Insumo incluido en el pedido ${numero_pedido}`
+				});
+				continue;
+			}
+
+			await tx.insert(lineas_pedido).values({
+				pedido_id: pedido.id,
+				producto_id: linea.producto_id,
+				cantidad: linea.cantidad,
+				precio_unitario: linea.visible_cliente ? linea.precio_unitario : 0,
+				precio_lista_unitario: linea.precio_lista_unitario,
+				margen_porcentaje: linea.margen_producto,
+				costo_materiales: linea.costo_materiales,
+				insumos_snapshot: linea.insumos_snapshot,
+				es_personalizado: linea.es_personalizado,
+				descripcion_personalizada: linea.es_personalizado ? linea.descripcion : null,
+				orden_linea: linea.orden_linea
+			});
+		}
+
+		await tx.insert(logs_cambios_estado).values({
+			entidad_tipo: 'pedido',
+			entidad_id: pedido.id,
+			usuario_id: user.id,
+			estado_anterior_id: pedido.estado_id,
+			estado_nuevo_id: pedido.estado_id,
+			comentario: 'Pedido creado',
+			created_at: new Date()
+		});
+
+		return pedido;
 	});
-
-	return pedido;
 }
 
 export async function cambiarEstadoPedidoServicio({
@@ -629,7 +678,6 @@ export async function cambiarEstadoPedidoServicio({
 		estadoOrigenId: pedido.estado_id,
 		estadoDestinoId: estado_destino_id
 	});
-
 	if (!transicion) throw new Error('Transición no permitida');
 
 	await db.transaction(async (tx) => {
@@ -644,7 +692,7 @@ export async function cambiarEstadoPedidoServicio({
 			.select({ slug: estados_pedido.slug })
 			.from(estados_pedido)
 			.where(eq(estados_pedido.id, estado_destino_id))
-			.then((r) => r[0]);
+			.then((rows) => rows[0]);
 		const updates: Partial<typeof pedidos.$inferSelect> = {
 			estado_id: estado_destino_id,
 			updated_at: now
@@ -653,7 +701,6 @@ export async function cambiarEstadoPedidoServicio({
 		if (estadoDestino?.slug === PEDIDO_SLUG.ENTREGADO) {
 			updates.fecha_entrega_real = now;
 			const contactoDistribuidorId = pedidoBloqueado.contacto_distribuidor_id;
-
 			if (
 				contactoDistribuidorId &&
 				!pedidoBloqueado.comision_distribuidor_descontada &&

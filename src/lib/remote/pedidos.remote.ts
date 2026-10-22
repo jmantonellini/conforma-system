@@ -2,11 +2,10 @@ import * as v from 'valibot';
 import { command, form, query, requested } from '$app/server';
 import { db } from '$lib/server/db';
 import { adjuntos, pedidos, lineas_pedido, estados_pedido } from '$lib/server/db/schema';
-import { redirect } from '@sveltejs/kit';
-import { resolve } from '$app/paths';
 import { eq } from 'drizzle-orm';
 import { requirePermission } from '$lib/server/auth/permissions';
 import { eliminarObjeto } from '$lib/server/services/object-storage.service';
+import { getInsumos } from '$lib/remote/insumos.remote';
 import {
 	PedidoSchema,
 	crearPedidoServicio,
@@ -38,10 +37,16 @@ const normalizarPedidoPayload = <T extends Record<string, unknown>>(data: T) => 
 	lineas: Array.isArray(data.lineas)
 		? data.lineas.map((linea) => ({
 				...linea,
+				tipo: (linea as { tipo?: 'producto' | 'insumo' | 'concepto' }).tipo,
+				visible_cliente: (linea as { visible_cliente?: boolean }).visible_cliente !== false,
 				producto_id: String((linea as { producto_id?: string | number }).producto_id ?? ''),
+				insumo_id: Number((linea as { insumo_id?: string | number }).insumo_id) || undefined,
 				cantidad: Number((linea as { cantidad?: number }).cantidad ?? 0),
 				precio: Number((linea as { precio?: number }).precio ?? 0),
 				precio_lista: Number((linea as { precio_lista?: number }).precio_lista ?? 0),
+				costo_materiales: Number((linea as { costo_materiales?: number }).costo_materiales ?? 0),
+				nuevo_insumo: (linea as { nuevo_insumo?: unknown }).nuevo_insumo,
+				insumos_asociados: (linea as { insumos_asociados?: unknown }).insumos_asociados ?? [],
 				descripcion: (linea as { descripcion?: string | null }).descripcion ?? undefined
 			}))
 		: []
@@ -140,8 +145,10 @@ export const eliminarEstadoPedido = command(v.number(), async (id) => {
 export const crearPedido = form(PedidoSchema, async (data) => {
 	const pedido = await crearPedidoServicio(normalizarPedidoPayload(data));
 	refrescarCachesPedido();
-
-	redirect(303, resolve(`/pedidos/${pedido.id}`));
+	if (data.lineas.some((linea) => linea.nuevo_insumo)) {
+		getInsumos({ limit: 100 }).refresh();
+	}
+	return { pedidoId: pedido.id };
 });
 
 export const crearEstadoPedido = form(

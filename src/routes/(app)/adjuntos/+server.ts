@@ -32,8 +32,8 @@ async function requirePermiso(tipo: TipoEntidadAdjunto, accion: 'edit' | 'create
 	try {
 		await requirePermission(permisoEntidad(tipo), 'edit');
 	} catch (error) {
-		if (tipo !== 'cotizacion' || accion !== 'create') throw error;
-		await requirePermission('cotizaciones', 'create');
+		if ((tipo !== 'cotizacion' && tipo !== 'pedido') || accion !== 'create') throw error;
+		await requirePermission(tipo, 'create');
 	}
 }
 
