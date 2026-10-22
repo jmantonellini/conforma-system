@@ -47,14 +47,16 @@
 	<label class="flex items-center gap-2 text-sm">
 		Validez (días)
 		<input
-			class="remove-arrow input w-20 input-sm"
+			class="remove-arrow input w-12 input-sm"
 			type="number"
 			min="1"
 			value={validezDias}
 			oninput={(event) => onCambiarValidez(Number(event.currentTarget.value) || 1)}
 		/>
 	</label>
-	<label class="label cursor-pointer gap-2">
+	<label class="label cursor-pointer gap-2 text-sm">
+		Agregar IVA 21%
+
 		<input
 			class="checkbox checkbox-sm"
 			type="checkbox"
@@ -62,14 +64,13 @@
 			disabled={bloqueada}
 			onchange={(event) => onCambiarIva(event.currentTarget.checked)}
 		/>
-		<span>Agregar IVA 21%</span>
 	</label>
 	<Can modulo="cotizaciones" accion="descuento">
 		<label for="descuento-global" class="flex items-center gap-2 text-sm">
 			Descuento general (%)
 			<input
 				id="descuento-global"
-				class="remove-arrow input w-24 text-right input-sm"
+				class="remove-arrow input w-12 text-right input-sm"
 				type="number"
 				min="0"
 				max="99.99"
@@ -89,7 +90,7 @@
 				type="text"
 				inputmode="decimal"
 				aria-label="Precio final de la cotización"
-        class:input-error={!totalValido || !cubreCostos}
+				class:input-error={!totalValido || !cubreCostos}
 				value={precioTotalIngresado ?? formatearDosDecimales(totalFinal)}
 				disabled={bloqueada}
 				oninput={(event) => onActualizarTotal(event.currentTarget.value)}

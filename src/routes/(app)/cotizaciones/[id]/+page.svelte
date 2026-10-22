@@ -227,9 +227,10 @@
 				{#if cotizacion.cliente?.id}
 					<FormFieldWrapper label="Cliente" id="cliente" class="lg:col-span-2">
 						<p class="font-medium">
-							{cotizacion.cliente.nombre}
-							{cotizacion.cliente.apellido ?? ''}
-							{cotizacion.cliente.razon_social ?? ''} - {cotizacion.cliente.telefono ?? ''}
+							<span>{cotizacion.cliente.nombre}</span>
+							<span>{cotizacion.cliente.apellido ?? ''}</span>
+							<span>{cotizacion.cliente.razon_social ?? ''}</span>
+							<span>{cotizacion.cliente.telefono ?? ''}</span>
 						</p>
 					</FormFieldWrapper>
 				{:else}
