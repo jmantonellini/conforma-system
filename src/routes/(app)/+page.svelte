@@ -127,20 +127,6 @@
 
 <PageLayout>
 	<div class="flex flex-col gap-4">
-		<div class="flex items-center justify-end">
-			<button class="btn btn-primary btn-sm" onclick={abrirNuevaTarea}> + Nueva Tarea </button>
-		</div>
-
-		<!-- KANBAN: Tareas accionables -->
-		<KanBanBoard
-			{tareas}
-			onEstadoChange={handleEstadoChange}
-			onReorder={handleReorder}
-			onEliminar={handleEliminar}
-			onEditar={abrirEditarTarea}
-			onArchivar={handleArchivar}
-		/>
-
 		<!-- PEDIDOS ACTIVOS: Contexto de negocio -->
 		<div class="card bg-base-100 shadow">
 			<div class="card-body">
@@ -213,6 +199,20 @@
 				/>
 			</div>
 		</div>
+
+		<div class="flex items-center justify-end">
+			<button class="btn btn-primary btn-sm" onclick={abrirNuevaTarea}> + Nueva Tarea </button>
+		</div>
+
+		<!-- KANBAN: Tareas accionables -->
+		<KanBanBoard
+			{tareas}
+			onEstadoChange={handleEstadoChange}
+			onReorder={handleReorder}
+			onEliminar={handleEliminar}
+			onEditar={abrirEditarTarea}
+			onArchivar={handleArchivar}
+		/>
 	</div>
 </PageLayout>
 
@@ -253,7 +253,11 @@
 				</FormFieldWrapper>
 
 				<FormFieldWrapper id="descripcion" label="Descripción">
-					<textarea class="textarea w-full resize-none" rows="3" {...form.fields.descripcion.as('text')}>
+					<textarea
+						class="textarea w-full resize-none"
+						rows="3"
+						{...form.fields.descripcion.as('text')}
+					>
 					</textarea>
 				</FormFieldWrapper>
 
