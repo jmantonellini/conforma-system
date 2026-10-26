@@ -43,7 +43,7 @@ export const getProductos = query(
 		sort: v.optional(v.picklist(['nombre', 'codigo']), 'nombre'),
 		direction: v.optional(v.picklist(['asc', 'desc']), 'asc'),
 		page: v.optional(v.pipe(v.number(), v.toMinValue(1)), 1),
-		limit: v.optional(v.pipe(v.number(), v.minValue(1), v.maxValue(100)), 10)
+		limit: v.optional(v.pipe(v.number(), v.minValue(1), v.maxValue(100)), 20)
 	}),
 	async ({ search, categoriaId, sort = 'nombre', direction = 'asc', page, limit }) => {
 		return getProductosListado({ search, categoriaId, sort, direction, page, limit });

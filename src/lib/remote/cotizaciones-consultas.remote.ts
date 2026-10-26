@@ -59,9 +59,9 @@ export const getCotizaciones = query(
 		estadoId: v.optional(v.number()),
 		asignadaA: v.optional(v.number()),
 		page: v.optional(v.pipe(v.number(), v.toMinValue(1)), 1),
-		limit: v.optional(v.pipe(v.number(), v.minValue(1), v.maxValue(100)), 10)
+		limit: v.optional(v.pipe(v.number(), v.minValue(1), v.maxValue(100)), 20)
 	}),
-	async ({ search, estadoId, asignadaA, page = 1, limit = 10 }) => {
+	async ({ search, estadoId, asignadaA, page = 1, limit = 20 }) => {
 		await requirePermission('cotizaciones', 'view');
 		const offset = (page - 1) * limit;
 		const where = crearCondicionBusquedaCotizacion({ search, estadoId, asignadaA });
