@@ -13,7 +13,7 @@
 		cuit?: string;
 		email?: string;
 		telefono?: string;
-		rol: 'ninguno' | 'cliente' | 'proveedor' | 'ambos';
+		rol: 'ninguno' | 'cliente' | 'proveedor';
 		es_distribuidor: boolean;
 		porcentaje_compensacion: number;
 		saldo_disponible: number;

@@ -13,9 +13,7 @@
 	const form = crearContacto;
 	const rolSolicitado = page.url.searchParams.get('rol');
 	let rol = $state(
-		rolSolicitado === 'ninguno' || rolSolicitado === 'proveedor' || rolSolicitado === 'ambos'
-			? rolSolicitado
-			: 'cliente'
+		rolSolicitado === 'ninguno' || rolSolicitado === 'proveedor' ? rolSolicitado : 'cliente'
 	);
 	let esDistribuidor = $state(false);
 	let porcentajeCompensacion = $state(0);
@@ -176,7 +174,6 @@
 						<option value="ninguno">Sin rol comercial</option>
 						<option value="cliente">Cliente</option>
 						<option value="proveedor">Proveedor</option>
-						<option value="ambos">Cliente y proveedor</option>
 					</select>
 				</FormFieldWrapper>
 				<FormFieldWrapper id="es_distribuidor" label="Distribuidor">
@@ -212,7 +209,7 @@
 						/>
 					</FormFieldWrapper>
 				{/if}
-				{#if rol === 'proveedor' || rol === 'ambos'}
+				{#if rol === 'proveedor'}
 					<FormFieldWrapper id="codigo" label="Código de proveedor">
 						<input class="input" {...form.fields.codigo.as('text', '')} />
 					</FormFieldWrapper>

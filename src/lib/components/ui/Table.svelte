@@ -21,7 +21,7 @@
 </script>
 
 <div class="overflow-x-auto">
-	<table class="table table-zebra table-sm">
+	<table class="table table-zebra table-sm table-compact">
 		<thead>
 			<tr>
 				{@render header(onSort)}

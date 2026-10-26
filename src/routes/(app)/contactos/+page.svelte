@@ -78,9 +78,9 @@
 				}}
 			>
 				<option value="todos">Todos</option>
+				<option value="distribuidor">Distribuidores</option>
 				<option value="cliente">Clientes</option>
 				<option value="proveedor">Proveedores</option>
-				<option value="ambos">Clientes y proveedores</option>
 			</select>
 		</div>
 		<ExcelMenu
@@ -101,13 +101,23 @@
 			{#snippet contactoHeader(onSort: ((key: string) => void) | undefined)}
 				<th><button class="link" onclick={() => onSort?.('razon_social')}>Razón social</button></th>
 				<th><button class="link" onclick={() => onSort?.('cuit')}>CUIT</button></th>
+				<th><button class="link" onclick={() => onSort?.('apellido')}>Apellido y Nombre</button></th
+				>
 				<th>Roles</th>
 				<th><button class="link" onclick={() => onSort?.('email')}>Contacto</button></th>
-				<th></th>
+				<th>Acciones</th>
 			{/snippet}
 			{#snippet contactoRow(contacto: (typeof data.contactos)[number])}
-				<td class="font-medium"><Highlight text={contacto.razon_social} query={search} /></td>
+				<td class="max-w-48 truncate font-medium"
+					><Highlight text={contacto.razon_social} query={search} /></td
+				>
 				<td><Highlight text={contacto.cuit || '-'} query={search} /></td>
+				<td
+					><Highlight
+						text={contacto.apellido ? contacto.apellido + ' ' + contacto.nombre : ''}
+						query={search}
+					/></td
+				>
 				<td>
 					<div class="flex flex-wrap gap-1">
 						{#if contacto.es_cliente}<span class="badge badge-sm badge-info">Cliente</span>{/if}
@@ -124,15 +134,15 @@
 				<td><Highlight text={contacto.email || contacto.telefono || '-'} query={search} /></td>
 				<td class="flex items-center justify-end gap-1">
 					<button
-						class="btn btn-circle btn-ghost btn-sm"
+						class="btn btn-circle btn-ghost btn-xs"
 						title="Ver"
 						onclick={() => goto(resolve(`/contactos/${contacto.id}`))}
 					>
-						<Eye />
+						<Eye class="size-4" />
 					</button>
 					<Can modulo="contactos" accion="delete">
 						<button
-							class="btn btn-circle btn-ghost btn-error btn-sm"
+							class="btn btn-circle btn-ghost btn-error btn-xs"
 							title="Eliminar"
 							onclick={async () => {
 								if (!confirm(`¿Eliminar el contacto "${contacto.nombre} ${contacto.apellido}"?`))
@@ -145,7 +155,7 @@
 								}
 							}}
 						>
-							<Delete />
+							<Delete class="size-4" />
 						</button>
 					</Can>
 				</td>

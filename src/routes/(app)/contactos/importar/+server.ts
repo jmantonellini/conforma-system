@@ -43,7 +43,7 @@ export async function POST({ request }) {
 				const porcentaje = numero(valor('porcentaje_compensacion') || 0);
 				const saldo = numero(valor('saldo_disponible') || 0);
 				if (!razonSocial) errores.push(`Fila ${indice + 2}: razón social vacía`);
-				if (!['ninguno', 'cliente', 'proveedor', 'ambos'].includes(rol))
+				if (!['ninguno', 'cliente', 'proveedor'].includes(rol))
 					errores.push(`Fila ${indice + 2}: rol inválido`);
 				if (!Number.isFinite(porcentaje) || porcentaje < 0 || porcentaje > 100)
 					errores.push(`Fila ${indice + 2}: comisión inválida`);
@@ -52,7 +52,7 @@ export async function POST({ request }) {
 				return {
 					...mapearFilaContactoExcel(filaMapeada),
 					razon_social: razonSocial,
-					rol: rol as 'ninguno' | 'cliente' | 'proveedor' | 'ambos',
+					rol: rol as 'ninguno' | 'cliente' | 'proveedor',
 					es_distribuidor: booleano(valor('es_distribuidor')),
 					porcentaje_compensacion: porcentaje,
 					saldo_disponible: saldo,

@@ -15,13 +15,7 @@
 	let rolEditado = $state<string | undefined>();
 	const esDistribuidor = $derived(distribuidorEditado ?? contacto.es_distribuidor ?? false);
 	const rolBase = $derived(
-		contacto.proveedor
-			? contacto.es_cliente
-				? 'ambos'
-				: 'proveedor'
-			: contacto.es_cliente
-				? 'cliente'
-				: 'ninguno'
+		contacto.proveedor ? 'proveedor' : contacto.es_cliente ? 'cliente' : 'ninguno'
 	);
 	const rol = $derived(rolEditado ?? rolBase);
 	let editando = $state(false);
@@ -132,7 +126,6 @@
 							<option value="ninguno">Sin rol comercial</option>
 							<option value="cliente">Cliente</option>
 							<option value="proveedor">Proveedor</option>
-							<option value="ambos">Cliente y proveedor</option>
 						</select>
 					</FormFieldWrapper>
 					<FormFieldWrapper id="es_distribuidor" label="Distribuidor">
@@ -173,7 +166,7 @@
 							/>
 						</FormFieldWrapper>
 					{/if}
-					{#if rol === 'proveedor' || rol === 'ambos'}
+					{#if rol === 'proveedor'}
 						<FormFieldWrapper id="codigo" label="Código de proveedor">
 							<input
 								class="input"

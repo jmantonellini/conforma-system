@@ -79,12 +79,10 @@ const esContactoCliente = (empresa: { es_cliente?: boolean; es_distribuidor?: bo
 
 const construirCondicionContactoBase = ({
 	search,
-	rol = 'todos',
-	incluirClientes = true
+	rol = 'todos'
 }: {
 	search?: string;
-	rol?: 'todos' | 'cliente' | 'proveedor' | 'ambos';
-	incluirClientes?: boolean;
+	rol?: 'todos' | 'distribuidor' | 'cliente' | 'proveedor';
 } = {}) => {
 	const condiciones: any[] = [eq(contactos.activo, true)];
 
@@ -93,17 +91,23 @@ const construirCondicionContactoBase = ({
 		condiciones.push(
 			sql<boolean>`(
 				${contactos.razon_social} ILIKE ${patron}
+				OR ${contactos.apellido} ILIKE ${patron}
+				OR ${contactos.nombre} ILIKE ${patron}
 				OR ${contactos.cuit} ILIKE ${patron}
 				OR ${contactos.email} ILIKE ${patron}
 			)`
 		);
 	}
 
-	if (incluirClientes && (rol === 'cliente' || rol === 'ambos')) {
-		condiciones.push(or(eq(contactos.es_cliente, true), eq(contactos.es_distribuidor, true)));
+	if (rol === 'cliente') {
+		condiciones.push(eq(contactos.es_cliente, true));
 	}
 
-	if (rol === 'proveedor' || rol === 'ambos') {
+	if (rol === 'distribuidor') {
+		condiciones.push(eq(contactos.es_distribuidor, true));
+	}
+
+	if (rol === 'proveedor') {
 		condiciones.push(
 			exists(
 				db
@@ -119,7 +123,7 @@ const construirCondicionContactoBase = ({
 
 const ContactoSchema = v.object({
 	...ContactoBaseSchema,
-	rol: v.picklist(['ninguno', 'cliente', 'proveedor', 'ambos']),
+	rol: v.picklist(['ninguno', 'cliente', 'distribuidor', 'proveedor']),
 	es_distribuidor: CheckboxBooleanSchema,
 	porcentaje_compensacion: v.optional(v.pipe(v.number(), v.minValue(0), v.maxValue(100)), 0),
 	saldo_disponible: v.optional(v.pipe(v.number(), v.minValue(0)), 0),
@@ -149,7 +153,7 @@ const ProveedorSchema = v.object({
 
 const ContactoUpdateSchema = v.object({
 	...ContactoBaseSchema,
-	rol: v.optional(v.picklist(['ninguno', 'cliente', 'proveedor', 'ambos']), 'ninguno'),
+	rol: v.optional(v.picklist(['ninguno', 'cliente', 'distribuidor', 'proveedor']), 'ninguno'),
 	es_cliente: v.optional(v.boolean()),
 	es_distribuidor: CheckboxBooleanSchema,
 	pais: v.optional(v.string()),
@@ -188,7 +192,7 @@ const ImportarContactosSchema = v.pipe(
 			numero: v.optional(v.string()),
 			piso: v.optional(v.string()),
 			departamento: v.optional(v.string()),
-			rol: v.optional(v.picklist(['ninguno', 'cliente', 'proveedor', 'ambos']), 'ninguno'),
+			rol: v.optional(v.picklist(['ninguno', 'cliente', 'distribuidor', 'proveedor']), 'ninguno'),
 			es_distribuidor: v.optional(v.boolean(), false),
 			porcentaje_compensacion: v.optional(v.pipe(v.number(), v.minValue(0), v.maxValue(100)), 0),
 			saldo_disponible: v.optional(v.pipe(v.number(), v.minValue(0)), 0),
@@ -203,11 +207,14 @@ const ImportarContactosSchema = v.pipe(
 export const obtenerContactos = query(
 	v.object({
 		search: v.optional(v.string()),
-		rol: v.optional(v.picklist(['todos', 'cliente', 'proveedor', 'ambos']), 'todos'),
+		rol: v.optional(
+			v.picklist(['todos', 'distribuidor', 'cliente', 'proveedor']),
+			'todos'
+		),
 		sort: v.optional(v.picklist(['razon_social', 'cuit', 'email', 'created_at']), 'razon_social'),
 		direction: v.optional(v.picklist(['asc', 'desc']), 'asc'),
 		page: v.optional(v.pipe(v.number(), v.toMinValue(1)), 1),
-		limit: v.optional(v.pipe(v.number(), v.minValue(1), v.maxValue(100)), 20)
+		limit: v.optional(v.pipe(v.number(), v.minValue(1), v.maxValue(100)), 50)
 	}),
 	async ({
 		search,
@@ -215,7 +222,7 @@ export const obtenerContactos = query(
 		sort = 'razon_social',
 		direction = 'asc',
 		page = 1,
-		limit = 20
+		limit = 50
 	}) => {
 		const where = construirCondicionContactoBase({ search, rol });
 		const seleccion = seleccionContactoBase;
@@ -299,7 +306,7 @@ export const crearContacto = form(ContactoSchema, async (data) => {
 			})
 			.returning();
 
-		const esCliente = rol === 'cliente' || rol === 'ambos' || Boolean(es_distribuidor);
+		const esCliente = rol === 'cliente' || Boolean(es_distribuidor);
 		if (esCliente) {
 			await tx
 				.update(contactos)
@@ -310,7 +317,7 @@ export const crearContacto = form(ContactoSchema, async (data) => {
 				.where(eq(contactos.id, nuevaEmpresa.id));
 		}
 
-		if (rol === 'proveedor' || rol === 'ambos') {
+		if (rol === 'proveedor') {
 			await tx.insert(proveedores).values({
 				contacto_id: nuevaEmpresa.id,
 				codigo,
@@ -336,7 +343,7 @@ export const importarContactos = command(ImportarContactosSchema, async (filas) 
 	await requirePermission('contactos', 'create');
 	await db.transaction(async (tx) => {
 		for (const fila of filas) {
-			const esCliente = fila.rol === 'cliente' || fila.rol === 'ambos' || fila.es_distribuidor;
+			const esCliente = fila.rol === 'cliente' || fila.es_distribuidor;
 			const valores = {
 				razon_social: fila.razon_social,
 				nombre: fila.nombre || null,
@@ -377,7 +384,7 @@ export const importarContactos = command(ImportarContactosSchema, async (filas) 
 						.values({ ...valores, created_at: new Date() })
 						.returning();
 
-			if (fila.rol === 'proveedor' || fila.rol === 'ambos') {
+			if (fila.rol === 'proveedor') {
 				const proveedor = await tx
 					.select({ id: proveedores.id })
 					.from(proveedores)
@@ -425,9 +432,9 @@ export const actualizarContacto = form(
 			.from(contactos)
 			.where(eq(contactos.id, contactoId))
 			.limit(1);
-		const esProveedor = rol === 'proveedor' || rol === 'ambos';
+		const esProveedor = rol === 'proveedor';
 		const esCliente = rol
-			? rol === 'cliente' || rol === 'ambos' || Boolean(data.es_distribuidor)
+			? rol === 'cliente' || Boolean(data.es_distribuidor)
 			: (data.es_cliente ?? (esContactoCliente(data) || Boolean(existente?.es_cliente)));
 		const actualizado = await db.transaction(async (tx) => {
 			const [contacto] = await tx

@@ -43,14 +43,7 @@ export async function GET() {
 			numero: contacto.numero,
 			piso: contacto.piso,
 			departamento: contacto.departamento,
-			rol:
-				esCliente && esProveedor
-					? 'ambos'
-					: esCliente
-						? 'cliente'
-						: esProveedor
-							? 'proveedor'
-							: 'ninguno',
+			rol: esCliente ? 'cliente' : esProveedor ? 'proveedor' : 'ninguno',
 			es_distribuidor: contacto.es_distribuidor,
 			porcentaje_compensacion: contacto.porcentaje_compensacion,
 			saldo_disponible: contacto.saldo_disponible,

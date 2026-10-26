@@ -4,8 +4,8 @@ import type { PageServerLoad } from './$types';
 export const load: PageServerLoad = async ({ url }) => {
 	const search = url.searchParams.get('search') || '';
 	const rolParametro = url.searchParams.get('rol');
-	const rol = ['cliente', 'proveedor', 'ambos'].includes(rolParametro ?? '')
-		? (rolParametro as 'cliente' | 'proveedor' | 'ambos')
+	const rol = ['cliente', 'distribuidor', 'proveedor'].includes(rolParametro ?? '')
+		? (rolParametro as 'cliente' | 'distribuidor' | 'proveedor')
 		: 'todos';
 	const page = Number(url.searchParams.get('page')) || 1;
 	const sortParametro = url.searchParams.get('sort');
