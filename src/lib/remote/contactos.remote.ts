@@ -207,10 +207,7 @@ const ImportarContactosSchema = v.pipe(
 export const obtenerContactos = query(
 	v.object({
 		search: v.optional(v.string()),
-		rol: v.optional(
-			v.picklist(['todos', 'distribuidor', 'cliente', 'proveedor']),
-			'todos'
-		),
+		rol: v.optional(v.picklist(['todos', 'distribuidor', 'cliente', 'proveedor']), 'todos'),
 		sort: v.optional(v.picklist(['razon_social', 'cuit', 'email', 'created_at']), 'razon_social'),
 		direction: v.optional(v.picklist(['asc', 'desc']), 'asc'),
 		page: v.optional(v.pipe(v.number(), v.toMinValue(1)), 1),
@@ -300,6 +297,7 @@ export const crearContacto = form(ContactoSchema, async (data) => {
 			.insert(contactos)
 			.values({
 				...empresaData,
+				cuit: empresaData.cuit?.trim() || null,
 				nombre: data.nombre || null,
 				apellido: data.apellido || null,
 				es_distribuidor: Boolean(es_distribuidor)
@@ -441,6 +439,7 @@ export const actualizarContacto = form(
 				.update(contactos)
 				.set({
 					...data,
+					...(data.cuit !== undefined ? { cuit: data.cuit.trim() || null } : {}),
 					es_cliente: esCliente,
 					es_distribuidor: Boolean(data.es_distribuidor),
 					updated_at: new Date()
