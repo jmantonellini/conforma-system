@@ -136,7 +136,7 @@
 			<legend class="fieldset-legend">Información del contacto</legend>
 			<div class="grid gap-4 md:grid-cols-3">
 				<FormFieldWrapper id="cuit" label="CUIT">
-					<input {...form.fields.cuit.as('text', '')} type="hidden" id="cuit-digits" />
+					<input {...form.fields.cuit.as('text')} type="hidden" id="cuit-digits" />
 					<input
 						id="cuit"
 						class="input"

@@ -1,5 +1,5 @@
 import { error } from '@sveltejs/kit';
-import { and, eq } from 'drizzle-orm';
+import { and, eq, or } from 'drizzle-orm';
 import { db } from '$lib/server/db';
 import { adjuntos } from '$lib/server/db/schema';
 import { requirePermission } from '$lib/server/auth/permissions';
@@ -13,6 +13,14 @@ export async function GET({ params }) {
 
 	try {
 		const orden = await getOrdenFabricacion(ordenId);
+		const condicionesPlanos = [
+			and(eq(adjuntos.orden_fabricacion_id, ordenId), eq(adjuntos.es_plano, true))!
+		];
+		if (orden.producto?.id) {
+			condicionesPlanos.push(
+				and(eq(adjuntos.producto_id, orden.producto.id), eq(adjuntos.es_plano, true))!
+			);
+		}
 		const planos = await db
 			.select({
 				id: adjuntos.id,
@@ -21,7 +29,7 @@ export async function GET({ params }) {
 				mime_type: adjuntos.mime_type
 			})
 			.from(adjuntos)
-			.where(and(eq(adjuntos.orden_fabricacion_id, ordenId), eq(adjuntos.es_plano, true)))
+			.where(or(...condicionesPlanos))
 			.orderBy(adjuntos.id);
 
 		const pdf = await generarPDFFabricacion(orden, planos);

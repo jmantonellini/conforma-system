@@ -314,6 +314,14 @@ export const getOrdenFabricacion = query(v.number(), async (id) => {
 		condicionesAdjuntos.push(eq(adjuntosTable.pedido_id, lineaTrabajo.pedido_id));
 	}
 	if (cotizacion?.id) condicionesAdjuntos.push(eq(adjuntosTable.cotizacion_id, cotizacion.id));
+	if (lineaTrabajo?.producto_id) {
+		condicionesAdjuntos.push(
+			and(
+				eq(adjuntosTable.producto_id, lineaTrabajo.producto_id),
+				eq(adjuntosTable.es_plano, true)
+			)!
+		);
+	}
 	const adjuntosRelacionados = await db
 		.select({
 			id: adjuntosTable.id,
@@ -324,7 +332,8 @@ export const getOrdenFabricacion = query(v.number(), async (id) => {
 			created_at: adjuntosTable.created_at,
 			cotizacion_id: adjuntosTable.cotizacion_id,
 			pedido_id: adjuntosTable.pedido_id,
-			orden_fabricacion_id: adjuntosTable.orden_fabricacion_id
+			orden_fabricacion_id: adjuntosTable.orden_fabricacion_id,
+			producto_id: adjuntosTable.producto_id
 		})
 		.from(adjuntosTable)
 		.where(or(...condicionesAdjuntos))
@@ -340,7 +349,9 @@ export const getOrdenFabricacion = query(v.number(), async (id) => {
 			? { tipo: 'cotizacion' as const, id: adjunto.cotizacion_id }
 			: adjunto.pedido_id
 				? { tipo: 'pedido' as const, id: adjunto.pedido_id }
-				: { tipo: 'fabricacion' as const, id: adjunto.orden_fabricacion_id! }
+				: adjunto.producto_id
+					? { tipo: 'producto' as const, id: adjunto.producto_id }
+					: { tipo: 'fabricacion' as const, id: adjunto.orden_fabricacion_id! }
 	}));
 
 	const recetaBase = (

@@ -14,11 +14,15 @@ function propietario(adjunto: typeof adjuntos.$inferSelect) {
 	if (adjunto.orden_fabricacion_id) {
 		return { tipo: 'fabricacion' as const, id: adjunto.orden_fabricacion_id };
 	}
+	if (adjunto.producto_id) return { tipo: 'producto' as const, id: adjunto.producto_id };
 	return null;
 }
 
 function permisoEntidad(tipo: TipoEntidadAdjunto) {
-	return tipo === 'cotizacion' ? 'cotizaciones' : tipo === 'pedido' ? 'pedidos' : 'taller';
+	if (tipo === 'cotizacion') return 'cotizaciones';
+	if (tipo === 'pedido') return 'pedidos';
+	if (tipo === 'producto') return 'productos';
+	return 'taller';
 }
 
 async function obtenerAdjunto(id: number) {
@@ -33,7 +37,12 @@ export async function GET({ params }) {
 	const id = Number(params.id);
 	if (!Number.isSafeInteger(id) || id < 1) error(404, 'Archivo no encontrado');
 	const { adjunto, owner } = await obtenerAdjunto(id);
-	await requirePermission(permisoEntidad(owner.tipo), 'view');
+	try {
+		await requirePermission(permisoEntidad(owner.tipo), 'view');
+	} catch (cause) {
+		if (owner.tipo !== 'producto' || !adjunto.es_plano) throw cause;
+		await requirePermission('taller', 'view');
+	}
 
 	let contenido: Buffer;
 	try {

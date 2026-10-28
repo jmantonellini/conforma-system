@@ -584,6 +584,7 @@ export const adjuntos = pgTable(
 		orden_fabricacion_id: integer('orden_fabricacion_id').references(() => ordenes_fabricacion.id, {
 			onDelete: 'cascade'
 		}),
+		producto_id: integer('producto_id').references(() => productos.id, { onDelete: 'cascade' }),
 		nombre_original: text('nombre_original').notNull(),
 		archivo_key: text('archivo_key').notNull(),
 		mime_type: text('mime_type'),
@@ -595,9 +596,10 @@ export const adjuntos = pgTable(
 		index('idx_adjuntos_owner_cotizacion').on(table.cotizacion_id),
 		index('idx_adjuntos_owner_pedido').on(table.pedido_id),
 		index('idx_adjuntos_owner_fabricacion').on(table.orden_fabricacion_id),
+		index('idx_adjuntos_owner_producto').on(table.producto_id),
 		check(
 			'adjuntos_un_solo_propietario',
-			sql`num_nonnulls(cotizacion_id, pedido_id, orden_fabricacion_id) = 1`
+			sql`num_nonnulls(cotizacion_id, pedido_id, orden_fabricacion_id, producto_id) = 1`
 		)
 	]
 );

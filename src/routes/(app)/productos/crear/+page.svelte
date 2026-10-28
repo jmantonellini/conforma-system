@@ -10,7 +10,7 @@
 	import { Delete } from '$lib/components/ui/icons';
 	import { toast } from '$lib/stores/toast.svelte';
 	import { page } from '$app/state';
-	import { goto, invalidateAll } from '$app/navigation';
+	import { afterNavigate, goto, invalidateAll } from '$app/navigation';
 	import { resolve } from '$app/paths';
 	import { calcularPrecioVenta, formatearDosDecimales, redondearPrecio } from '$lib/utils/precios';
 
@@ -18,6 +18,10 @@
 	let marcas = page.data.marcas;
 	let tiposDeUso = page.data.tiposDeUso;
 	let tiposVehiculo = page.data.tiposVehiculo;
+	let form = crearProducto;
+	let planosSeleccionados = $state<File[]>([]);
+	let referenciasSeleccionadas = $state<File[]>([]);
+	let subiendoAdjuntos = $state(false);
 	let insumos = (await getInsumos({ limit: 100 })).data;
 	let productos = (await getProductos({ limit: 100 })).data;
 	let receta = $state([{ insumo_id: '', producto_id: '', cantidad: 1 }]);
@@ -41,23 +45,72 @@
 		if (receta.length > 1) receta = receta.filter((_, i) => i !== indice);
 	}
 
+	function seleccionarPlanos(event: Event) {
+		planosSeleccionados = Array.from((event.currentTarget as HTMLInputElement).files ?? []);
+	}
+
+	function seleccionarReferencias(event: Event) {
+		referenciasSeleccionadas = Array.from((event.currentTarget as HTMLInputElement).files ?? []);
+	}
+
+	async function subirArchivosProducto(productoId: number, archivos: File[], esPlano: boolean) {
+		if (!archivos.length) return;
+		const formData = new FormData();
+		formData.set('tipo', 'producto');
+		formData.set('entidad_id', String(productoId));
+		formData.set('accion', 'create');
+		formData.set('es_plano', String(esPlano));
+		for (const archivo of archivos) formData.append('archivos', archivo);
+
+		const response = await fetch(resolve('/adjuntos'), { method: 'POST', body: formData });
+		const resultado = (await response.json().catch(() => null)) as {
+			error?: string;
+			resultados?: { nombre: string; error?: string }[];
+		} | null;
+		if (!response.ok) throw new Error(resultado?.error || 'No se pudieron subir los archivos');
+		const fallidos = (resultado?.resultados ?? []).filter((archivo) => archivo.error);
+		if (fallidos.length) {
+			throw new Error(fallidos.map((archivo) => `${archivo.nombre}: ${archivo.error}`).join(' · '));
+		}
+	}
+
 	let modelos = $derived(
 		crearProducto.fields.marca_id.value()
 			? await getModelos(Number(crearProducto.fields.marca_id.value() as string))
 			: []
 	);
+
+	afterNavigate(() => {
+		form.element?.reset();
+	});
 </script>
 
 <PageLayout>
 	<Can modulo="productos" accion="create">
 		<form
-			{...crearProducto.enhance(async (form) => {
+			{...form.enhance(async (form) => {
 				try {
 					if (await form.submit()) {
+						const productoId = form.result?.producto?.id;
+						toast.success('Producto creado!');
+						if (productoId) {
+							subiendoAdjuntos = true;
+							try {
+								await subirArchivosProducto(productoId, planosSeleccionados, true);
+								await subirArchivosProducto(productoId, referenciasSeleccionadas, false);
+							} catch (error) {
+								toast.warning(
+									error instanceof Error
+										? `El producto se creó, pero algunos archivos no se subieron: ${error.message}`
+										: 'El producto se creó, pero algunos archivos no se subieron.'
+								);
+							} finally {
+								subiendoAdjuntos = false;
+							}
+						}
 						await getProductos({}).refresh();
 						await invalidateAll();
-						toast.success('Producto creado!');
-						goto(resolve('/productos'));
+						await goto(resolve('/productos'));
 					} else {
 						toast.error('Error de validación');
 					}
@@ -354,9 +407,44 @@
 					>
 				</div>
 			</fieldset>
+			<fieldset class="fieldset rounded-box border border-base-300 bg-base-200 p-4">
+				<legend class="fieldset-legend">Planos, fotos y referencias</legend>
+				<div class="grid gap-4 md:grid-cols-2">
+					<FormFieldWrapper id="planos_producto" label="Planos de fabricación">
+						<input
+							type="file"
+							multiple
+							accept="image/jpeg,image/png,image/webp"
+							class="file-input w-full"
+							disabled={!!crearProducto.pending || subiendoAdjuntos}
+							onchange={seleccionarPlanos}
+						/>
+						{#if planosSeleccionados.length}
+							<p class="mt-1 text-sm text-base-content/60">
+								{planosSeleccionados.map((archivo) => archivo.name).join(', ')}
+							</p>
+						{/if}
+					</FormFieldWrapper>
+					<FormFieldWrapper id="referencias_producto" label="Fotos y referencias">
+						<input
+							type="file"
+							multiple
+							accept="image/jpeg,image/png,image/webp,audio/ogg,audio/mpeg,audio/mp4,audio/x-m4a,audio/wav,audio/x-wav,video/mp4,application/pdf"
+							class="file-input w-full"
+							disabled={!!crearProducto.pending || subiendoAdjuntos}
+							onchange={seleccionarReferencias}
+						/>
+						{#if referenciasSeleccionadas.length}
+							<p class="mt-1 text-sm text-base-content/60">
+								{referenciasSeleccionadas.map((archivo) => archivo.name).join(', ')}
+							</p>
+						{/if}
+					</FormFieldWrapper>
+				</div>
+			</fieldset>
 			<FormActions
 				cancelHref="/productos"
-				pending={!!crearProducto.pending}
+				pending={!!crearProducto.pending || subiendoAdjuntos}
 				submitText="Guardar Producto"
 			/>
 		</form>

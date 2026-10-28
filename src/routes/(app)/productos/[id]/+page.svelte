@@ -14,8 +14,9 @@
 		SearchSelect
 	} from '$lib/components/ui';
 	import { Delete } from '$lib/components/ui/icons';
+	import ArchivosAdjuntos from '$lib/components/ArchivosAdjuntos.svelte';
 	import { toast } from '$lib/stores/toast.svelte';
-	import { goto } from '$app/navigation';
+	import { afterNavigate, goto } from '$app/navigation';
 	import { page } from '$app/state';
 	import { resolve } from '$app/paths';
 	import { calcularPrecioVenta, formatearDosDecimales, redondearPrecio } from '$lib/utils/precios';
@@ -49,7 +50,7 @@
 	);
 
 	let showDeleteModal = $state(false);
-	let receta = $state<Array<{ insumo_id: string; producto_id: string; cantidad: number }>>([]);
+	let receta = $derived<Array<{ insumo_id: string; producto_id: string; cantidad: number }>>([]);
 
 	$effect(() => {
 		receta = (data.receta ?? []).map((linea) => ({
@@ -78,6 +79,12 @@
 	function agregarInsumo() {
 		receta = [...receta, { insumo_id: '', producto_id: '', cantidad: 1 }];
 	}
+
+	afterNavigate(() => {
+		console.log('AFTER NAVIGATE');
+
+		form.element?.reset();
+	});
 </script>
 
 <PageLayout>
@@ -410,6 +417,11 @@
 			/>
 		</form>
 	</Can>
+	<ArchivosAdjuntos
+		tipo="producto"
+		entidadId={data.producto.id}
+		adjuntos={data.producto.adjuntos}
+	/>
 </PageLayout>
 
 <!-- Modal eliminar -->

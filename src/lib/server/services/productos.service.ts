@@ -2,6 +2,7 @@ import * as v from 'valibot';
 import { db } from '$lib/server/db';
 import {
 	productos,
+	adjuntos,
 	categorias_productos,
 	tipos_uso,
 	categorias_competencia,
@@ -194,11 +195,29 @@ export async function getProductosListado({
 export async function getProductoByIdService(id: number) {
 	const [producto] = await db.select().from(productos).where(eq(productos.id, id)).limit(1);
 	if (!producto) throw new Error('Producto no encontrado');
-	const costo_materiales = await calcularCostoMaterialesProducto(id);
+	const [costo_materiales, archivos] = await Promise.all([
+		calcularCostoMaterialesProducto(id),
+		db
+			.select({
+				id: adjuntos.id,
+				nombre_original: adjuntos.nombre_original,
+				mime_type: adjuntos.mime_type,
+				es_plano: adjuntos.es_plano,
+				tamano_bytes: adjuntos.tamano_bytes,
+				created_at: adjuntos.created_at
+			})
+			.from(adjuntos)
+			.where(eq(adjuntos.producto_id, id))
+			.orderBy(adjuntos.id)
+	]);
 	return {
 		...producto,
 		costo_materiales,
-		precio_venta: calcularPrecioVenta(costo_materiales, producto.margen_porcentaje ?? 0)
+		precio_venta: calcularPrecioVenta(costo_materiales, producto.margen_porcentaje ?? 0),
+		adjuntos: archivos.map((archivo) => ({
+			...archivo,
+			propietario: { tipo: 'producto' as const, id }
+		}))
 	};
 }
 

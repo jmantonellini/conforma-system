@@ -25,7 +25,13 @@
 	const TIPOS_ARCHIVO =
 		'image/jpeg,image/png,image/webp,audio/ogg,audio/mpeg,audio/mp4,audio/x-m4a,audio/wav,audio/x-wav,video/mp4,application/pdf';
 	const permisoModulo = (tipoAdjunto: TipoEntidadAdjunto) =>
-		tipoAdjunto === 'cotizacion' ? 'cotizaciones' : tipoAdjunto === 'pedido' ? 'pedidos' : 'taller';
+		tipoAdjunto === 'cotizacion'
+			? 'cotizaciones'
+			: tipoAdjunto === 'pedido'
+				? 'pedidos'
+				: tipoAdjunto === 'producto'
+					? 'productos'
+					: 'taller';
 	const puedeSubir = $derived(
 		can(page.data.user, page.data.permisos, permisoModulo(tipo), 'edit') ||
 			(tipo === 'cotizacion' && can(page.data.user, page.data.permisos, 'cotizaciones', 'create'))
@@ -38,7 +44,8 @@
 		const formData = new FormData();
 		formData.set('tipo', tipo);
 		formData.set('entidad_id', String(entidadId));
-		formData.set('es_plano', String(tipo === 'fabricacion' && marcarComoPlano));
+		formData.set('accion', tipo === 'producto' ? 'edit' : 'create');
+		formData.set('es_plano', String(tipo === 'producto' && marcarComoPlano));
 		for (const archivo of Array.from(files)) formData.append('archivos', archivo);
 
 		try {
@@ -57,7 +64,7 @@
 				toast.error(fallidos.map((archivo) => `${archivo.nombre}: ${archivo.error}`).join(' · '));
 			} else {
 				toast.success('Archivos adjuntados');
-				if (tipo === 'fabricacion') marcarComoPlano = false;
+				if (tipo === 'producto') marcarComoPlano = false;
 			}
 			await invalidateAll();
 		} catch {
@@ -156,17 +163,17 @@
 			<input
 				type="file"
 				multiple
-				accept={tipo === 'fabricacion' && marcarComoPlano
+				accept={tipo === 'producto' && marcarComoPlano
 					? 'image/jpeg,image/png,image/webp'
 					: TIPOS_ARCHIVO}
 				class="file-input w-full max-w-md"
 				disabled={subiendo}
 				onchange={seleccionarArchivos}
 			/>
-			{#if tipo === 'fabricacion'}
+			{#if tipo === 'producto'}
 				<label class="label mt-2 w-fit cursor-pointer gap-3">
 					<input type="checkbox" class="toggle toggle-sm" bind:checked={marcarComoPlano} />
-					<span>Marcar imágenes como plano para imprimir</span>
+					<span>Subir como plano de fabricación</span>
 				</label>
 			{/if}
 		</div>
@@ -220,16 +227,18 @@
 					{#if adjunto.es_plano}
 						<span class="badge badge-sm badge-info">Plano</span>
 					{/if}
-					<Can modulo={permisoModulo(adjunto.propietario.tipo)} accion="edit">
-						<button
-							type="button"
-							class="btn btn-ghost text-error btn-xs"
-							aria-label={`Eliminar adjunto: ${adjunto.nombre_original}`}
-							onclick={() => borrarAdjunto(adjunto.id)}
-						>
-							✕
-						</button>
-					</Can>
+					{#if !(tipo === 'fabricacion' && adjunto.propietario.tipo === 'producto')}
+						<Can modulo={permisoModulo(adjunto.propietario.tipo)} accion="edit">
+							<button
+								type="button"
+								class="btn btn-ghost text-error btn-xs"
+								aria-label={`Eliminar adjunto: ${adjunto.nombre_original}`}
+								onclick={() => borrarAdjunto(adjunto.id)}
+							>
+								✕
+							</button>
+						</Can>
+					{/if}
 				</div>
 			</div>
 		{:else}

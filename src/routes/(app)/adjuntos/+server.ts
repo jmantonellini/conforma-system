@@ -3,7 +3,13 @@ import { json } from '@sveltejs/kit';
 import { eq } from 'drizzle-orm';
 import sharp from 'sharp';
 import { db } from '$lib/server/db';
-import { adjuntos, cotizaciones, ordenes_fabricacion, pedidos } from '$lib/server/db/schema';
+import {
+	adjuntos,
+	cotizaciones,
+	ordenes_fabricacion,
+	pedidos,
+	productos
+} from '$lib/server/db/schema';
 import { requirePermission } from '$lib/server/auth/permissions';
 import { eliminarObjeto, guardarObjeto } from '$lib/server/services/object-storage.service';
 import type { TipoEntidadAdjunto } from '$lib/types/adjuntos';
@@ -25,10 +31,17 @@ const TIPOS_ARCHIVO = {
 };
 
 function permisoEntidad(tipo: TipoEntidadAdjunto) {
-	return tipo === 'cotizacion' ? 'cotizaciones' : tipo === 'pedido' ? 'pedidos' : 'taller';
+	if (tipo === 'cotizacion') return 'cotizaciones';
+	if (tipo === 'pedido') return 'pedidos';
+	if (tipo === 'producto') return 'productos';
+	return 'taller';
 }
 
 async function requirePermiso(tipo: TipoEntidadAdjunto, accion: 'edit' | 'create') {
+	if (tipo === 'producto') {
+		await requirePermission('productos', accion);
+		return;
+	}
 	try {
 		await requirePermission(permisoEntidad(tipo), 'edit');
 	} catch (error) {
@@ -39,7 +52,13 @@ async function requirePermiso(tipo: TipoEntidadAdjunto, accion: 'edit' | 'create
 
 async function entidadExiste(tipo: TipoEntidadAdjunto, id: number) {
 	const tabla =
-		tipo === 'cotizacion' ? cotizaciones : tipo === 'pedido' ? pedidos : ordenes_fabricacion;
+		tipo === 'cotizacion'
+			? cotizaciones
+			: tipo === 'pedido'
+				? pedidos
+				: tipo === 'producto'
+					? productos
+					: ordenes_fabricacion;
 	return db.select({ id: tabla.id }).from(tabla).where(eq(tabla.id, id)).limit(1);
 }
 
@@ -47,13 +66,14 @@ export async function POST({ request }) {
 	const formData = await request.formData();
 	const tipo = formData.get('tipo');
 	const entidadId = Number(formData.get('entidad_id'));
-	if (tipo !== 'cotizacion' && tipo !== 'pedido' && tipo !== 'fabricacion') {
+	if (tipo !== 'cotizacion' && tipo !== 'pedido' && tipo !== 'fabricacion' && tipo !== 'producto') {
 		return json({ error: 'Tipo de entidad no válido' }, { status: 400 });
 	}
 	if (!Number.isSafeInteger(entidadId) || entidadId < 1) {
 		return json({ error: 'Entidad no encontrada' }, { status: 404 });
 	}
-	await requirePermiso(tipo, 'create');
+	const accion = formData.get('accion') === 'edit' ? 'edit' : 'create';
+	await requirePermiso(tipo, accion);
 	if (!(await entidadExiste(tipo, entidadId)).length) {
 		return json({ error: 'Entidad no encontrada' }, { status: 404 });
 	}
@@ -61,7 +81,7 @@ export async function POST({ request }) {
 	const archivos = formData
 		.getAll('archivos')
 		.filter((archivo): archivo is File => archivo instanceof File && archivo.size > 0);
-	const esPlano = tipo === 'fabricacion' && formData.get('es_plano') === 'true';
+	const esPlano = tipo === 'producto' && formData.get('es_plano') === 'true';
 	if (!archivos.length) return json({ error: 'No se enviaron archivos' }, { status: 400 });
 	if (archivos.reduce((total, archivo) => total + archivo.size, 0) > MAX_BATCH_SIZE) {
 		return json({ error: 'El total de archivos no puede superar 25 MB' }, { status: 413 });
@@ -103,11 +123,13 @@ export async function POST({ request }) {
 			const propietario = {
 				cotizacion_id: null as number | null,
 				pedido_id: null as number | null,
-				orden_fabricacion_id: null as number | null
+				orden_fabricacion_id: null as number | null,
+				producto_id: null as number | null
 			};
 			if (tipo === 'cotizacion') propietario.cotizacion_id = entidadId;
 			else if (tipo === 'pedido') propietario.pedido_id = entidadId;
-			else propietario.orden_fabricacion_id = entidadId;
+			else if (tipo === 'fabricacion') propietario.orden_fabricacion_id = entidadId;
+			else propietario.producto_id = entidadId;
 
 			const [adjunto] = await db
 				.insert(adjuntos)

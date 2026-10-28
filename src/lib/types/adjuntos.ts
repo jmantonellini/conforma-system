@@ -1,4 +1,4 @@
-export type TipoEntidadAdjunto = 'cotizacion' | 'pedido' | 'fabricacion';
+export type TipoEntidadAdjunto = 'cotizacion' | 'pedido' | 'fabricacion' | 'producto';
 
 export type Adjunto = {
 	id: number;
