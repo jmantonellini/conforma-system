@@ -107,7 +107,7 @@ export async function obtenerPrecioProducto(productoId: number) {
 	};
 }
 
-export async function getProductosListado({
+export async function getProductosCatalogo({
 	search,
 	categoriaId,
 	page = 1,
@@ -121,6 +121,40 @@ export async function getProductosListado({
 	limit?: number;
 	sort?: 'nombre' | 'codigo';
 	direction?: 'asc' | 'desc';
+}) {
+	const listado = await getProductosListado({
+		search,
+		categoriaId,
+		page,
+		limit,
+		sort,
+		direction,
+		incluirPrecios: false
+	});
+	return {
+		...listado,
+		data: listado.data.map(
+			({ costo_materiales: _costo, precio_venta: _precio, ...producto }) => producto
+		)
+	};
+}
+
+export async function getProductosListado({
+	search,
+	categoriaId,
+	page = 1,
+	limit = 10,
+	sort = 'nombre',
+	direction = 'asc',
+	incluirPrecios = true
+}: {
+	search?: string;
+	categoriaId?: number;
+	page?: number;
+	limit?: number;
+	sort?: 'nombre' | 'codigo';
+	direction?: 'asc' | 'desc';
+	incluirPrecios?: boolean;
 }) {
 	const offset = (page - 1) * limit;
 	const conditions = [];
@@ -167,16 +201,22 @@ export async function getProductosListado({
 		.orderBy(orden)
 		.limit(limit)
 		.offset(offset);
-	const dataConPrecios = await Promise.all(
-		data.map(async (producto) => {
-			const costo_materiales = await calcularCostoMaterialesProducto(producto.id);
-			return {
+	const dataConPrecios = incluirPrecios
+		? await Promise.all(
+				data.map(async (producto) => {
+					const costo_materiales = await calcularCostoMaterialesProducto(producto.id);
+					return {
+						...producto,
+						costo_materiales,
+						precio_venta: calcularPrecioVenta(costo_materiales, producto.margen_porcentaje ?? 0)
+					};
+				})
+			)
+		: data.map((producto) => ({
 				...producto,
-				costo_materiales,
-				precio_venta: calcularPrecioVenta(costo_materiales, producto.margen_porcentaje ?? 0)
-			};
-		})
-	);
+				costo_materiales: 0,
+				precio_venta: 0
+			}));
 	const [totalResult] = await db
 		.select({ count: count() })
 		.from(productos)
@@ -268,6 +308,7 @@ export async function getProductoConRecetaService(productoId: number) {
 				componente_id: producto_componentes.componente_id,
 				cantidad: producto_componentes.cantidad,
 				orden: producto_componentes.orden,
+				codigo: productos.codigo,
 				nombre: productos.nombre
 			})
 			.from(producto_componentes)
@@ -325,12 +366,16 @@ export async function getProductoConRecetaService(productoId: number) {
 		...receta.map((linea) => ({
 			insumo_id: linea.insumo_id,
 			producto_id: undefined,
+			codigo: linea.codigo,
+			nombre: linea.nombre,
 			cantidad: linea.cantidad,
 			orden: linea.orden
 		})),
 		...componentes.map((linea) => ({
 			insumo_id: undefined,
 			producto_id: linea.componente_id,
+			codigo: linea.codigo,
+			nombre: linea.nombre,
 			cantidad: linea.cantidad,
 			orden: linea.orden
 		}))

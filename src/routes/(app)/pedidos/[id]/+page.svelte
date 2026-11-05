@@ -17,7 +17,8 @@
 		getPedidoById
 	} from '$lib/remote/pedidos.remote';
 	import { toast } from '$lib/stores/toast.svelte';
-	import { Paths } from '$lib/types';
+	import { Paths, PEDIDO_SLUG } from '$lib/types';
+	import { ESTADO_RESERVA, TIPO_LOG_PEDIDO } from '$lib/types/dominio';
 	import { formatearFecha } from '$lib/utils/fechas';
 	import { formatearDosDecimales } from '$lib/utils/precios';
 	import PedidoEnvios from './PedidoEnvios.svelte';
@@ -36,8 +37,8 @@
 		if (ordenId) goto(resolve(`/fabricacion/${ordenId}`));
 	}
 
-	async function moverPedido(destinoId: number, nombre: string) {
-		const confirmar = nombre === 'Cancelado' || nombre === 'Demorado';
+	async function moverPedido(destinoId: number, nombre: string, slug: string) {
+		const confirmar = slug === PEDIDO_SLUG.CANCELADO || slug === PEDIDO_SLUG.DEMORADO;
 		if (confirmar && !confirm(`¿Cambiar a "${nombre}"?`)) return;
 
 		try {
@@ -150,7 +151,8 @@
 											<li>
 												<Can modulo="pedidos" accion="edit">
 													<button
-														onclick={() => moverPedido(t.estado_destino_id, t.destino_nombre)}
+														onclick={() =>
+															moverPedido(t.estado_destino_id, t.destino_nombre, t.destino_slug)}
 													>
 														<span class="badge badge-{t.destino_color} badge-xs"></span>
 														{t.destino_nombre}
@@ -208,7 +210,15 @@
 							<td class="text-right">${formatearDosDecimales(linea.precio_unitario)}</td>
 							<td class="text-right font-semibold">${formatearDosDecimales(linea.subtotal)}</td>
 							<td>
-								{#if linea.produccion}
+								{#if linea.reserva_stock}
+									<span class="badge badge-sm badge-info">
+										{linea.reserva_stock.estado === ESTADO_RESERVA.RESERVADA
+											? `Reservado · ${linea.reserva_stock.ubicacion_nombre}`
+											: linea.reserva_stock.estado === ESTADO_RESERVA.CONSUMIDA
+												? 'Despachado desde stock'
+												: 'Reserva liberada'}
+									</span>
+								{:else if linea.produccion}
 									{@const p = linea.produccion}
 									<button
 										class={`badge-${p.es_final ? 'success' : p.total > 0 ? 'warning' : 'ghost'} badge cursor-pointer text-nowrap hover:opacity-80`}
@@ -221,7 +231,9 @@
 								{/if}
 							</td>
 							<td class="text-center">
-								{#if linea.produccion}
+								{#if linea.reserva_stock}
+									<span class="text-sm text-base-content/50">Gestionado desde stock</span>
+								{:else if linea.produccion}
 									<button
 										class="btn btn-ghost text-nowrap btn-sm"
 										onclick={() => irADetalleOrden(linea.produccion.orden_id)}
@@ -305,9 +317,9 @@
 					{/snippet}
 					{#snippet rowHistorial(log: Awaited<ReturnType<typeof getHistorialPedido>>[number])}
 						{@const color =
-							log.tipo === 'estado'
+							log.tipo === TIPO_LOG_PEDIDO.ESTADO
 								? log.estado_nuevo?.color || 'ghost'
-								: log.tipo === 'envio'
+								: log.tipo === TIPO_LOG_PEDIDO.ENVIO
 									? 'info'
 									: 'success'}
 						<td>
@@ -317,7 +329,7 @@
 							<span class="badge badge-sm badge-{color}">{log.titulo}</span>
 						</td>
 						<td>
-							{#if log.tipo === 'estado'}
+							{#if log.tipo === TIPO_LOG_PEDIDO.ESTADO}
 								{log.estado_anterior?.nombre || 'Creado'} → {log.estado_nuevo?.nombre || '-'}
 								{#if log.detalle}<p class="text-xs text-base-content/60">{log.detalle}</p>{/if}
 							{:else}

@@ -1,4 +1,5 @@
-export type TipoEntidadAdjunto = 'cotizacion' | 'pedido' | 'fabricacion' | 'producto';
+import type { TipoEntidadAdjunto } from './dominio';
+export type { TipoEntidadAdjunto } from './dominio';
 
 export type Adjunto = {
 	id: number;

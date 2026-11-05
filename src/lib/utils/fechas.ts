@@ -1,3 +1,12 @@
+export function fechaInputManana(fecha = new Date()): string {
+	const manana = new Date(fecha);
+	manana.setDate(manana.getDate() + 1);
+	const anio = manana.getFullYear();
+	const mes = String(manana.getMonth() + 1).padStart(2, '0');
+	const dia = String(manana.getDate()).padStart(2, '0');
+	return `${anio}-${mes}-${dia}`;
+}
+
 export function estaVencido(fecha: string | Date | null): boolean {
 	if (!fecha) return false;
 	const hoy = new Date();

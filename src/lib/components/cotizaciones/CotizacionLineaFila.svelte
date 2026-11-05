@@ -9,6 +9,7 @@
 		bloqueada: boolean;
 		cantidadLineas: number;
 		productos: ProductoOpcion[];
+		onBuscarProducto?: (search: string) => Promise<void>;
 		insumos: InsumoOpcion[];
 		onEliminar: (lineaId: number) => void;
 		onSeleccionarProducto: (lineaId: number, productoId: string) => void;
@@ -27,6 +28,7 @@
 		bloqueada,
 		cantidadLineas,
 		productos,
+		onBuscarProducto,
 		insumos,
 		onEliminar,
 		onSeleccionarProducto,
@@ -74,6 +76,7 @@
 					label: producto.nombre
 				}))}
 				onChange={(value: string) => onSeleccionarProducto(linea.idx, value)}
+				onSearch={onBuscarProducto}
 			/>
 		{:else if linea.nuevo_insumo}
 			<div class="flex min-h-8 flex-col justify-center">

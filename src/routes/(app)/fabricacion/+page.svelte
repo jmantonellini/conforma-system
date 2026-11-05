@@ -102,7 +102,12 @@
 					</span>
 				</td>
 				<td class="font-medium"><Highlight text={orden.nombre_trabajo} query={search} /></td>
-				<td><Highlight text={orden.producto_nombre || '-'} query={search} /></td>
+				<td>
+					<Highlight text={orden.producto_nombre || '-'} query={search} />
+					{#if orden.es_para_stock}
+						<span class="ml-2 badge badge-sm badge-info">Stock</span>
+					{/if}
+				</td>
 				<td class="text-center">
 					<div class="flex items-center gap-2">
 						<progress

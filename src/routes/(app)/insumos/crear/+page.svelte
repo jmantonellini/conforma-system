@@ -88,7 +88,11 @@
 				</div>
 			</fieldset>
 			<FormErrors {form} />
-			<FormActions cancelHref="/insumos" pending={!!form.pending} submitText="Crear insumo" />
+			<FormActions
+				cancelHref={resolve('/insumos')}
+				pending={!!form.pending}
+				submitText="Crear insumo"
+			/>
 		</form>
 	</Can>
 </PageLayout>

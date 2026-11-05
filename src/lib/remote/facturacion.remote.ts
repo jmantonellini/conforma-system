@@ -6,11 +6,19 @@ import * as v from 'valibot';
 import { getCurrentUser } from './usuarios.remote';
 import { getHistorialPedido, getPedidoById } from './pedidos.remote';
 import { requirePermission } from '$lib/server/auth/permissions';
+import { ESTADO_PAGO, METODO_PAGO, type EstadoPago } from '$lib/types/dominio';
 
 const RegistrarPagoSchema = v.object({
 	pedido_id: v.pipe(v.string(), v.transform(Number), v.number()),
 	monto: v.number(),
-	metodo_pago: v.optional(v.string()),
+	metodo_pago: v.optional(
+		v.picklist([
+			METODO_PAGO.EFECTIVO,
+			METODO_PAGO.TRANSFERENCIA,
+			METODO_PAGO.CHEQUE,
+			METODO_PAGO.CUOTAS
+		])
+	),
 	cantidad_cuotas: v.optional(v.pipe(v.number(), v.integer(), v.minValue(1))),
 	observaciones: v.optional(v.string())
 });
@@ -29,15 +37,15 @@ export const getPagosByPedido = query(v.number(), async (pedidoId) => {
 		(pedidoRow?.anticipo || 0) + pagosRows.reduce((s, p) => s + (p.monto || 0), 0);
 	const saldo = (pedidoRow?.precio_total || 0) - totalPagado;
 
-	let estado: 'sin_pagar' | 'anticipo' | 'parcial' | 'pagado';
+	let estado: EstadoPago;
 	if (saldo <= 0 && pedidoRow?.precio_total) {
-		estado = 'pagado';
+		estado = ESTADO_PAGO.PAGADO;
 	} else if (totalPagado === 0) {
-		estado = 'sin_pagar';
+		estado = ESTADO_PAGO.SIN_PAGAR;
 	} else if (totalPagado === (pedidoRow?.anticipo || 0) && pagosRows.length === 0) {
-		estado = 'anticipo';
+		estado = ESTADO_PAGO.ANTICIPO;
 	} else {
-		estado = 'parcial';
+		estado = ESTADO_PAGO.PARCIAL;
 	}
 
 	return { pagos: pagosRows, totalPagado, saldo, estado };

@@ -18,6 +18,7 @@ export enum Modulos {
 	FABRICACION = 'fabricacion',
 	CONFIGURACION = 'configuracion',
 	INSUMOS = 'insumos',
+	STOCK = 'stock',
 	ENVIOS = 'envios',
 	TAREAS = 'tareas'
 }
@@ -32,6 +33,7 @@ export enum Paths {
 	PEDIDOS = '/' + Modulos.PEDIDOS,
 	FABRICACION = '/' + Modulos.FABRICACION,
 	INSUMOS = '/' + Modulos.INSUMOS,
+	STOCK = '/' + Modulos.STOCK,
 	ENVIOS = '/' + Modulos.ENVIOS,
 	CONFIGURACION = '/' + Modulos.CONFIGURACION,
 	CONFIGURACION_ESTADOS = '/' + Modulos.CONFIGURACION + '/estados',
@@ -57,5 +59,7 @@ export const PEDIDO_SLUG = {
 	EN_PRODUCCION: 'en_produccion',
 	PENDIENTE: 'pendiente',
 	PAUSADO: 'pausado',
-	ENTREGADO: 'entregado'
+	ENTREGADO: 'entregado',
+	CANCELADO: 'cancelado',
+	DEMORADO: 'demorado'
 } as const;

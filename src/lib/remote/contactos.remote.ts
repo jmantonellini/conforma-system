@@ -1,10 +1,11 @@
 import * as v from 'valibot';
 import { command, form, query } from '$app/server';
-import { and, asc, count, desc, eq, exists, or, sql } from 'drizzle-orm';
+import { and, asc, count, desc, eq, exists, or, sql, type SQL } from 'drizzle-orm';
 import { db } from '$lib/server/db';
 import { contactos, proveedores, pedidos, estados_pedido } from '$lib/server/db/schema';
 import { requirePermission } from '$lib/server/auth/permissions';
 import { consultarCuitARCA } from '$lib/server/services/arca-padron.service';
+import { listarContactosCliente } from '$lib/server/services/contactos.service';
 import { esCuitValido } from '$lib/utils/cuit';
 import { redirect } from '@sveltejs/kit';
 import { resolve } from '$app/paths';
@@ -17,7 +18,10 @@ const ContactoBaseSchema = {
 		v.pipe(
 			v.string(),
 			v.trim(),
-			v.check((cuit) => cuit === '' || esCuitValido(cuit), 'Ingresá un CUIT válido de 11 dígitos')
+			v.check(
+				(cuit) => cuit.trim() === '' || esCuitValido(cuit),
+				'Ingresá un CUIT válido de 11 dígitos'
+			)
 		)
 	),
 	email: v.optional(v.string()),
@@ -84,7 +88,7 @@ const construirCondicionContactoBase = ({
 	search?: string;
 	rol?: 'todos' | 'distribuidor' | 'cliente' | 'proveedor';
 } = {}) => {
-	const condiciones: any[] = [eq(contactos.activo, true)];
+	const condiciones: SQL[] = [eq(contactos.activo, true)];
 
 	if (search?.trim()) {
 		const patron = `%${search.trim()}%`;
@@ -99,24 +103,18 @@ const construirCondicionContactoBase = ({
 		);
 	}
 
-	if (rol === 'cliente') {
-		condiciones.push(eq(contactos.es_cliente, true));
-	}
-
-	if (rol === 'distribuidor') {
-		condiciones.push(eq(contactos.es_distribuidor, true));
-	}
-
-	if (rol === 'proveedor') {
-		condiciones.push(
-			exists(
-				db
-					.select({ id: proveedores.id })
-					.from(proveedores)
-					.where(eq(proveedores.contacto_id, contactos.id))
-			)
-		);
-	}
+	const filtrosRol: Partial<Record<typeof rol, SQL>> = {
+		cliente: eq(contactos.es_cliente, true),
+		distribuidor: eq(contactos.es_distribuidor, true),
+		proveedor: exists(
+			db
+				.select({ id: proveedores.id })
+				.from(proveedores)
+				.where(eq(proveedores.contacto_id, contactos.id))
+		)
+	};
+	const filtroRol = filtrosRol[rol];
+	if (filtroRol) condiciones.push(filtroRol);
 
 	return condiciones.length > 1 ? and(...condiciones) : condiciones[0];
 };
@@ -251,14 +249,7 @@ export const obtenerContactosCliente = query(
 		soloDistribuidores: v.optional(v.boolean(), false)
 	}),
 	async ({ search, limit, soloDistribuidores }) => {
-		const condicionBase = construirCondicionContactoBase({ search, rol: 'cliente' });
-		const where = soloDistribuidores
-			? and(condicionBase, eq(contactos.es_distribuidor, true))
-			: condicionBase;
-		const datosQuery = db.select().from(contactos).where(where).orderBy(contactos.razon_social);
-		const datos = limit === undefined ? await datosQuery : await datosQuery.limit(limit);
-		const [{ total }] = await db.select({ total: count() }).from(contactos).where(where);
-		return { data: datos, total };
+		return listarContactosCliente({ search, limit, soloDistribuidores });
 	}
 );
 

@@ -14,6 +14,7 @@ import {
 } from '$lib/server/db/schema';
 import { and, asc, eq, or } from 'drizzle-orm';
 import { requirePermission } from '$lib/server/auth/permissions';
+import { toSlug } from '$lib/utils/ids';
 
 const idSchema = v.object({ id: v.number() });
 
@@ -60,7 +61,7 @@ export const crearCategoriaProducto = command(
 		await requirePermission('configuracion', 'edit');
 		const [categoria] = await db
 			.insert(categorias_productos)
-			.values(data)
+			.values({ ...data, slug: toSlug(data.nombre) })
 			.onConflictDoNothing({ target: categorias_productos.nombre })
 			.returning();
 		getCategoriasProductoAdmin().refresh();
@@ -78,7 +79,7 @@ export const actualizarCategoriaProducto = command(
 		await requirePermission('configuracion', 'edit');
 		const [categoria] = await db
 			.update(categorias_productos)
-			.set(data)
+			.set({ ...data, slug: toSlug(data.nombre) })
 			.where(eq(categorias_productos.id, id))
 			.returning();
 		getCategoriasProductoAdmin().refresh();

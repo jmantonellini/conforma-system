@@ -7,6 +7,7 @@
 		getEnviosByPedido
 	} from '$lib/remote/envios.remote';
 	import { toast } from '$lib/stores/toast.svelte';
+	import { ESTADO_ENVIO } from '$lib/types/dominio';
 
 	let { pedidoId }: { pedidoId: number } = $props();
 
@@ -43,7 +44,8 @@
 						<p class="text-sm text-base-content/70">
 							Guía: {envio.numero_guia || '-'} · Bultos: {envio.cantidad_bultos} ·
 							<span
-								class="badge badge-dash badge-sm capitalize badge-{envio.estado === 'entregado'
+								class="badge badge-dash badge-sm capitalize badge-{envio.estado ===
+								ESTADO_ENVIO.ENTREGADO
 									? 'success'
 									: 'warning'}"
 							>
@@ -51,7 +53,7 @@
 							</span>
 						</p>
 					</div>
-					{#if envio.estado !== 'entregado'}
+					{#if envio.estado !== ESTADO_ENVIO.ENTREGADO}
 						<Can modulo="pedidos" accion="edit">
 							<button
 								class="btn btn-sm btn-success"

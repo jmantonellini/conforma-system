@@ -16,22 +16,23 @@
 	import { Delete } from '$lib/components/ui/icons';
 	import ArchivosAdjuntos from '$lib/components/ArchivosAdjuntos.svelte';
 	import { toast } from '$lib/stores/toast.svelte';
-	import { afterNavigate, goto } from '$app/navigation';
+	import { goto } from '$app/navigation';
 	import { page } from '$app/state';
 	import { resolve } from '$app/paths';
 	import { calcularPrecioVenta, formatearDosDecimales, redondearPrecio } from '$lib/utils/precios';
 	import type { PageProps } from './$types';
+	import { CATEGORIAS_PRODUCTO, TIPOS_USO_PRODUCTO } from '$lib/types/catalogos';
 
 	let { data }: PageProps = $props();
 
 	// Cargar datos del producto
-	let categorias = page.data.categorias;
+	let categorias: { id: number; nombre: string; slug: string }[] = page.data.categorias;
 	let tiposVehiculo = page.data.tiposVehiculo;
 	let marcas = page.data.marcas;
 
-	let tiposUso = page.data.tiposDeUso;
+	let tiposUso: { id: number; nombre: string; slug: string }[] = page.data.tiposDeUso;
 
-	let form = actualizarProducto;
+	let form = $derived(actualizarProducto.for(String(data.producto.id)));
 
 	let categoriaActual = $derived(
 		form.fields.categoria_id.value() ??
@@ -48,16 +49,54 @@
 	let tipoUsoActual = $derived(
 		form.fields.tipo_uso_id.value() ?? String(data.producto.tipo_uso_id)
 	);
+	let categoriaSeleccionada = $derived(
+		categorias.find((categoria) => String(categoria.id) === categoriaActual)
+	);
+	let tipoUsoSeleccionado = $derived(
+		tiposUso.find((tipoUso) => String(tipoUso.id) === tipoUsoActual)
+	);
 
 	let showDeleteModal = $state(false);
-	let receta = $derived<Array<{ insumo_id: string; producto_id: string; cantidad: number }>>([]);
-
-	$effect(() => {
-		receta = (data.receta ?? []).map((linea) => ({
+	const mapearReceta = () =>
+		(data.receta ?? []).map((linea) => ({
 			insumo_id: linea.insumo_id ? String(linea.insumo_id) : '',
 			producto_id: linea.producto_id ? String(linea.producto_id) : '',
 			cantidad: linea.cantidad
 		}));
+	let receta = $derived(mapearReceta());
+	let opcionesComponentes = $derived.by(() => {
+		const opciones: Record<string, { value: string; label: string }> = {};
+		for (const insumo of data.insumos) {
+			const value = `insumo:${insumo.id}`;
+			opciones[value] = {
+				value: `insumo:${insumo.id}`,
+				label: `${insumo.codigo} - ${insumo.nombre}`
+			};
+		}
+		for (const producto of data.productos) {
+			if (producto.id === data.producto.id) continue;
+			const value = `producto:${producto.id}`;
+			opciones[value] = {
+				value: `producto:${producto.id}`,
+				label: `${producto.codigo} - ${producto.nombre}`
+			};
+		}
+		for (const linea of data.receta ?? []) {
+			if (linea.insumo_id) {
+				const value = `insumo:${linea.insumo_id}`;
+				opciones[value] = {
+					value,
+					label: `${linea.codigo ?? ''} - ${linea.nombre ?? 'Insumo'}`
+				};
+			} else if (linea.producto_id) {
+				const value = `producto:${linea.producto_id}`;
+				opciones[value] = {
+					value,
+					label: `${linea.codigo ?? ''} - ${linea.nombre ?? 'Producto'}`
+				};
+			}
+		}
+		return Object.values(opciones);
 	});
 	let costoReceta = $derived(
 		redondearPrecio(
@@ -80,11 +119,9 @@
 		receta = [...receta, { insumo_id: '', producto_id: '', cantidad: 1 }];
 	}
 
-	afterNavigate(() => {
-		console.log('AFTER NAVIGATE');
-
-		form.element?.reset();
-	});
+	function actualizarLinea(indice: number, cambios: Partial<(typeof receta)[number]>) {
+		receta = receta.map((linea, i) => (i === indice ? { ...linea, ...cambios } : linea));
+	}
 </script>
 
 <PageLayout>
@@ -164,7 +201,7 @@
 			</fieldset>
 
 			<!-- Vehículo (solo si categoría es Escape) -->
-			{#if categoriaActual === '1'}
+			{#if categoriaSeleccionada?.slug === CATEGORIAS_PRODUCTO.ESCAPES}
 				<fieldset class="fieldset rounded-box border border-base-300 bg-base-200 p-4">
 					<legend class="fieldset-legend">Vehículo</legend>
 					<div class="grid grid-cols-1 gap-4 md:grid-cols-3">
@@ -231,7 +268,7 @@
 							</select>
 						</FormFieldWrapper>
 
-						{#if tipoUsoActual === '2'}
+						{#if tipoUsoSeleccionado?.slug === TIPOS_USO_PRODUCTO.COMPETENCIA}
 							<FormFieldWrapper label="Categoría de competencia" id="categoria_competencia_id">
 								<select
 									{...form.fields.categoria_competencia_id.as(
@@ -347,34 +384,24 @@
 											: '',
 								set: (value: string) => {
 									const [tipo, id] = value.split(':');
-									linea.insumo_id = tipo === 'insumo' ? id : '';
-									linea.producto_id = tipo === 'producto' ? id : '';
+									actualizarLinea(indice, {
+										insumo_id: tipo === 'insumo' ? id : '',
+										producto_id: tipo === 'producto' ? id : ''
+									});
 								}
 							}}
-							options={[
-								...data.insumos.map((insumo) => ({
-									value: `insumo:${insumo.id}`,
-									label: `${insumo.codigo} - ${insumo.nombre}`
-								})),
-								...data.productos
-									.filter((producto) => producto.id !== data.producto.id)
-									.map((producto) => ({
-										value: `producto:${producto.id}`,
-										label: `${producto.codigo} - ${producto.nombre}`
-									}))
-							]}
-							onChange={(value: string) => {
-								const [tipo, id] = value.split(':');
-								linea.insumo_id = tipo === 'insumo' ? id : '';
-								linea.producto_id = tipo === 'producto' ? id : '';
-							}}
+							options={opcionesComponentes}
 						/>
 						<input
 							class="remove-arrow input w-16 input-sm"
 							type="number"
 							min="0"
 							step="0.01"
-							bind:value={linea.cantidad}
+							value={linea.cantidad}
+							oninput={(event) =>
+								actualizarLinea(indice, {
+									cantidad: Number(event.currentTarget.value) || 0
+								})}
 						/>
 						<span class="label w-20 min-w-0 justify-start truncate whitespace-nowrap" title={unidad}
 							>{unidad}
@@ -411,7 +438,7 @@
 
 			<FormErrors {form} />
 			<FormActions
-				cancelHref="/productos"
+				cancelHref={resolve('/productos')}
 				pending={!!form.pending}
 				submitText="Actualizar Producto"
 			/>

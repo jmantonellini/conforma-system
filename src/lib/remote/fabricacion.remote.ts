@@ -7,10 +7,12 @@ import {
 	unidades_fabricacion,
 	lineas_pedido,
 	pedidos,
+	productos,
 	estados_fabricacion,
 	transiciones_estado,
 	logs_cambios_estado,
-	estados_pedido
+	estados_pedido,
+	movimientos_stock
 } from '$lib/server/db/schema';
 import { eq, sql, and } from 'drizzle-orm';
 import { getCurrentUser } from './usuarios.remote';
@@ -23,6 +25,9 @@ import {
 } from './fabricacion-consultas.remote';
 import { PEDIDO_SLUG } from '$lib/types';
 import { eliminarObjeto } from '$lib/server/services/object-storage.service';
+import { registrarIngresoProduccionTx } from '$lib/server/services/stock.service';
+import { requirePermission } from '$lib/server/auth/permissions';
+import { getStockDisponibilidad } from './stock.remote';
 
 // ============================================================
 // FORMS
@@ -31,69 +36,86 @@ import { eliminarObjeto } from '$lib/server/services/object-storage.service';
 export const crearOrdenFabricacion = form(CrearOrdenSchema, async (data) => {
 	const user = await getCurrentUser();
 	if (!user) throw new Error('No autorizado');
+	const esParaStock = data.origen === 'stock';
+	if (esParaStock) await requirePermission('stock', 'edit');
+	if (esParaStock ? !data.producto_id : !data.linea_pedido_id) {
+		throw new Error(esParaStock ? 'Selecciona un producto' : 'Selecciona una línea de pedido');
+	}
 
 	const cantidadTotal = Number(data.cantidad_total);
-
-	const [orden] = await db
-		.insert(ordenes_fabricacion)
-		.values({
-			nombre_trabajo: data.nombre_trabajo,
-			linea_pedido_id: data.linea_pedido_id,
-			cantidad_total: cantidadTotal,
-			prioridad: data.prioridad,
-			fecha_fin_estimada: data.fecha_fin_estimada ? new Date(data.fecha_fin_estimada) : null,
-			asignado_a: data.asignado_a || null,
-			observaciones: data.observaciones
-		})
-		.returning();
-
-	const estadoInicial = await db
-		.select()
-		.from(estados_fabricacion)
-		.where(eq(estados_fabricacion.slug, 'preparando_material'))
-		.then((rows) => rows[0]);
-
-	if (!estadoInicial) throw new Error('Estado inicial no configurado');
-
-	const unidades = [];
-	for (let i = 1; i <= cantidadTotal; i++) {
-		const [unidad] = await db
-			.insert(unidades_fabricacion)
+	if (!Number.isSafeInteger(cantidadTotal) || cantidadTotal < 1) {
+		throw new Error('La cantidad debe ser un entero mayor a cero');
+	}
+	const [orden, unidades] = await db.transaction(async (tx) => {
+		if (esParaStock) {
+			const [producto] = await tx
+				.select({ id: productos.id })
+				.from(productos)
+				.where(eq(productos.id, data.producto_id!))
+				.limit(1);
+			if (!producto) throw new Error('Producto no encontrado');
+		}
+		const [ordenCreada] = await tx
+			.insert(ordenes_fabricacion)
 			.values({
-				orden_fabricacion_id: orden.id,
-				numero_serie: `${orden.id}-${i.toString().padStart(3, '0')}`,
-				estado_id: estadoInicial.id,
-				historial_estados: []
+				nombre_trabajo: data.nombre_trabajo,
+				linea_pedido_id: esParaStock ? null : data.linea_pedido_id!,
+				producto_id: esParaStock ? data.producto_id! : null,
+				es_para_stock: esParaStock,
+				cantidad_total: cantidadTotal,
+				prioridad: data.prioridad,
+				fecha_fin_estimada: data.fecha_fin_estimada ? new Date(data.fecha_fin_estimada) : null,
+				asignado_a: data.asignado_a || null,
+				observaciones: data.observaciones
 			})
 			.returning();
-		unidades.push(unidad);
-	}
 
-	const pedido = await db
-		.select({ id: lineas_pedido.pedido_id, estado_id: pedidos.estado_id })
-		.from(lineas_pedido)
-		.innerJoin(pedidos, eq(lineas_pedido.pedido_id, pedidos.id))
-		.where(eq(lineas_pedido.id, data.linea_pedido_id))
-		.then((r) => r[0]);
+		const [estadoInicial] = await tx
+			.select()
+			.from(estados_fabricacion)
+			.where(eq(estados_fabricacion.slug, 'preparando_material'));
+		if (!estadoInicial) throw new Error('Estado inicial no configurado');
 
-	if (pedido) {
-		const [pendiente, enProd] = await Promise.all([
-			db
-				.select({ id: estados_pedido.id })
-				.from(estados_pedido)
-				.where(eq(estados_pedido.slug, 'pendiente'))
-				.then((r) => r[0]),
-			db
-				.select({ id: estados_pedido.id })
-				.from(estados_pedido)
-				.where(eq(estados_pedido.slug, 'en_produccion'))
-				.then((r) => r[0])
-		]);
+		const unidadesCreadas = await tx
+			.insert(unidades_fabricacion)
+			.values(
+				Array.from({ length: cantidadTotal }, (_, index) => ({
+					orden_fabricacion_id: ordenCreada.id,
+					numero_serie: `${ordenCreada.id}-${(index + 1).toString().padStart(3, '0')}`,
+					estado_id: estadoInicial.id,
+					historial_estados: []
+				}))
+			)
+			.returning();
 
-		if (pedido.estado_id === pendiente?.id && enProd) {
-			await db.update(pedidos).set({ estado_id: enProd.id }).where(eq(pedidos.id, pedido.id));
+		if (!esParaStock) {
+			const [pedido] = await tx
+				.select({ id: lineas_pedido.pedido_id, estado_id: pedidos.estado_id })
+				.from(lineas_pedido)
+				.innerJoin(pedidos, eq(lineas_pedido.pedido_id, pedidos.id))
+				.where(eq(lineas_pedido.id, data.linea_pedido_id!))
+				.limit(1);
+			if (pedido) {
+				const [pendiente, enProd] = await Promise.all([
+					tx
+						.select({ id: estados_pedido.id })
+						.from(estados_pedido)
+						.where(eq(estados_pedido.slug, 'pendiente')),
+					tx
+						.select({ id: estados_pedido.id })
+						.from(estados_pedido)
+						.where(eq(estados_pedido.slug, 'en_produccion'))
+				]);
+				if (pedido.estado_id === pendiente[0]?.id && enProd[0]) {
+					await tx
+						.update(pedidos)
+						.set({ estado_id: enProd[0].id })
+						.where(eq(pedidos.id, pedido.id));
+				}
+			}
 		}
-	}
+		return [ordenCreada, unidadesCreadas] as const;
+	});
 
 	return { success: true, orden, unidades };
 });
@@ -169,6 +191,25 @@ export const cambiarEstadoUnidad = command(
 			.then((rows) => rows[0]);
 
 		await db.transaction(async (tx) => {
+			const [orden] = await tx
+				.select({
+					es_para_stock: ordenes_fabricacion.es_para_stock,
+					producto_id: ordenes_fabricacion.producto_id
+				})
+				.from(ordenes_fabricacion)
+				.where(eq(ordenes_fabricacion.id, unidad.orden_fabricacion_id))
+				.limit(1);
+			if (orden?.es_para_stock && !estadoDestino?.es_final) {
+				const [ingreso] = await tx
+					.select({ id: movimientos_stock.id })
+					.from(movimientos_stock)
+					.where(eq(movimientos_stock.unidad_fabricacion_id, unidad.id))
+					.limit(1);
+				if (ingreso) {
+					throw new Error('No se puede reabrir una unidad que ya ingresó al stock');
+				}
+			}
+
 			await tx
 				.update(unidades_fabricacion)
 				.set({
@@ -190,6 +231,14 @@ export const cambiarEstadoUnidad = command(
 			});
 
 			if (estadoDestino?.es_final) {
+				if (orden?.es_para_stock && orden.producto_id && !unidad.es_defectuoso) {
+					await registrarIngresoProduccionTx(tx, {
+						productoId: orden.producto_id,
+						unidadId: unidad.id,
+						usuarioId: user.id
+					});
+				}
+
 				const pedido = await tx
 					.select({ id: lineas_pedido.pedido_id })
 					.from(ordenes_fabricacion)
@@ -241,6 +290,7 @@ export const cambiarEstadoUnidad = command(
 		// Refrescar
 		Promise.all([
 			getPedidos({ search: '', page: 1 }).refresh(),
+			getStockDisponibilidad().refresh(),
 			getOrdenFabricacion(unidad.orden_fabricacion_id).refresh(),
 			getHistorialUnidades(unidad.orden_fabricacion_id).refresh()
 		]).catch(() => {});

@@ -9,19 +9,19 @@ import {
 	getProductoByIdService,
 	getProductoConRecetaService,
 	getProductoInsumosService,
+	getProductosCatalogo as getProductosCatalogoService,
 	getProductosListado,
 	getTiposUsoService,
 	getTiposVehiculoService,
 	crearProductoServicio,
 	actualizarProductoServicio,
-	eliminarProductoServicio
+	eliminarProductoServicio,
+	obtenerPrecioProducto
 } from '$lib/server/services/productos.service';
 
-const toOptionalNumber = (value: string | number | null | undefined) => {
-	if (value === null || value === undefined || value === '') return undefined;
-	const parsed = Number(value);
-	return Number.isFinite(parsed) ? parsed : undefined;
-};
+import { toOptionalId } from '$lib/utils/ids';
+
+const toOptionalNumber = toOptionalId;
 
 const normalizarProductoPayload = <T extends Record<string, unknown>>(data: T) => ({
 	...data,
@@ -43,10 +43,41 @@ export const getProductos = query(
 		sort: v.optional(v.picklist(['nombre', 'codigo']), 'nombre'),
 		direction: v.optional(v.picklist(['asc', 'desc']), 'asc'),
 		page: v.optional(v.pipe(v.number(), v.toMinValue(1)), 1),
+		limit: v.optional(v.pipe(v.number(), v.minValue(1), v.maxValue(100)), 20),
+		incluirPrecios: v.optional(v.boolean(), true)
+	}),
+	async ({
+		search,
+		categoriaId,
+		sort = 'nombre',
+		direction = 'asc',
+		page,
+		limit,
+		incluirPrecios
+	}) => {
+		return getProductosListado({
+			search,
+			categoriaId,
+			sort,
+			direction,
+			page,
+			limit,
+			incluirPrecios
+		});
+	}
+);
+
+export const getProductosCatalogo = query(
+	v.object({
+		search: v.optional(v.string()),
+		categoriaId: v.optional(v.number()),
+		sort: v.optional(v.picklist(['nombre', 'codigo']), 'nombre'),
+		direction: v.optional(v.picklist(['asc', 'desc']), 'asc'),
+		page: v.optional(v.pipe(v.number(), v.toMinValue(1)), 1),
 		limit: v.optional(v.pipe(v.number(), v.minValue(1), v.maxValue(100)), 20)
 	}),
 	async ({ search, categoriaId, sort = 'nombre', direction = 'asc', page, limit }) => {
-		return getProductosListado({ search, categoriaId, sort, direction, page, limit });
+		return getProductosCatalogoService({ search, categoriaId, sort, direction, page, limit });
 	}
 );
 
@@ -56,6 +87,10 @@ export const getProductoById = query(
 		return getProductoByIdService(id);
 	}
 );
+
+export const getProductoPrecio = query(v.number(), async (productoId) => {
+	return obtenerPrecioProducto(productoId);
+});
 
 export const getProductoInsumos = query(v.number(), async (productoId) => {
 	return getProductoInsumosService(productoId);

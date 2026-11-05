@@ -24,17 +24,20 @@
 
 	const TIPOS_ARCHIVO =
 		'image/jpeg,image/png,image/webp,audio/ogg,audio/mpeg,audio/mp4,audio/x-m4a,audio/wav,audio/x-wav,video/mp4,application/pdf';
-	const permisoModulo = (tipoAdjunto: TipoEntidadAdjunto) =>
-		tipoAdjunto === 'cotizacion'
-			? 'cotizaciones'
-			: tipoAdjunto === 'pedido'
-				? 'pedidos'
-				: tipoAdjunto === 'producto'
-					? 'productos'
-					: 'taller';
+	const modulosPorTipo: Record<
+		TipoEntidadAdjunto,
+		'cotizaciones' | 'pedidos' | 'productos' | 'taller'
+	> = {
+		cotizacion: 'cotizaciones',
+		pedido: 'pedidos',
+		producto: 'productos',
+		fabricacion: 'taller'
+	};
+	const permisoModulo = (tipoAdjunto: TipoEntidadAdjunto) => modulosPorTipo[tipoAdjunto];
 	const puedeSubir = $derived(
 		can(page.data.user, page.data.permisos, permisoModulo(tipo), 'edit') ||
-			(tipo === 'cotizacion' && can(page.data.user, page.data.permisos, 'cotizaciones', 'create'))
+			(modulosPorTipo[tipo] === 'cotizaciones' &&
+				can(page.data.user, page.data.permisos, 'cotizaciones', 'create'))
 	);
 
 	async function subirArchivos(files: FileList | null, input?: HTMLInputElement) {

@@ -2,15 +2,18 @@
 	import { page } from '$app/state';
 	import { crearOrdenFabricacion } from '$lib/remote/fabricacion.remote';
 	import { getEmpleados } from '$lib/remote/empleados.remote';
+	import { getProductos } from '$lib/remote/productos.remote';
 	import { getLineasPedidoSinOrden } from '$lib/remote/pedidos.remote';
 	import { PageLayout, FormErrors, FormFieldWrapper, FormActions } from '$lib/components/ui';
 	import { toast } from '$lib/stores/toast.svelte';
 	import { goto } from '$app/navigation';
 	import { resolve } from '$app/paths';
 
-	const form = crearOrdenFabricacion;
+	const origenStock = $derived(page.url.searchParams.get('origen') === 'stock');
+	const form = $derived(crearOrdenFabricacion.for(origenStock ? 'stock' : 'pedido'));
 	const empleados = $derived(await getEmpleados());
 	const lineasPendientes = $derived(await getLineasPedidoSinOrden({ limit: 100 }));
+	const productos = $derived(await getProductos({ limit: 100 }));
 
 	const lineaId = $derived(page.url.searchParams.get('linea') ?? '');
 	const lineaSeleccionada = $derived(
@@ -25,7 +28,7 @@
 			try {
 				if (await form.submit()) {
 					form.element.reset();
-					goto(resolve('/fabricacion'));
+					goto(resolve(origenStock ? '/stock' : '/fabricacion'));
 					toast.success('Orden creada!');
 				}
 			} catch (error) {
@@ -39,29 +42,50 @@
 			<div class="card-body">
 				<h3 class="card-title">Datos de la orden</h3>
 				<div class="grid gap-4 lg:grid-cols-3">
-					<!-- Línea: select libre o input bloqueado -->
-					<FormFieldWrapper id="linea_pedido_id" label="Línea de pedido" required>
-						{#if bloqueado}
-							<input {...form.fields.linea_pedido_id.as('hidden', lineaId)} />
-							<input
-								type="text"
-								class="input bg-base-300"
-								value="{lineaSeleccionada?.pedido_numero} — {lineaSeleccionada?.producto_nombre ||
-									lineaSeleccionada?.descripcion ||
-									'Personalizado'} ({lineaSeleccionada?.cantidad}u)"
-								disabled
-							/>
-						{:else}
-							<select {...form.fields.linea_pedido_id.as('select')} class="select" required>
+					<input {...form.fields.origen.as('hidden', origenStock ? 'stock' : 'pedido')} />
+					{#if origenStock}
+						<FormFieldWrapper id="producto_id" label="Producto para stock" required>
+							<select
+								{...form.fields.producto_id.as('select')}
+								class="select"
+								required
+								onchange={(event) => {
+									const producto = productos.data.find(
+										(item) => String(item.id) === event.currentTarget.value
+									);
+									form.fields.nombre_trabajo.set(producto?.nombre ?? '');
+								}}
+							>
 								<option value="">Seleccionar...</option>
-								{#each lineasPendientes as lp (lp.id)}
-									<option value={String(lp.id)}>
-										{lp.pedido_numero} — {lp.producto_nombre || lp.descripcion || 'Personalizado'} ({lp.cantidad}u)
-									</option>
+								{#each productos.data as producto (producto.id)}
+									<option value={String(producto.id)}>{producto.codigo} — {producto.nombre}</option>
 								{/each}
 							</select>
-						{/if}
-					</FormFieldWrapper>
+						</FormFieldWrapper>
+					{:else}
+						<FormFieldWrapper id="linea_pedido_id" label="Línea de pedido" required>
+							{#if bloqueado}
+								<input {...form.fields.linea_pedido_id.as('hidden', lineaId)} />
+								<input
+									type="text"
+									class="input bg-base-300"
+									value="{lineaSeleccionada?.pedido_numero} — {lineaSeleccionada?.producto_nombre ||
+										lineaSeleccionada?.descripcion ||
+										'Personalizado'} ({lineaSeleccionada?.cantidad}u)"
+									disabled
+								/>
+							{:else}
+								<select {...form.fields.linea_pedido_id.as('select')} class="select" required>
+									<option value="">Seleccionar...</option>
+									{#each lineasPendientes as lp (lp.id)}
+										<option value={String(lp.id)}>
+											{lp.pedido_numero} — {lp.producto_nombre || lp.descripcion || 'Personalizado'} ({lp.cantidad}u)
+										</option>
+									{/each}
+								</select>
+							{/if}
+						</FormFieldWrapper>
+					{/if}
 
 					<FormFieldWrapper id="nombre_trabajo" label="Nombre del trabajo" required>
 						<input
@@ -69,7 +93,7 @@
 							{...form.fields.nombre_trabajo.as('text')}
 							value={bloqueado
 								? lineaSeleccionada?.producto_nombre || lineaSeleccionada?.descripcion || ''
-								: ''}
+								: undefined}
 						/>
 					</FormFieldWrapper>
 
@@ -121,6 +145,10 @@
 		</div>
 
 		<FormErrors {form} />
-		<FormActions cancelHref="/fabricacion" pending={!!form.pending} submitText="Crear Orden" />
+		<FormActions
+			cancelHref={origenStock ? resolve('/stock') : resolve('/fabricacion')}
+			pending={!!form.pending}
+			submitText="Crear Orden"
+		/>
 	</form>
 </PageLayout>

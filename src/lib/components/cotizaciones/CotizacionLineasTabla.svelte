@@ -7,6 +7,7 @@
 		lineas: LineaEdicion[];
 		bloqueada: boolean;
 		productos: ProductoOpcion[];
+		onBuscarProducto?: (search: string) => Promise<void>;
 		insumos: InsumoOpcion[];
 		descuentoGlobal: number;
 		totalBase: number;
@@ -29,6 +30,7 @@
 		lineas,
 		bloqueada,
 		productos,
+		onBuscarProducto,
 		insumos,
 		descuentoGlobal,
 		totalBase,
@@ -67,6 +69,7 @@
 					{bloqueada}
 					cantidadLineas={lineas.length}
 					{productos}
+					{onBuscarProducto}
 					{insumos}
 					{onEliminar}
 					{onSeleccionarProducto}

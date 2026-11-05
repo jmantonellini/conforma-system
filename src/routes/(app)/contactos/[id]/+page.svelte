@@ -52,7 +52,7 @@
 				<Can modulo="contactos" accion="edit">
 					{#if editando}
 						<FormActions
-							cancelHref="/contactos"
+							cancelHref={resolve('/contactos')}
 							pending={!!form.pending}
 							submitText="Guardar cambios"
 						/>

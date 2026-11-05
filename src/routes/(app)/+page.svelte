@@ -36,6 +36,14 @@
 		asignado_a: ''
 	});
 	const form = crearTarea;
+	const prioridadesOrden = new Map([
+		[2, { clase: 'badge-error', nombre: 'Crítica' }],
+		[1, { clase: 'badge-warning', nombre: 'Urgente' }]
+	]);
+	let esModoCreacion = $derived(modalMode !== 'edit');
+	function obtenerPrioridad(prioridad: number | null) {
+		return prioridadesOrden.get(prioridad ?? 0) ?? { clase: 'badge-ghost', nombre: 'Normal' };
+	}
 
 	function formatearFechaInput(value: Date | string | null | undefined) {
 		if (!value) return '';
@@ -79,10 +87,8 @@
 	}
 
 	async function handleReorder(updates: { id: number; orden: number }[]) {
-		tareas = tareas.map((t) => {
-			const update = updates.find((u) => u.id === t.id);
-			return update ? { ...t, orden: update.orden } : t;
-		});
+		const ordenPorId = new Map(updates.map((update) => [update.id, update.orden]));
+		tareas = tareas.map((t) => (ordenPorId.has(t.id) ? { ...t, orden: ordenPorId.get(t.id)! } : t));
 		await reordenarTareas({ tareas: updates });
 	}
 
@@ -104,7 +110,7 @@
 
 	async function handleGuardarEdicion(event: SubmitEvent) {
 		event.preventDefault();
-		if (tareaEditandoId === null) return;
+		if (!tareaEditandoId) return;
 		if (!tareaForm.titulo.trim()) {
 			toast.error('El título es requerido');
 			return;
@@ -133,7 +139,7 @@
 				<div class="mb-4 flex items-center justify-between">
 					<h2 class="card-title">Órdenes activas</h2>
 					<span class="text-sm text-base-content/60">
-						{ordenesActivas.length} orden{ordenesActivas.length === 1 ? '' : 'es'} en curso
+						{ordenesActivas.length} orden{ordenesActivas.length <= 1 ? '' : 'es'} en curso
 					</span>
 				</div>
 
@@ -149,13 +155,9 @@
 
 				{#snippet rowOrden(o: (typeof ordenesActivas)[number])}
 					<td>
-						{#if o.prioridad === 2}
-							<span class="badge badge-error">Crítica</span>
-						{:else if o.prioridad === 1}
-							<span class="badge badge-warning">Urgente</span>
-						{:else}
-							<span class="badge badge-ghost">Normal</span>
-						{/if}
+						<span class={`badge ${obtenerPrioridad(o.prioridad).clase}`}>
+							{obtenerPrioridad(o.prioridad).nombre}
+						</span>
 					</td>
 					<td>
 						<span class={`badge badge-${o.estado.color}`}>
@@ -218,16 +220,16 @@
 
 <Modal
 	bind:open={showModal}
-	title={modalMode === 'create' ? 'Nueva Tarea' : 'Editar Tarea'}
+	title={esModoCreacion ? 'Nueva Tarea' : 'Editar Tarea'}
 	onClose={() => {
 		showModal = false;
-		if (modalMode === 'edit') {
+		if (!esModoCreacion) {
 			resetTareaForm();
 			tareaEditandoId = null;
 		}
 	}}
 >
-	{#if modalMode === 'create'}
+	{#if esModoCreacion}
 		<form
 			{...form.enhance(async (formInstance) => {
 				try {
@@ -313,7 +315,7 @@
 
 	{#snippet actions()}
 		<button class="btn" onclick={() => (showModal = false)}>Cancelar</button>
-		{#if modalMode === 'create'}
+		{#if esModoCreacion}
 			<button type="submit" class="btn btn-primary" form="tarea-form" disabled={!!form.pending}>
 				{form.pending ? 'Creando...' : 'Crear'}
 			</button>

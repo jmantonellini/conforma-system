@@ -4,6 +4,7 @@
 	import { toast } from '$lib/stores/toast.svelte';
 	import { formatearFecha } from '$lib/utils/fechas';
 	import { formatearDosDecimales, redondearPrecio } from '$lib/utils/precios';
+	import { ESTADO_PAGO, METODO_PAGO } from '$lib/types/dominio';
 
 	let { pedidoId }: { pedidoId: number } = $props();
 
@@ -34,20 +35,20 @@
 			</Can>
 		</div>
 
-		{#if facturacion && typeof facturacion.estado === 'string'}
+		{#if facturacion}
 			<div class="mt-2 flex items-center justify-between gap-2">
 				<span
-					class="badge badge-{facturacion.estado === 'pagado'
+					class="badge badge-{facturacion.estado === ESTADO_PAGO.PAGADO
 						? 'success'
-						: facturacion.estado === 'sin_pagar'
+						: facturacion.estado === ESTADO_PAGO.SIN_PAGAR
 							? 'ghost'
 							: 'warning'}"
 				>
-					{facturacion.estado === 'sin_pagar'
+					{facturacion.estado === ESTADO_PAGO.SIN_PAGAR
 						? 'Sin pagar'
-						: facturacion.estado === 'anticipo'
+						: facturacion.estado === ESTADO_PAGO.ANTICIPO
 							? 'Solo anticipo'
-							: facturacion.estado === 'parcial'
+							: facturacion.estado === ESTADO_PAGO.PARCIAL
 								? 'Parcial'
 								: 'Pagado'}
 				</span>
@@ -68,7 +69,7 @@
 							<p class="font-semibold">${formatearDosDecimales(pago.monto)}</p>
 							<p class="text-sm text-base-content/70 capitalize">
 								<span>
-									{pago.metodo_pago === 'cuotas'
+									{pago.metodo_pago === METODO_PAGO.CUOTAS
 										? 'Tarjeta de crédito'
 										: pago.metodo_pago || 'Sin método'}
 								</span>
@@ -122,14 +123,14 @@
 				</div>
 			</FormFieldWrapper>
 			<FormFieldWrapper label="Método" id="metodo_pago">
-				<select class="select" {...form.fields.metodo_pago.as('select', 'efectivo')}>
-					<option value="efectivo">Efectivo</option>
-					<option value="transferencia">Transferencia</option>
-					<option value="cheque">Cheque</option>
-					<option value="cuotas">Tarjeta en cuotas</option>
+				<select class="select" {...form.fields.metodo_pago.as('select', METODO_PAGO.EFECTIVO)}>
+					<option value={METODO_PAGO.EFECTIVO}>Efectivo</option>
+					<option value={METODO_PAGO.TRANSFERENCIA}>Transferencia</option>
+					<option value={METODO_PAGO.CHEQUE}>Cheque</option>
+					<option value={METODO_PAGO.CUOTAS}>Tarjeta en cuotas</option>
 				</select>
 			</FormFieldWrapper>
-			{#if form.fields.metodo_pago.value() === 'cuotas'}
+			{#if form.fields.metodo_pago.value() === METODO_PAGO.CUOTAS}
 				<FormFieldWrapper label="Cantidad de cuotas" id="cantidad_cuotas" required>
 					<input
 						class="remove-arrow input"

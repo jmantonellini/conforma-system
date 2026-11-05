@@ -41,6 +41,9 @@ const normalizarPedidoPayload = <T extends Record<string, unknown>>(data: T) => 
 				visible_cliente: (linea as { visible_cliente?: boolean }).visible_cliente !== false,
 				producto_id: String((linea as { producto_id?: string | number }).producto_id ?? ''),
 				insumo_id: Number((linea as { insumo_id?: string | number }).insumo_id) || undefined,
+				stock_ubicacion_id:
+					Number((linea as { stock_ubicacion_id?: string | number }).stock_ubicacion_id) ||
+					undefined,
 				cantidad: Number((linea as { cantidad?: number }).cantidad ?? 0),
 				precio: Number((linea as { precio?: number }).precio ?? 0),
 				precio_lista: Number((linea as { precio_lista?: number }).precio_lista ?? 0),

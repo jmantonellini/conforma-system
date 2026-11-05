@@ -54,8 +54,14 @@ function obtenerDomicilioFiscal(domicilios: unknown): Record<string, unknown> | 
 }
 
 function textoOpcional(valor: unknown): string | undefined {
-	if (typeof valor === 'string') return valor.trim() || undefined;
-	if (typeof valor === 'number') return String(valor);
+	switch (typeof valor) {
+		case 'string':
+			return valor.trim() || undefined;
+		case 'number':
+			return String(valor);
+		default:
+			return undefined;
+	}
 	return undefined;
 }
 

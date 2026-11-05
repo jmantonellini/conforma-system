@@ -12,13 +12,22 @@
 
 	const form = crearContacto;
 	const rolSolicitado = page.url.searchParams.get('rol');
-	let rol = $state(
+	const rolInicial =
 		rolSolicitado === 'ninguno' || rolSolicitado === 'proveedor' ? rolSolicitado : 'cliente'
-	);
+	let rol = $state(rolInicial);
 	let esDistribuidor = $state(false);
 	let porcentajeCompensacion = $state(0);
 	let cuitFormateado = $state('');
 	let cuitConsultado = '';
+
+	function resetearFormulario() {
+		form.element?.reset();
+		rol = rolInicial;
+		esDistribuidor = false;
+		porcentajeCompensacion = 0;
+		cuitFormateado = '';
+		cuitConsultado = '';
+	}
 
 	function establecerCuit(input: HTMLInputElement, cuit: string, digitosAntesDelCursor: number) {
 		form.fields.cuit.set(cuit);
@@ -123,7 +132,7 @@
 		{...form.enhance(async (instance) => {
 			try {
 				if (await instance.submit()) {
-					form.element?.reset();
+					resetearFormulario();
 					toast.success('Contacto creado');
 				} else toast.error('Revisá los datos del contacto');
 			} catch {
@@ -230,6 +239,11 @@
 		</fieldset>
 		<FormDireccion {form} initialData={undefined} />
 		<FormErrors {form} />
-		<FormActions cancelHref="/contactos" pending={!!form.pending} submitText="Crear contacto" />
+		<FormActions
+			cancelHref={resolve('/contactos')}
+			onCancel={resetearFormulario}
+			pending={!!form.pending}
+			submitText="Crear contacto"
+		/>
 	</form>
 </PageLayout>

@@ -109,7 +109,11 @@
 					</FormFieldWrapper>
 				</div>
 				<FormErrors {form} />
-				<FormActions cancelHref="/insumos" pending={!!form.pending} submitText="Guardar cambios" />
+				<FormActions
+					cancelHref={resolve('/insumos')}
+					pending={!!form.pending}
+					submitText="Guardar cambios"
+				/>
 			</div>
 		</form>
 	</Can>

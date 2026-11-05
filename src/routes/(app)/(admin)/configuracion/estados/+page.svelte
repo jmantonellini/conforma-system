@@ -50,37 +50,39 @@
 	let transicionesFabricacion = $derived(await getTransicionesEstadoAdmin('fabricacion'));
 	let transicionesPedido = $derived(await getTransicionesEstadoAdmin('pedido'));
 	let transicionesCotizacion = $derived(await getTransicionesEstadoAdmin('cotizacion'));
-	let estadosSeleccionados = $derived(
-		activeSection === 'fabricacion'
-			? estadosFabricacion
-			: activeSection === 'pedidos'
-				? estadosPedido
-				: estadosCotizacion
+	type EstadoSection = Exclude<Section, 'categorias'>;
+	const estadosPorSeccion = $derived({
+		fabricacion: estadosFabricacion,
+		pedidos: estadosPedido,
+		cotizaciones: estadosCotizacion
+	});
+	const transicionesPorSeccion = $derived({
+		fabricacion: transicionesFabricacion,
+		pedidos: transicionesPedido,
+		cotizaciones: transicionesCotizacion
+	});
+	let estadoSection = $derived(
+		activeSection in estadosPorSeccion ? (activeSection as EstadoSection) : 'fabricacion'
 	);
-	let transicionesSeleccionadas = $derived(
-		activeSection === 'fabricacion'
-			? transicionesFabricacion
-			: activeSection === 'pedidos'
-				? transicionesPedido
-				: transicionesCotizacion
-	);
-	let tipoEstadoActual = $derived<'fabricacion' | 'pedido' | 'cotizacion'>(
-		activeSection === 'fabricacion'
-			? 'fabricacion'
-			: activeSection === 'pedidos'
-				? 'pedido'
-				: 'cotizacion'
-	);
+	let estadosSeleccionados = $derived(estadosPorSeccion[estadoSection]);
+	let transicionesSeleccionadas = $derived(transicionesPorSeccion[estadoSection]);
+	const tiposPorSeccion = {
+		fabricacion: 'fabricacion',
+		pedidos: 'pedido',
+		cotizaciones: 'cotizacion'
+	} as const;
+	let tipoEstadoActual = $derived(tiposPorSeccion[estadoSection]);
+	let esCategorias = $derived(activeSection === 'categorias');
+	let esFabricacion = $derived(activeSection === 'fabricacion');
+	let esPedidos = $derived(activeSection === 'pedidos');
+	let esCotizaciones = $derived(activeSection === 'cotizaciones');
+	let esVistaEstados = $derived(vistaEstado === 'estados');
+	let esCategoriasModal = $derived(modalType === 'categorias');
 
 	$effect(() => {
 		const section = page.url.searchParams.get('seccion');
-		if (
-			section === 'fabricacion' ||
-			section === 'pedidos' ||
-			section === 'cotizaciones' ||
-			section === 'categorias'
-		) {
-			activeSection = section;
+		if (section && ['fabricacion', 'pedidos', 'cotizaciones', 'categorias'].includes(section)) {
+			activeSection = section as Section;
 		}
 	});
 
@@ -114,8 +116,9 @@
 	}
 
 	async function guardar() {
+		if (!modalType) return;
 		try {
-			if (modalType === 'categorias') {
+			if (esCategoriasModal) {
 				const data = { nombre, descripcion: descripcion || undefined };
 				if (editingId) await actualizarCategoriaProducto({ id: editingId, ...data });
 				else {
@@ -125,18 +128,19 @@
 						return;
 					}
 				}
-			} else if (modalType === 'fabricacion') {
+			} else {
 				const data = { nombre, slug, grupo, orden: Number(orden), color, es_final: esFinal };
-				if (editingId) await actualizarEstadoFabricacion({ id: editingId, ...data });
-				else await crearEstadoFabricacion(data);
-			} else if (modalType === 'pedidos') {
-				const data = { nombre, slug, grupo, orden: Number(orden), color, es_final: esFinal };
-				if (editingId) await actualizarEstadoPedidoAdmin({ id: editingId, ...data });
-				else await crearEstadoPedidoAdmin(data);
-			} else if (modalType === 'cotizaciones') {
-				const data = { nombre, slug, grupo, orden: Number(orden), color, es_final: esFinal };
-				if (editingId) await actualizarEstadoCotizacionAdmin({ id: editingId, ...data });
-				else await crearEstadoCotizacionAdmin(data);
+				const acciones = {
+					fabricacion: { crear: crearEstadoFabricacion, actualizar: actualizarEstadoFabricacion },
+					pedidos: { crear: crearEstadoPedidoAdmin, actualizar: actualizarEstadoPedidoAdmin },
+					cotizaciones: {
+						crear: crearEstadoCotizacionAdmin,
+						actualizar: actualizarEstadoCotizacionAdmin
+					}
+				};
+				const accion = acciones[modalType as EstadoSection];
+				if (editingId) await accion.actualizar({ id: editingId, ...data });
+				else await accion.crear(data);
 			}
 			toast.success(editingId ? 'Configuración actualizada' : 'Configuración creada');
 			cerrarModal();
@@ -148,10 +152,13 @@
 	async function eliminar(tipo: Section, id: number) {
 		if (!confirm('¿Eliminar este registro?')) return;
 		try {
-			if (tipo === 'categorias') await eliminarCategoriaProducto({ id });
-			if (tipo === 'fabricacion') await eliminarEstadoFabricacion({ id });
-			if (tipo === 'pedidos') await eliminarEstadoPedidoAdmin({ id });
-			if (tipo === 'cotizaciones') await eliminarEstadoCotizacionAdmin({ id });
+			const acciones = {
+				categorias: eliminarCategoriaProducto,
+				fabricacion: eliminarEstadoFabricacion,
+				pedidos: eliminarEstadoPedidoAdmin,
+				cotizaciones: eliminarEstadoCotizacionAdmin
+			};
+			await acciones[tipo]({ id });
 			toast.success('Registro eliminado');
 		} catch (error) {
 			toast.error(error instanceof Error ? error.message : 'No se pudo eliminar');
@@ -204,28 +211,26 @@
 	<div class="flex flex-col gap-6">
 		<div role="tablist" class="tabs-box tabs w-fit">
 			<button
-				class:tab-active={activeSection === 'categorias'}
+				class:tab-active={esCategorias}
 				class="tab"
 				onclick={() => (activeSection = 'categorias')}>Categorías de productos</button
 			>
 			<button
-				class:tab-active={activeSection === 'fabricacion'}
+				class:tab-active={esFabricacion}
 				class="tab"
 				onclick={() => (activeSection = 'fabricacion')}>Estados de fabricación</button
 			>
-			<button
-				class:tab-active={activeSection === 'pedidos'}
-				class="tab"
-				onclick={() => (activeSection = 'pedidos')}>Estados de pedidos</button
+			<button class:tab-active={esPedidos} class="tab" onclick={() => (activeSection = 'pedidos')}
+				>Estados de pedidos</button
 			>
 			<button
-				class:tab-active={activeSection === 'cotizaciones'}
+				class:tab-active={esCotizaciones}
 				class="tab"
 				onclick={() => (activeSection = 'cotizaciones')}>Estados de cotización</button
 			>
 		</div>
 
-		{#if activeSection === 'categorias'}
+		{#if esCategorias}
 			<div class="card bg-base-100 shadow">
 				<div class="card-body p-0">
 					<div class="flex items-center justify-between p-6">
@@ -264,20 +269,15 @@
 				</div>
 			</div>
 		{:else}
-			{@const estados =
-				activeSection === 'fabricacion'
-					? estadosFabricacion
-					: activeSection === 'pedidos'
-						? estadosPedido
-						: estadosCotizacion}
+			{@const estados = estadosSeleccionados}
 			<div role="tablist" class="tabs-box tabs w-fit">
 				<button
-					class:tab-active={vistaEstado === 'estados'}
+					class:tab-active={esVistaEstados}
 					class="tab"
 					onclick={() => (vistaEstado = 'estados')}>Estados</button
 				>
 				<button
-					class:tab-active={vistaEstado === 'transiciones'}
+					class:tab-active={!esVistaEstados}
 					class="tab"
 					onclick={() => (vistaEstado = 'transiciones')}>Transiciones</button
 				>
@@ -286,18 +286,16 @@
 				<div class="card-body p-0">
 					<div class="flex items-center justify-between p-6">
 						<h2 class="card-title">
-							{#if vistaEstado === 'transiciones'}
-								Transiciones
-							{:else if activeSection === 'fabricacion'}
-								Estados de fabricación
-							{:else if activeSection === 'pedidos'}
-								Estados de pedidos
-							{:else}
-								Estados de cotización
-							{/if}
+							{!esVistaEstados
+								? 'Transiciones'
+								: esFabricacion
+									? 'Estados de fabricación'
+									: esPedidos
+										? 'Estados de pedidos'
+										: 'Estados de cotización'}
 						</h2>
 						<Can modulo="configuracion" accion="edit">
-							{#if vistaEstado === 'transiciones'}
+							{#if !esVistaEstados}
 								<button class="btn btn-primary btn-sm" onclick={abrirNuevaTransicion}>
 									+ Nueva transición
 								</button>
@@ -308,7 +306,7 @@
 							{/if}
 						</Can>
 					</div>
-					{#if vistaEstado === 'estados'}
+					{#if esVistaEstados}
 						{#snippet stateHeader()}<th>Orden</th><th>Nombre</th><th>Slug</th><th>Grupo</th><th
 								>Color</th
 							><th>Final</th><th class="text-center">Acciones</th>{/snippet}
@@ -382,7 +380,7 @@
 			<FormFieldWrapper label="Nombre" id="nombre" required
 				><input class="input" bind:value={nombre} /></FormFieldWrapper
 			>
-			{#if modalType === 'categorias'}
+			{#if esCategoriasModal}
 				<FormFieldWrapper label="Descripción" id="descripcion"
 					><textarea class="textarea" bind:value={descripcion}></textarea></FormFieldWrapper
 				>

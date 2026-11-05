@@ -19,7 +19,9 @@ import {
 	usuarios,
 	cotizaciones,
 	adjuntos as adjuntosTable,
-	contactos
+	contactos,
+	reservas_stock,
+	ubicaciones_stock
 } from '$lib/server/db/schema';
 import {
 	and,
@@ -50,11 +52,16 @@ import {
 	type LineaComercialResuelta
 } from '$lib/server/services/lineas-comerciales.service';
 import { formatearDosDecimales } from '$lib/utils/precios';
+import {
+	procesarReservasPedidoTx,
+	reservarStockParaLineaTx
+} from '$lib/server/services/stock.service';
 
 export const LineaPedidoSchema = v.object({
 	tipo: v.optional(v.picklist(['producto', 'insumo', 'concepto']), 'producto'),
 	visible_cliente: v.optional(v.boolean(), true),
 	producto_id: v.optional(v.string()),
+	stock_ubicacion_id: v.optional(v.number()),
 	insumo_id: v.optional(v.number()),
 	nuevo_insumo: v.optional(
 		v.object({
@@ -260,6 +267,32 @@ export async function obtenerPedidoDetalle(id: number) {
 			};
 		})
 	);
+	const reservasStock = lineas.length
+		? await db
+				.select({
+					linea_pedido_id: reservas_stock.linea_pedido_id,
+					cantidad: reservas_stock.cantidad,
+					estado: reservas_stock.estado,
+					ubicacion_stock_id: reservas_stock.ubicacion_stock_id,
+					ubicacion_nombre: sql<string>`COALESCE(${contactos.razon_social}, ${ubicaciones_stock.nombre})`
+				})
+				.from(reservas_stock)
+				.innerJoin(ubicaciones_stock, eq(reservas_stock.ubicacion_stock_id, ubicaciones_stock.id))
+				.leftJoin(contactos, eq(ubicaciones_stock.contacto_distribuidor_id, contactos.id))
+				.where(
+					inArray(
+						reservas_stock.linea_pedido_id,
+						lineas.map((linea) => linea.id)
+					)
+				)
+		: [];
+	const reservasPorLinea = new Map(
+		reservasStock.map((reserva) => [reserva.linea_pedido_id, reserva])
+	);
+	const lineasConStock = lineasConProduccion.map((linea) => ({
+		...linea,
+		reserva_stock: reservasPorLinea.get(linea.id) ?? null
+	}));
 
 	const insumosAdicionales = await db
 		.select({
@@ -284,7 +317,7 @@ export async function obtenerPedidoDetalle(id: number) {
 		.limit(1);
 	const condicionesAdjuntos = [eq(adjuntosTable.pedido_id, id)];
 	if (cotizacion?.id) condicionesAdjuntos.push(eq(adjuntosTable.cotizacion_id, cotizacion.id));
-	const ordenesRelacionadas = lineasConProduccion.flatMap((linea) =>
+	const ordenesRelacionadas = lineasConStock.flatMap((linea) =>
 		linea.produccion ? [linea.produccion.orden_id] : []
 	);
 	if (ordenesRelacionadas.length) {
@@ -323,7 +356,7 @@ export async function obtenerPedidoDetalle(id: number) {
 			(primero, segundo) =>
 				new Date(segundo.created_at ?? 0).getTime() - new Date(primero.created_at ?? 0).getTime()
 		);
-	const ordenes = lineasConProduccion
+	const ordenes = lineasConStock
 		.filter((linea) => linea.produccion)
 		.map((linea) => linea.produccion!.orden_id);
 
@@ -336,7 +369,7 @@ export async function obtenerPedidoDetalle(id: number) {
 				orden_fabricacion_id: ordenes.length === 1 ? ordenes[0] : null
 			}
 		},
-		lineas: lineasConProduccion,
+		lineas: lineasConStock,
 		insumosAdicionales,
 		adjuntos
 	};
@@ -539,7 +572,11 @@ export async function crearPedidoServicio(data: {
 	usar_credito_distribuidor?: boolean;
 	monto_credito_distribuidor?: number;
 	porcentaje_comision_distribuidor?: number;
-	lineas: (LineaComercialEntrada & { precio: number; precio_lista?: number })[];
+	lineas: (LineaComercialEntrada & {
+		precio: number;
+		precio_lista?: number;
+		stock_ubicacion_id?: number;
+	})[];
 	fecha_entrega_prometida?: string;
 	anticipo?: number;
 	observaciones?: string;
@@ -548,13 +585,19 @@ export async function crearPedidoServicio(data: {
 	if (!user) throw new Error('Usuario no autenticado');
 
 	await requirePermission('pedidos', 'create');
+	if (data.lineas.some((linea) => linea.stock_ubicacion_id)) {
+		await requirePermission('stock', 'edit');
+	}
 	if (data.lineas.some((linea) => linea.nuevo_insumo)) {
 		await requirePermission('insumos', 'create');
 	}
 	const numero_pedido = await generarNumeroPedido();
 	return db.transaction(async (tx) => {
-		const lineasResueltas: (LineaComercialResuelta & { precio: number; orden_linea: number })[] =
-			[];
+		const lineasResueltas: (LineaComercialResuelta & {
+			precio: number;
+			orden_linea: number;
+			stock_ubicacion_id?: number;
+		})[] = [];
 		for (const [orden_linea, linea] of data.lineas.entries()) {
 			const resuelta = await resolverLineaComercial(
 				tx,
@@ -568,7 +611,8 @@ export async function crearPedidoServicio(data: {
 			lineasResueltas.push({
 				...resuelta,
 				precio: resuelta.precio_unitario,
-				orden_linea
+				orden_linea,
+				stock_ubicacion_id: linea.stock_ubicacion_id
 			});
 		}
 
@@ -624,19 +668,31 @@ export async function crearPedidoServicio(data: {
 				continue;
 			}
 
-			await tx.insert(lineas_pedido).values({
-				pedido_id: pedido.id,
-				producto_id: linea.producto_id,
-				cantidad: linea.cantidad,
-				precio_unitario: linea.visible_cliente ? linea.precio_unitario : 0,
-				precio_lista_unitario: linea.precio_lista_unitario,
-				margen_porcentaje: linea.margen_producto,
-				costo_materiales: linea.costo_materiales,
-				insumos_snapshot: linea.insumos_snapshot,
-				es_personalizado: linea.es_personalizado,
-				descripcion_personalizada: linea.es_personalizado ? linea.descripcion : null,
-				orden_linea: linea.orden_linea
-			});
+			const [lineaPedido] = await tx
+				.insert(lineas_pedido)
+				.values({
+					pedido_id: pedido.id,
+					producto_id: linea.producto_id,
+					cantidad: linea.cantidad,
+					precio_unitario: linea.visible_cliente ? linea.precio_unitario : 0,
+					precio_lista_unitario: linea.precio_lista_unitario,
+					margen_porcentaje: linea.margen_producto,
+					costo_materiales: linea.costo_materiales,
+					insumos_snapshot: linea.insumos_snapshot,
+					es_personalizado: linea.es_personalizado,
+					descripcion_personalizada: linea.es_personalizado ? linea.descripcion : null,
+					orden_linea: linea.orden_linea
+				})
+				.returning({ id: lineas_pedido.id });
+			if (linea.stock_ubicacion_id) {
+				if (!linea.producto_id) throw new Error('Solo se puede reservar stock para productos');
+				await reservarStockParaLineaTx(tx, {
+					lineaPedidoId: lineaPedido.id,
+					productoId: linea.producto_id,
+					ubicacionId: linea.stock_ubicacion_id,
+					cantidad: linea.cantidad
+				});
+			}
 		}
 
 		await tx.insert(logs_cambios_estado).values({
@@ -689,7 +745,7 @@ export async function cambiarEstadoPedidoServicio({
 		if (!pedidoBloqueado) throw new Error('Pedido no encontrado');
 
 		const estadoDestino = await tx
-			.select({ slug: estados_pedido.slug })
+			.select({ slug: estados_pedido.slug, es_final: estados_pedido.es_final })
 			.from(estados_pedido)
 			.where(eq(estados_pedido.id, estado_destino_id))
 			.then((rows) => rows[0]);
@@ -740,6 +796,11 @@ export async function cambiarEstadoPedidoServicio({
 				await txInner.update(pedidos).set(updates).where(eq(pedidos.id, pedido_id));
 			}
 		});
+		if (estadoDestino?.slug === PEDIDO_SLUG.ENTREGADO) {
+			await procesarReservasPedidoTx(tx, pedido_id, 'consumir', user.id);
+		} else if (estadoDestino?.es_final) {
+			await procesarReservasPedidoTx(tx, pedido_id, 'liberar', user.id);
+		}
 	});
 
 	return { success: true };
@@ -828,6 +889,19 @@ export async function getLineasPedidoSinOrdenServicio({
 							.select()
 							.from(ordenes_fabricacion)
 							.where(eq(ordenes_fabricacion.linea_pedido_id, lineas_pedido.id))
+					)
+				),
+				not(
+					exists(
+						db
+							.select()
+							.from(reservas_stock)
+							.where(
+								and(
+									eq(reservas_stock.linea_pedido_id, lineas_pedido.id),
+									eq(reservas_stock.estado, 'reservada')
+								)
+							)
 					)
 				),
 				...conditions

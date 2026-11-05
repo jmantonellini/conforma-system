@@ -220,7 +220,7 @@
 			<FormErrors {form} />
 
 			<FormActions
-				cancelHref={Paths.COTIZACIONES}
+				cancelHref={resolve(Paths.COTIZACIONES)}
 				pending={!!form.pending || subiendoArchivos}
 				pendingText="Creando cotización..."
 				submitText="Crear Cotización"

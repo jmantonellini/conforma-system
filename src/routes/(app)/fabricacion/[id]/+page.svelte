@@ -15,6 +15,7 @@
 	import { resolve } from '$app/paths';
 	import { formatearFecha } from '$lib/utils/fechas.js';
 	import type { MaterialSnapshot } from '$lib/types/linea-comercial';
+	import { ESTADO_FABRICACION, PRIORIDAD_FABRICACION } from '$lib/types/dominio';
 
 	let { params } = $props();
 	const orden = $derived(await getOrdenFabricacion(Number(params.id)));
@@ -76,7 +77,9 @@
 			onConfirm: async () => {
 				// Buscar el estado "pausado" entre las transiciones disponibles
 				const unidad = orden.unidades.find((u) => u.id === unidadId);
-				const estadoPausado = unidad?.transiciones_disponibles.find((t) => t.slug === 'pausado');
+				const estadoPausado = unidad?.transiciones_disponibles.find(
+					(t) => t.slug === ESTADO_FABRICACION.PAUSADO
+				);
 				if (estadoPausado) {
 					await cambiarEstado(unidadId, estadoPausado.id, comentario.trim());
 				}
@@ -166,7 +169,9 @@
 			</div>
 			<div class="stat bg-base-200">
 				<div class="stat-title">Cliente</div>
-				<div class="stat-value text-lg">{orden.cliente_nombre}</div>
+				<div class="stat-value text-lg">
+					{orden.es_para_stock ? 'Stock interno' : orden.cliente_nombre}
+				</div>
 			</div>
 			<div class="stat bg-base-200">
 				<div class="stat-title">Estado</div>
@@ -181,9 +186,9 @@
 			<div class="stat bg-base-200">
 				<div class="stat-title">Prioridad</div>
 				<div class="stat-value">
-					{#if orden.prioridad === 2}
+					{#if orden.prioridad === PRIORIDAD_FABRICACION.CRITICA}
 						<span class="badge badge-error">Crítica</span>
-					{:else if orden.prioridad === 1}
+					{:else if orden.prioridad === PRIORIDAD_FABRICACION.URGENTE}
 						<span class="badge badge-warning">Urgente</span>
 					{:else}
 						<span class="badge badge-ghost">Normal</span>
@@ -323,7 +328,7 @@
 									<button
 										class="btn btn-{transicion.color} btn-outline btn-xs"
 										onclick={() =>
-											transicion.slug === 'pausado'
+											transicion.slug === ESTADO_FABRICACION.PAUSADO
 												? manejarPausa(unidad.id)
 												: cambiarEstado(unidad.id, transicion.id)}
 										disabled={isLoading}

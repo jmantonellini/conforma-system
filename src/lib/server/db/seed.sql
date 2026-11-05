@@ -16,6 +16,13 @@ INSERT INTO roles (id, nombre, descripcion, created_at) VALUES
 (5, 'jefe_planta', 'Gestiona fabricación y pedidos', NULL)
 ON CONFLICT (id) DO NOTHING;
 
+INSERT INTO permisos (accion, modulo)
+SELECT acciones.accion, 'stock'
+FROM (VALUES ('view'), ('edit')) AS acciones(accion)
+WHERE NOT EXISTS (
+	SELECT 1 FROM permisos p WHERE p.modulo = 'stock' AND p.accion = acciones.accion
+);
+
 
 -- ============================================================
 -- PERMISOS
@@ -69,6 +76,20 @@ INSERT INTO roles_permisos (rol_id, permiso_id, created_at) VALUES
 (5, 1, to_timestamp(1781809311)), (5, 5, to_timestamp(1781809311)), (5, 9, to_timestamp(1781809311)),
 (5, 11, to_timestamp(1781809311)), (5, 13, to_timestamp(1781809311)), (5, 14, to_timestamp(1781809311)),
 (5, 15, to_timestamp(1781809311))
+ON CONFLICT DO NOTHING;
+
+INSERT INTO roles_permisos (rol_id, permiso_id, created_at)
+SELECT existentes.rol_id, stock_permiso.id, NOW()
+FROM roles_permisos existentes
+INNER JOIN permisos permiso_producto ON permiso_producto.id = existentes.permiso_id
+INNER JOIN permisos stock_permiso
+	ON stock_permiso.modulo = 'stock' AND stock_permiso.accion = permiso_producto.accion
+WHERE permiso_producto.modulo = 'productos'
+	AND permiso_producto.accion IN ('view', 'edit')
+ON CONFLICT DO NOTHING;
+
+INSERT INTO ubicaciones_stock (tipo, nombre)
+VALUES ('deposito', 'Depósito central')
 ON CONFLICT DO NOTHING;
 
 
@@ -162,11 +183,11 @@ ON CONFLICT (tipo, estado_origen_id, estado_destino_id) DO NOTHING;
 -- CATEGORÍAS DE PRODUCTOS
 -- ============================================================
 
-INSERT INTO categorias_productos (id, nombre, descripcion, created_at) VALUES
-(1, 'Escapes', 'Escapes', NULL),
-(2, 'Industria', 'Industria', NULL),
-(3, 'Arquitectura', 'Arquitectura', NULL),
-(4, 'Otros', 'Otros', NULL)
+INSERT INTO categorias_productos (id, nombre, slug, descripcion, created_at) VALUES
+(1, 'Escapes', 'escapes', 'Escapes', NULL),
+(2, 'Industria', 'industria', 'Industria', NULL),
+(3, 'Arquitectura', 'arquitectura', 'Arquitectura', NULL),
+(4, 'Otros', 'otros', 'Otros', NULL)
 ON CONFLICT (id) DO NOTHING;
 
 

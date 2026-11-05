@@ -188,7 +188,7 @@ export async function generarPDFFabricacion(orden: OrdenFabricacion, planos: Pla
 		: '—';
 	const grilla: [string, string][][] = [
 		[
-			['PEDIDO', orden.pedido_numero || 'Sin pedido'],
+			['PEDIDO', orden.es_para_stock ? 'Stock interno' : orden.pedido_numero || 'Sin pedido'],
 			['CLIENTE', orden.cliente_nombre || '—'],
 			['FECHA', fechaCreacion],
 			['ENTREGA ESTIMADA', fechaEntrega]

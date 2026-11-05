@@ -2,37 +2,57 @@
 	import { onDestroy } from 'svelte';
 	import { goto } from '$app/navigation';
 	import { resolve } from '$app/paths';
+	import { page } from '$app/state';
 	import { crearPedido } from '$lib/remote/pedidos.remote';
+	import { getDatosCreacionPedido } from '$lib/remote/pedidos-consultas.remote';
+	import { getProductosCatalogo } from '$lib/remote/productos.remote';
 	import { obtenerContactosCliente } from '$lib/remote/contactos.remote';
-	import { getProductos } from '$lib/remote/productos.remote';
-	import {
-		getCategoriasInsumo,
-		getInsumos,
-		getTiposInsumo,
-		getUnidadesInsumo
-	} from '$lib/remote/insumos.remote';
 	import LineasConceptosEditor from '$lib/components/cotizaciones/LineasConceptosEditor.svelte';
 	import SearchSelect from '$lib/components/ui/SearchSelect.svelte';
 	import FormFieldWrapper from '$lib/components/ui/FormFieldWrapper.svelte';
 	import { FormActions, FormErrors, PageLayout } from '$lib/components/ui';
 	import { toast } from '$lib/stores/toast.svelte';
 	import { Paths } from '$lib/types';
+	import { can } from '$lib/utils/permissions';
 	import type { InsumoOpcion, LineaEdicion, ProductoOpcion } from '$lib/types/cotizacion-editor';
 	import { formatearDosDecimales, redondearPrecio } from '$lib/utils/precios';
+	import { fechaInputManana } from '$lib/utils/fechas';
 
 	let form = crearPedido;
-	let clientes = await obtenerContactosCliente({ limit: 100 });
-	let productosResultado = await getProductos({ limit: 100 });
-	let insumosResultado = await getInsumos({ limit: 100 });
-	let tiposInsumo = await getTiposInsumo();
-	let categoriasInsumo = await getCategoriasInsumo();
-	let unidadesInsumo = await getUnidadesInsumo();
-	const productos: ProductoOpcion[] = productosResultado.data.map((producto) => ({
-		id: producto.id,
-		nombre: producto.nombre,
-		costo_materiales: producto.costo_materiales,
-		precio_venta: producto.precio_venta
-	}));
+	const contactoSolicitadoId = page.url.searchParams.get('contacto') ?? '';
+	const productoInicialId = page.url.searchParams.get('producto') ?? '';
+	const ubicacionInicialId = page.url.searchParams.get('stockUbicacion') ?? '';
+	const puedeReservarStock = can(page.data.user, page.data.permisos, 'stock', 'edit');
+	const datosCreacion = await getDatosCreacionPedido({
+		contactoId: contactoSolicitadoId || undefined,
+		productoId: productoInicialId || undefined,
+		stockUbicacionId: ubicacionInicialId || undefined,
+		incluirStock: puedeReservarStock
+	});
+	let clientes = datosCreacion.clientes;
+	let productosResultado = datosCreacion.productos;
+	let stockDisponibilidad = datosCreacion.stock;
+	const contactoInicialId = clientes.data.some(
+		(cliente) => String(cliente.id) === contactoSolicitadoId
+	)
+		? contactoSolicitadoId
+		: '';
+	let insumosResultado = datosCreacion.insumos;
+	let tiposInsumo = datosCreacion.tiposInsumo;
+	let categoriasInsumo = datosCreacion.categoriasInsumo;
+	let unidadesInsumo = datosCreacion.unidadesInsumo;
+	let productos = $state<ProductoOpcion[]>(
+		productosResultado.data.map((producto) => {
+			const detalle = producto as Partial<ProductoOpcion>;
+			return {
+				id: producto.id,
+				nombre: producto.nombre,
+				costo_materiales:
+					typeof detalle.costo_materiales === 'number' ? detalle.costo_materiales : null,
+				precio_venta: typeof detalle.precio_venta === 'number' ? detalle.precio_venta : null
+			};
+		})
+	);
 	const insumos: InsumoOpcion[] = insumosResultado.data.map((insumo) => ({
 		id: insumo.id,
 		codigo: insumo.codigo,
@@ -41,7 +61,7 @@
 		costo_unitario: insumo.costo_unitario
 	}));
 	let usarCreditoDistribuidor = $state(false);
-	let clienteSeleccionadoId = $state('');
+	let clienteSeleccionadoId = $state(contactoInicialId);
 	let distribuidorSeleccionadoId = $state('');
 	let porcentajeComisionDistribuidor = $state(0);
 	let archivosSeleccionados = $state<File[]>([]);
@@ -54,6 +74,7 @@
 				tipo: linea.tipo,
 				visible_cliente: linea.visible_cliente,
 				producto_id: linea.producto_id || undefined,
+				stock_ubicacion_id: Number(linea.stock_ubicacion_id) || undefined,
 				insumo_id: linea.tipo === 'insumo' ? Number(linea.insumo_id) || undefined : undefined,
 				nuevo_insumo: linea.nuevo_insumo,
 				cantidad: linea.cantidad,
@@ -89,8 +110,41 @@
 		precio_minimo_unitario: 0,
 		costo_materiales: 0
 	};
-	let lineas = $state<LineaEdicion[]>([lineaInicial]);
-	form.fields.lineas.set(serializarLineas([lineaInicial]));
+	const productoInicialCatalogo = datosCreacion.productos.data.find(
+		(producto) => String(producto.id) === productoInicialId
+	);
+	const productoInicialDetalle = productoInicialCatalogo as
+		| (typeof productoInicialCatalogo & { costo_materiales?: number; precio_venta?: number })
+		| undefined;
+	const disponibilidadInicial = stockDisponibilidad.balances.find(
+		(balance) =>
+			String(balance.producto_id) === productoInicialId &&
+			String(balance.ubicacion_id) === ubicacionInicialId &&
+			balance.disponible > 0
+	);
+	const ubicacionInicial = stockDisponibilidad.ubicaciones.find(
+		(ubicacion) =>
+			String(ubicacion.id) === ubicacionInicialId &&
+			String(ubicacion.contacto_distribuidor_id) === contactoInicialId
+	);
+	const lineasIniciales =
+		productoInicialDetalle && disponibilidadInicial && ubicacionInicial
+			? [
+					{
+						...lineaInicial,
+						producto_id: String(productoInicialDetalle.id),
+						stock_ubicacion_id: ubicacionInicialId,
+						descripcion: productoInicialDetalle.nombre,
+						costo_materiales: redondearPrecio(productoInicialDetalle.costo_materiales ?? 0),
+						precio_lista_unitario: redondearPrecio(productoInicialDetalle.precio_venta ?? 0),
+						precio_minimo_unitario: redondearPrecio(productoInicialDetalle.precio_venta ?? 0),
+						precio_unitario: redondearPrecio(productoInicialDetalle.precio_venta ?? 0)
+					}
+				]
+			: [lineaInicial];
+	let lineas = $state<LineaEdicion[]>(lineasIniciales);
+	if (contactoInicialId) form.fields.contacto_id.set(contactoInicialId);
+	form.fields.lineas.set(serializarLineas(lineasIniciales));
 
 	let total = $derived(
 		redondearPrecio(
@@ -100,14 +154,15 @@
 		)
 	);
 	// Opciones para el SearchSelect
-	const clientesOptions =
+	let clientesOptions = $state(
 		clientes.data.length > 0
 			? clientes.data.map((c) => ({
 					value: c.id.toString(),
 					label: [c.nombre, c.apellido].filter(Boolean).join(' ') || c.razon_social
 				}))
-			: [];
-	const distribuidoresOptions =
+			: []
+	);
+	let distribuidoresOptions = $state(
 		clientes.data.filter((c) => c.es_distribuidor).length > 0
 			? clientes.data
 					.filter((c) => c.es_distribuidor)
@@ -115,7 +170,48 @@
 						value: c.id.toString(),
 						label: `${[c.nombre, c.apellido].filter(Boolean).join(' ') || c.razon_social} (distribuidor)`
 					}))
-			: [];
+			: []
+	);
+
+	let solicitudClientes = 0;
+	let solicitudDistribuidores = 0;
+	let solicitudProductos = 0;
+
+	async function buscarClientes(search: string) {
+		const solicitud = ++solicitudClientes;
+		const resultado = await obtenerContactosCliente({ search: search || undefined, limit: 100 });
+		if (solicitud !== solicitudClientes) return;
+		clientesOptions = resultado.data.map((cliente) => ({
+			value: String(cliente.id),
+			label: [cliente.nombre, cliente.apellido].filter(Boolean).join(' ') || cliente.razon_social
+		}));
+	}
+
+	async function buscarDistribuidores(search: string) {
+		const solicitud = ++solicitudDistribuidores;
+		const resultado = await obtenerContactosCliente({
+			search: search || undefined,
+			limit: 100,
+			soloDistribuidores: true
+		});
+		if (solicitud !== solicitudDistribuidores) return;
+		distribuidoresOptions = resultado.data.map((distribuidor) => ({
+			value: String(distribuidor.id),
+			label: `${[distribuidor.nombre, distribuidor.apellido].filter(Boolean).join(' ') || distribuidor.razon_social} (distribuidor)`
+		}));
+	}
+
+	async function buscarProductos(search: string) {
+		const solicitud = ++solicitudProductos;
+		const resultado = await getProductosCatalogo({ search: search || undefined, limit: 100 });
+		if (solicitud !== solicitudProductos) return;
+		productos = resultado.data.map((producto) => ({
+			id: producto.id,
+			nombre: producto.nombre,
+			costo_materiales: null,
+			precio_venta: null
+		}));
+	}
 
 	function seleccionarArchivos(event: Event) {
 		for (const vista of vistasPrevias) if (vista.url) URL.revokeObjectURL(vista.url);
@@ -151,9 +247,6 @@
 		for (const vista of vistasPrevias) if (vista.url) URL.revokeObjectURL(vista.url);
 	});
 
-	let clienteSeleccionado = $derived(
-		clientes.data.find((cliente) => cliente.id.toString() === clienteSeleccionadoId)
-	);
 	let distribuidorSeleccionado = $derived(
 		clientes.data.find((cliente) => cliente.id.toString() === distribuidorSeleccionadoId)
 	);
@@ -221,14 +314,8 @@
 					placeholder="Buscar cliente..."
 					field={form.fields.contacto_id}
 					onChange={(value) => (clienteSeleccionadoId = value)}
+					onSearch={buscarClientes}
 				/>
-				{#if clienteSeleccionado}
-					<p class="self-end text-sm text-base-content/70">
-						Contacto: {[clienteSeleccionado.nombre, clienteSeleccionado.apellido]
-							.filter(Boolean)
-							.join(' ') || 'Sin nombre cargado'}
-					</p>
-				{/if}
 
 				<!-- Distribuidor -->
 				<SearchSelect
@@ -238,6 +325,7 @@
 					placeholder="Buscar distribuidor..."
 					field={form.fields.contacto_distribuidor_id}
 					onChange={onDistribuidorChange}
+					onSearch={buscarDistribuidores}
 				/>
 				{#if distribuidorSeleccionado}
 					<p class="self-end text-sm text-base-content/70">
@@ -273,8 +361,8 @@
 				<FormFieldWrapper label="Fecha de entrega prometida" id="fecha_entrega_prometida">
 					<input
 						class="input input-sm"
-						{...form.fields?.fecha_entrega_prometida?.as('date')}
-						min={new Date().toISOString().split('T')[0]}
+						{...form.fields?.fecha_entrega_prometida?.as('date', fechaInputManana())}
+						min={fechaInputManana()}
 					/>
 				</FormFieldWrapper>
 
@@ -321,6 +409,8 @@
 		<LineasConceptosEditor
 			bind:lineas
 			{productos}
+			onBuscarProducto={buscarProductos}
+			stockDisponibilidad={stockDisponibilidad.balances}
 			{insumos}
 			{tiposInsumo}
 			{categoriasInsumo}
@@ -394,7 +484,7 @@
 
 		<!-- Actions -->
 		<FormActions
-			cancelHref={Paths.PEDIDOS}
+			cancelHref={resolve(Paths.PEDIDOS)}
 			pending={!!form.pending || subiendoArchivos}
 			pendingText="Creando pedido..."
 			submitText="Crear Pedido"

@@ -24,7 +24,7 @@ export type ProductoOpcion = {
 	id: number;
 	nombre: string;
 	costo_materiales: number | null;
-	precio_venta: number;
+	precio_venta: number | null;
 };
 
 export type InsumoOpcion = {
@@ -40,6 +40,7 @@ export type LineaEdicion = {
 	tipo: TipoLineaComercial;
 	visible_cliente: boolean;
 	producto_id: string;
+	stock_ubicacion_id?: string;
 	insumo_id: number | string | undefined;
 	nuevo_insumo?: NuevoInsumoComercial;
 	insumos_snapshot: MaterialSnapshot[];

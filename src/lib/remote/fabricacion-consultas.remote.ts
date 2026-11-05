@@ -42,9 +42,8 @@ function estadoOrdenFromUnidades(
 	if (estadosUnidad.every((estado) => estado.es_final)) {
 		return estados.find((estado) => estado.slug === 'terminado')!;
 	}
-	if (
-		estadosUnidad.some((estado) => estado.slug === 'en_produccion' || estado.slug === 'limpieza')
-	) {
+	const estadosActivos = new Set(['en_produccion', 'limpieza']);
+	if (estadosUnidad.some((estado) => estadosActivos.has(estado.slug))) {
 		return estados.find((estado) => estado.slug === 'en_produccion')!;
 	}
 	if (estadosUnidad.some((estado) => estado.slug === 'pausado')) {
@@ -63,13 +62,15 @@ export const getOrdenesFabricacion = query(
 	}),
 	async ({ search, estado, soloActivas, page, limit }) => {
 		const offset = (page - 1) * limit;
+		const productoStock = aliasedTable(productos, 'producto_stock');
 		const searchTerm = search?.trim() ? `%${search.trim()}%` : undefined;
 		const searchCondition = searchTerm
 			? or(
 					ilike(ordenes_fabricacion.nombre_trabajo, searchTerm),
 					ilike(pedidos.numero_pedido, searchTerm),
 					ilike(contactos.razon_social, searchTerm),
-					ilike(productos.nombre, searchTerm)
+					ilike(productos.nombre, searchTerm),
+					ilike(productoStock.nombre, searchTerm)
 				)
 			: undefined;
 
@@ -84,13 +85,16 @@ export const getOrdenesFabricacion = query(
 					fecha_fin_estimada: ordenes_fabricacion.fecha_fin_estimada,
 					asignado_a: ordenes_fabricacion.asignado_a,
 					observaciones: ordenes_fabricacion.observaciones,
-					linea_pedido_id: ordenes_fabricacion.linea_pedido_id
+					linea_pedido_id: ordenes_fabricacion.linea_pedido_id,
+					producto_id: ordenes_fabricacion.producto_id,
+					es_para_stock: ordenes_fabricacion.es_para_stock
 				})
 				.from(ordenes_fabricacion)
 				.leftJoin(lineas_pedido, eq(ordenes_fabricacion.linea_pedido_id, lineas_pedido.id))
 				.leftJoin(pedidos, eq(lineas_pedido.pedido_id, pedidos.id))
 				.leftJoin(contactos, eq(pedidos.contacto_id, contactos.id))
 				.leftJoin(productos, eq(lineas_pedido.producto_id, productos.id))
+				.leftJoin(productoStock, eq(ordenes_fabricacion.producto_id, productoStock.id))
 				.where(searchCondition)
 				.orderBy(desc(ordenes_fabricacion.prioridad), desc(ordenes_fabricacion.id))
 				.limit(limit)
@@ -124,7 +128,9 @@ export const getOrdenesFabricacion = query(
 							pedido_id: pedidos.id,
 							pedido_numero: pedidos.numero_pedido,
 							cliente_nombre: contactos.razon_social,
-							producto_nombre: productos.nombre,
+							producto_nombre: sql<
+								string | null
+							>`COALESCE(${productos.nombre}, ${productoStock.nombre})`,
 							empleado_nombre: empleados.nombre,
 							empleado_apellido: empleados.apellido
 						})
@@ -133,6 +139,7 @@ export const getOrdenesFabricacion = query(
 						.leftJoin(pedidos, eq(lineas_pedido.pedido_id, pedidos.id))
 						.leftJoin(contactos, eq(pedidos.contacto_id, contactos.id))
 						.leftJoin(productos, eq(lineas_pedido.producto_id, productos.id))
+						.leftJoin(productoStock, eq(ordenes_fabricacion.producto_id, productoStock.id))
 						.leftJoin(empleados, eq(ordenes_fabricacion.asignado_a, empleados.id))
 						.where(sql`${ordenes_fabricacion.id} IN ${ordenIds}`)
 				: [];
@@ -174,7 +181,9 @@ export const getOrdenesFabricacion = query(
 					? { id: relacionado.pedido_id, numero: relacionado.pedido_numero }
 					: null,
 				producto_nombre: relacionado?.producto_nombre,
-				observaciones: orden.observaciones
+				observaciones: orden.observaciones,
+				es_para_stock: orden.es_para_stock,
+				producto_id: orden.producto_id
 			};
 		});
 
@@ -194,6 +203,7 @@ export const getOrdenesFabricacion = query(
 );
 
 export const getOrdenFabricacion = query(v.number(), async (id) => {
+	const productoStock = aliasedTable(productos, 'producto_stock');
 	const [orden, unidades, estados] = await Promise.all([
 		db
 			.select({
@@ -207,6 +217,8 @@ export const getOrdenFabricacion = query(v.number(), async (id) => {
 				created_at: ordenes_fabricacion.created_at,
 				asignado_a: ordenes_fabricacion.asignado_a,
 				linea_pedido_id: ordenes_fabricacion.linea_pedido_id,
+				producto_id: ordenes_fabricacion.producto_id,
+				es_para_stock: ordenes_fabricacion.es_para_stock,
 				observaciones: ordenes_fabricacion.observaciones
 			})
 			.from(ordenes_fabricacion)
@@ -237,15 +249,16 @@ export const getOrdenFabricacion = query(v.number(), async (id) => {
 			pedido_id: pedidos.id,
 			pedido_numero: pedidos.numero_pedido,
 			cliente_nombre: contactos.razon_social,
-			producto_nombre: productos.nombre,
+			producto_nombre: sql<string | null>`COALESCE(${productos.nombre}, ${productoStock.nombre})`,
 			empleado_nombre: empleados.nombre,
 			empleado_apellido: empleados.apellido
 		})
-		.from(lineas_pedido)
+		.from(ordenes_fabricacion)
+		.leftJoin(lineas_pedido, eq(ordenes_fabricacion.linea_pedido_id, lineas_pedido.id))
 		.leftJoin(pedidos, eq(lineas_pedido.pedido_id, pedidos.id))
 		.leftJoin(contactos, eq(pedidos.contacto_id, contactos.id))
 		.leftJoin(productos, eq(lineas_pedido.producto_id, productos.id))
-		.leftJoin(ordenes_fabricacion, eq(ordenes_fabricacion.linea_pedido_id, lineas_pedido.id))
+		.leftJoin(productoStock, eq(ordenes_fabricacion.producto_id, productoStock.id))
 		.leftJoin(empleados, eq(ordenes_fabricacion.asignado_a, empleados.id))
 		.where(eq(ordenes_fabricacion.id, orden.id))
 		.then((rows) => rows[0]);
@@ -261,7 +274,9 @@ export const getOrdenFabricacion = query(v.number(), async (id) => {
 	const [lineaTrabajo] = await db
 		.select({
 			pedido_id: lineas_pedido.pedido_id,
-			producto_id: lineas_pedido.producto_id,
+			producto_id: sql<
+				number | null
+			>`COALESCE(${lineas_pedido.producto_id}, ${ordenes_fabricacion.producto_id})`,
 			descripcion: lineas_pedido.descripcion_personalizada,
 			insumos_snapshot: lineas_pedido.insumos_snapshot,
 			medidas: {
@@ -274,21 +289,28 @@ export const getOrdenFabricacion = query(v.number(), async (id) => {
 				trombon_observaciones: lineas_pedido.trombon_observaciones
 			},
 			producto: {
-				id: productos.id,
-				nombre: productos.nombre,
-				codigo: productos.codigo,
-				medidas_primario_diametro: productos.medidas_primario_diametro,
-				medidas_primario_largo: productos.medidas_primario_largo,
-				medidas_secundario_diametro: productos.medidas_secundario_diametro,
-				medidas_secundario_largo: productos.medidas_secundario_largo,
-				trombon_diametro_inicial: productos.trombon_diametro_inicial,
-				trombon_largo: productos.trombon_largo,
-				trombon_observaciones: productos.trombon_observaciones
+				id: productoStock.id,
+				nombre: productoStock.nombre,
+				codigo: productoStock.codigo,
+				medidas_primario_diametro: productoStock.medidas_primario_diametro,
+				medidas_primario_largo: productoStock.medidas_primario_largo,
+				medidas_secundario_diametro: productoStock.medidas_secundario_diametro,
+				medidas_secundario_largo: productoStock.medidas_secundario_largo,
+				trombon_diametro_inicial: productoStock.trombon_diametro_inicial,
+				trombon_largo: productoStock.trombon_largo,
+				trombon_observaciones: productoStock.trombon_observaciones
 			}
 		})
-		.from(lineas_pedido)
-		.leftJoin(productos, eq(lineas_pedido.producto_id, productos.id))
-		.where(eq(lineas_pedido.id, orden.linea_pedido_id))
+		.from(ordenes_fabricacion)
+		.leftJoin(lineas_pedido, eq(lineas_pedido.id, ordenes_fabricacion.linea_pedido_id))
+		.leftJoin(
+			productoStock,
+			eq(
+				productoStock.id,
+				sql`COALESCE(${lineas_pedido.producto_id}, ${ordenes_fabricacion.producto_id})`
+			)
+		)
+		.where(eq(ordenes_fabricacion.id, orden.id))
 		.limit(1);
 
 	const recetaActual = lineaTrabajo?.producto_id
@@ -434,7 +456,7 @@ export const getHistorialUnidades = query(v.number(), async (ordenId) => {
 		.select({ id: unidades_fabricacion.id })
 		.from(unidades_fabricacion)
 		.where(eq(unidades_fabricacion.orden_fabricacion_id, ordenId));
-	if (unidades.length === 0) return [];
+	if (unidades.length < 1) return [];
 
 	const ids = unidades.map((unidad) => unidad.id);
 	const estadoAnterior = aliasedTable(estados_fabricacion, 'estado_anterior');

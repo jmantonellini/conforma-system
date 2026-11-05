@@ -13,17 +13,18 @@
 	import { afterNavigate, goto, invalidateAll } from '$app/navigation';
 	import { resolve } from '$app/paths';
 	import { calcularPrecioVenta, formatearDosDecimales, redondearPrecio } from '$lib/utils/precios';
+	import { CATEGORIAS_PRODUCTO, TIPOS_USO_PRODUCTO } from '$lib/types/catalogos';
 
-	let categorias = page.data.categorias;
+	let categorias: { id: number; nombre: string; slug: string }[] = page.data.categorias;
 	let marcas = page.data.marcas;
-	let tiposDeUso = page.data.tiposDeUso;
+	let tiposDeUso: { id: number; nombre: string; slug: string }[] = page.data.tiposDeUso;
 	let tiposVehiculo = page.data.tiposVehiculo;
 	let form = crearProducto;
 	let planosSeleccionados = $state<File[]>([]);
 	let referenciasSeleccionadas = $state<File[]>([]);
 	let subiendoAdjuntos = $state(false);
-	let insumos = (await getInsumos({ limit: 100 })).data;
-	let productos = (await getProductos({ limit: 100 })).data;
+	let insumos = $state((await getInsumos({ limit: 100 })).data);
+	let productos = $state((await getProductos({ limit: 100 })).data);
 	let receta = $state([{ insumo_id: '', producto_id: '', cantidad: 1 }]);
 	let costoReceta = $derived(
 		redondearPrecio(
@@ -35,7 +36,30 @@
 		)
 	);
 	let margenPorcentaje = $derived(Number(crearProducto.fields.margen_porcentaje.value() ?? 0));
+	let categoriaSeleccionada = $derived(
+		categorias.find(
+			(categoria) => String(categoria.id) === crearProducto.fields.categoria_id.value()
+		)
+	);
+	let tipoUsoSeleccionado = $derived(
+		tiposDeUso.find((tipoUso) => String(tipoUso.id) === crearProducto.fields.tipo_uso_id.value())
+	);
 	let precioVenta = $derived(calcularPrecioVenta(costoReceta, margenPorcentaje));
+
+	let solicitudInsumos = 0;
+	let solicitudProductos = 0;
+
+	async function buscarInsumos(search: string) {
+		const solicitud = ++solicitudInsumos;
+		const resultado = await getInsumos({ search: search || undefined, limit: 100 });
+		if (solicitud === solicitudInsumos) insumos = resultado.data;
+	}
+
+	async function buscarProductos(search: string) {
+		const solicitud = ++solicitudProductos;
+		const resultado = await getProductos({ search: search || undefined, limit: 100 });
+		if (solicitud === solicitudProductos) productos = resultado.data;
+	}
 
 	function agregarInsumo() {
 		receta = [...receta, { insumo_id: '', producto_id: '', cantidad: 1 }];
@@ -76,7 +100,7 @@
 
 	let modelos = $derived(
 		crearProducto.fields.marca_id.value()
-			? await getModelos(Number(crearProducto.fields.marca_id.value() as string))
+			? await getModelos(Number(crearProducto.fields.marca_id.value()))
 			: []
 	);
 
@@ -172,7 +196,7 @@
 			</fieldset>
 
 			<!-- Vehículo -->
-			{#if crearProducto.fields.categoria_id.value() === '1'}
+			{#if categoriaSeleccionada?.slug === CATEGORIAS_PRODUCTO.ESCAPES}
 				<div class="grid grid-cols-1 gap-4 md:grid-cols-2">
 					<fieldset class="fieldset space-y-3 rounded-box border border-base-300 bg-base-200 p-4">
 						<legend class="fieldset-legend">Vehículo</legend>
@@ -238,14 +262,14 @@
 								</select>
 							</FormFieldWrapper>
 
-							{#if crearProducto.fields.tipo_uso_id.value() === '2'}
+							{#if tipoUsoSeleccionado?.slug === TIPOS_USO_PRODUCTO.COMPETENCIA}
 								<FormFieldWrapper label="Categoría de competencia" id="categoria_competencia_id">
 									<select
 										{...crearProducto.fields.categoria_competencia_id.as('select')}
 										class="select w-full select-sm"
 									>
 										<option value="">Seleccionar...</option>
-										{#each await getCategoriasComp(parseInt(crearProducto.fields.tipo_vehiculo_id.value() as string)) as cat (cat.id)}
+										{#each await getCategoriasComp(Number(crearProducto.fields.tipo_vehiculo_id.value())) as cat (cat.id)}
 											<option value={String(cat.id)}>{cat.nombre}</option>
 										{/each}
 									</select>
@@ -254,7 +278,7 @@
 						</div>
 					</fieldset>
 
-					<!-- Medidas (solo si categoría_id === 1) -->
+					<!-- Medidas -->
 					<fieldset class="fieldset rounded-box border border-base-300 bg-base-200 p-4">
 						<legend class="fieldset-legend">Medidas</legend>
 
@@ -366,6 +390,9 @@
 										linea.producto_id = tipo === 'producto' ? id : '';
 									}
 								}}
+								onSearch={async (search) => {
+									await Promise.all([buscarInsumos(search), buscarProductos(search)]);
+								}}
 								options={[
 									...insumos.map((insumo) => ({
 										value: `insumo:${insumo.id}`,
@@ -443,7 +470,7 @@
 				</div>
 			</fieldset>
 			<FormActions
-				cancelHref="/productos"
+				cancelHref={resolve('/productos')}
 				pending={!!crearProducto.pending || subiendoAdjuntos}
 				submitText="Guardar Producto"
 			/>

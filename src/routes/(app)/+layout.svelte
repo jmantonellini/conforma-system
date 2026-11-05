@@ -10,6 +10,7 @@
 		Puzzle,
 		Rocket,
 		Settings,
+		Stock,
 		Truck,
 		Users
 	} from '$lib/components/ui/icons';
@@ -40,6 +41,9 @@
 			: []),
 		...(can(data.user, data.permisos, Modulos.INSUMOS)
 			? [{ href: Paths.INSUMOS, label: 'Insumos', icon: Puzzle }]
+			: []),
+		...(can(data.user, data.permisos, Modulos.STOCK)
+			? [{ href: Paths.STOCK, label: 'Stock', icon: Stock }]
 			: []),
 		...(can(data.user, data.permisos, Modulos.ENVIOS)
 			? [{ href: Paths.ENVIOS, label: 'Envíos', icon: Truck }]

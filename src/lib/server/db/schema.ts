@@ -267,6 +267,7 @@ export const proveedores = pgTable(
 export const categorias_productos = pgTable('categorias_productos', {
 	id: serial('id').primaryKey(),
 	nombre: text('nombre').notNull().unique(),
+	slug: text('slug').notNull().unique(),
 	descripcion: text('descripcion'),
 	created_at: timestamp('created_at').defaultNow()
 });
@@ -554,8 +555,9 @@ export const ordenes_fabricacion = pgTable(
 		id: serial('id').primaryKey(),
 		linea_pedido_id: integer('linea_pedido_id')
 			.references(() => lineas_pedido.id, { onDelete: 'restrict' })
-			.notNull()
 			.unique(),
+		producto_id: integer('producto_id').references(() => productos.id, { onDelete: 'restrict' }),
+		es_para_stock: boolean('es_para_stock').notNull().default(false),
 		nombre_trabajo: text('nombre_trabajo').notNull(),
 		cantidad_total: integer('cantidad_total').notNull().default(1),
 		prioridad: integer('prioridad').default(0),
@@ -630,6 +632,113 @@ export const unidades_fabricacion = pgTable(
 	(table) => [
 		index('idx_unidades_orden').on(table.orden_fabricacion_id),
 		index('idx_unidades_estado').on(table.estado_id)
+	]
+);
+
+export const ubicaciones_stock = pgTable(
+	'ubicaciones_stock',
+	{
+		id: serial('id').primaryKey(),
+		tipo: text('tipo', { enum: ['deposito', 'distribuidor'] }).notNull(),
+		nombre: text('nombre').notNull(),
+		contacto_distribuidor_id: integer('contacto_distribuidor_id').references(() => contactos.id, {
+			onDelete: 'restrict'
+		}),
+		activo: boolean('activo').notNull().default(true),
+		created_at: timestamp('created_at').defaultNow()
+	},
+	(table) => [
+		uniqueIndex('idx_ubicaciones_stock_distribuidor')
+			.on(table.contacto_distribuidor_id)
+			.where(sql`${table.contacto_distribuidor_id} IS NOT NULL`),
+		uniqueIndex('idx_ubicaciones_stock_deposito')
+			.on(table.tipo)
+			.where(sql`${table.tipo} = 'deposito'`),
+		check(
+			'ubicaciones_stock_tipo_propietario',
+			sql`(${table.tipo} = 'deposito' AND ${table.contacto_distribuidor_id} IS NULL) OR (${table.tipo} = 'distribuidor' AND ${table.contacto_distribuidor_id} IS NOT NULL)`
+		)
+	]
+);
+
+export const reservas_stock = pgTable(
+	'reservas_stock',
+	{
+		id: serial('id').primaryKey(),
+		linea_pedido_id: integer('linea_pedido_id')
+			.references(() => lineas_pedido.id, { onDelete: 'cascade' })
+			.notNull()
+			.unique(),
+		ubicacion_stock_id: integer('ubicacion_stock_id')
+			.references(() => ubicaciones_stock.id, { onDelete: 'restrict' })
+			.notNull(),
+		cantidad: integer('cantidad').notNull(),
+		estado: text('estado', { enum: ['reservada', 'consumida', 'liberada'] })
+			.notNull()
+			.default('reservada'),
+		created_at: timestamp('created_at').defaultNow(),
+		updated_at: timestamp('updated_at').$onUpdate(() => new Date())
+	},
+	(table) => [
+		check('reservas_stock_cantidad_positiva', sql`${table.cantidad} > 0`),
+		index('idx_reservas_stock_ubicacion_estado').on(table.ubicacion_stock_id, table.estado)
+	]
+);
+
+export const movimientos_stock = pgTable(
+	'movimientos_stock',
+	{
+		id: serial('id').primaryKey(),
+		producto_id: integer('producto_id')
+			.references(() => productos.id, { onDelete: 'restrict' })
+			.notNull(),
+		ubicacion_origen_id: integer('ubicacion_origen_id').references(() => ubicaciones_stock.id, {
+			onDelete: 'restrict'
+		}),
+		ubicacion_destino_id: integer('ubicacion_destino_id').references(() => ubicaciones_stock.id, {
+			onDelete: 'restrict'
+		}),
+		cantidad: integer('cantidad').notNull(),
+		tipo: text('tipo', {
+			enum: [
+				'produccion',
+				'ingreso',
+				'transferencia',
+				'venta_distribuidor',
+				'devolucion',
+				'ajuste_entrada',
+				'ajuste_salida',
+				'venta_pedido'
+			]
+		}).notNull(),
+		unidad_fabricacion_id: integer('unidad_fabricacion_id').references(
+			() => unidades_fabricacion.id,
+			{ onDelete: 'restrict' }
+		),
+		linea_pedido_id: integer('linea_pedido_id').references(() => lineas_pedido.id, {
+			onDelete: 'restrict'
+		}),
+		usuario_id: integer('usuario_id').references(() => usuarios.id, { onDelete: 'set null' }),
+		observaciones: text('observaciones'),
+		created_at: timestamp('created_at').defaultNow()
+	},
+	(table) => [
+		check('movimientos_stock_cantidad_positiva', sql`${table.cantidad} > 0`),
+		check(
+			'movimientos_stock_ubicaciones_distintas',
+			sql`${table.ubicacion_origen_id} IS NULL OR ${table.ubicacion_destino_id} IS NULL OR ${table.ubicacion_origen_id} <> ${table.ubicacion_destino_id}`
+		),
+		check(
+			'movimientos_stock_requiere_ubicacion',
+			sql`${table.ubicacion_origen_id} IS NOT NULL OR ${table.ubicacion_destino_id} IS NOT NULL`
+		),
+		uniqueIndex('idx_movimientos_stock_unidad').on(table.unidad_fabricacion_id),
+		uniqueIndex('idx_movimientos_stock_linea_pedido_tipo')
+			.on(table.linea_pedido_id, table.tipo)
+			.where(sql`${table.linea_pedido_id} IS NOT NULL`),
+		index('idx_movimientos_stock_producto').on(table.producto_id),
+		index('idx_movimientos_stock_origen').on(table.ubicacion_origen_id),
+		index('idx_movimientos_stock_destino').on(table.ubicacion_destino_id)
 	]
 );
 

@@ -57,6 +57,20 @@
       "when": 1793163247830,
       "tag": "0007_amused_professor_monster",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1793905921271,
+      "tag": "0008_needy_nova",
+      "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1793912153760,
+      "tag": "0009_opposite_power_pack",
+      "breakpoints": true
     }
   ]
 }
