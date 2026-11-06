@@ -1,6 +1,6 @@
 import * as v from 'valibot';
 import { command, form, query } from '$app/server';
-import { and, asc, count, desc, eq, exists, or, sql, type SQL } from 'drizzle-orm';
+import { and, asc, count, desc, eq, exists, ilike, or, sql, type SQL } from 'drizzle-orm';
 import { db } from '$lib/server/db';
 import { contactos, proveedores, pedidos, estados_pedido } from '$lib/server/db/schema';
 import { requirePermission } from '$lib/server/auth/permissions';
@@ -44,6 +44,45 @@ export const obtenerDatosCuitARCA = query(
 	async (cuit) => {
 		await requirePermission('contactos', 'create');
 		return consultarCuitARCA(cuit);
+	}
+);
+
+export const crearContactoRapido = command(
+	v.object({
+		razon_social: v.pipe(v.string(), v.trim(), v.nonEmpty('Ingresá nombre o razón social')),
+		telefono: v.optional(v.pipe(v.string(), v.trim())),
+		email: v.optional(v.pipe(v.string(), v.trim())),
+		cuit: v.optional(v.string())
+	}),
+	async ({ razon_social, telefono, email, cuit }) => {
+		await requirePermission('contactos', 'create');
+		const condiciones: SQL[] = [eq(contactos.razon_social, razon_social)];
+		if (telefono) condiciones.push(ilike(contactos.telefono, `%${telefono}%`));
+		if (email) condiciones.push(ilike(contactos.email, email));
+		if (cuit?.trim()) condiciones.push(eq(contactos.cuit, cuit.trim()));
+
+		const [existente] = await db
+			.select({ id: contactos.id, razon_social: contactos.razon_social })
+			.from(contactos)
+			.where(and(eq(contactos.activo, true), or(...condiciones)))
+			.limit(1);
+		if (existente) return { ...existente, reutilizado: true };
+
+		const [nuevo] = await db
+			.insert(contactos)
+			.values({
+				razon_social,
+				nombre: razon_social,
+				telefono: telefono || null,
+				email: email || null,
+				cuit: cuit?.trim() || null,
+				es_cliente: true,
+				activo: true
+			})
+			.returning({ id: contactos.id, razon_social: contactos.razon_social });
+		obtenerContactos({}).refresh();
+		obtenerContactosCliente({}).refresh();
+		return { ...nuevo, reutilizado: false };
 	}
 );
 

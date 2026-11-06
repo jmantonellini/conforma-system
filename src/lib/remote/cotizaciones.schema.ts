@@ -33,7 +33,7 @@ export const LineaCotizacionSchema = v.object({
 export const CotizacionSchema = v.object({
 	contacto_id: v.pipe(
 		v.string(),
-		v.nonEmpty('Seleccioná un contacto'),
+		v.nonEmpty('Seleccioná o creá un contacto'),
 		v.transform(Number),
 		v.number(),
 		v.toMinValue(1)

@@ -12,6 +12,8 @@
 		class: className = '',
 		allowClear = true,
 		onSearch,
+		onCreate,
+		createLabel = 'Crear nuevo contacto',
 		...restProps
 	}: {
 		options: { value: string; label: string }[];
@@ -23,6 +25,8 @@
 		allowClear?: boolean;
 		onChange?: (val: string) => void;
 		onSearch?: (term: string) => Promise<void>;
+		onCreate?: (term: string) => void;
+		createLabel?: string;
 		[key: string]: any;
 	} = $props();
 
@@ -202,50 +206,48 @@
 		</select>
 	{/if}
 
-	{#if isOpen && isSearching}
-		<div
-			role="status"
-			class="absolute z-50 mt-1 w-full rounded-md border border-base-300 bg-base-100 px-3 py-2 text-sm text-base-content/70 shadow-lg"
-		>
-			Buscando...
-		</div>
-	{:else if isOpen && searchFailed}
-		<div
-			role="status"
-			class="absolute z-50 mt-1 w-full rounded-md border border-base-300 bg-base-100 px-3 py-2 text-sm text-error shadow-lg"
-		>
-			No se pudo completar la búsqueda
-		</div>
-	{:else if isOpen && filteredOptions.length}
-		<div
-			id={listboxId}
-			role="listbox"
-			class="absolute z-50 mt-1 max-h-60 w-full overflow-auto rounded-md border border-base-300 bg-base-100 shadow-lg"
-		>
-			{#each filteredOptions as opt, index (opt.value)}
+	{#if isOpen}
+		<div class="absolute z-50 mt-1 w-full rounded-md border border-base-300 bg-base-100 shadow-lg">
+			{#if onCreate}
 				<button
 					type="button"
-					id={`${listboxId}-option-${index}`}
-					role="option"
-					aria-selected={opt.value === field?.value?.()}
-					tabindex="-1"
-					class={[
-						'w-full px-4 py-2 text-left hover:bg-base-200',
-						{ 'bg-base-200': index === activeIndex }
-					]}
+					class="btn m-2 w-[calc(100%-1rem)] btn-primary btn-sm"
 					onmousedown={(event) => event.preventDefault()}
-					onclick={() => handleSelect(opt)}
+					onclick={() => onCreate?.(searchTerm.trim())}
 				>
-					{opt.label}
+					+ {createLabel}
 				</button>
-			{/each}
-		</div>
-	{:else if isOpen && !filteredOptions.length}
-		<div
-			role="status"
-			class="absolute z-50 mt-1 w-full rounded-md border border-base-300 bg-base-100 px-3 py-2 text-sm text-base-content/70 shadow-lg"
-		>
-			No hay resultados
+			{/if}
+
+			{#if isSearching}
+				<div role="status" class="px-3 py-2 text-sm text-base-content/70">Buscando...</div>
+			{:else if searchFailed}
+				<div role="status" class="px-3 py-2 text-sm text-error">
+					No se pudo completar la búsqueda
+				</div>
+			{:else if filteredOptions.length}
+				<div id={listboxId} role="listbox" class="max-h-60 overflow-auto">
+					{#each filteredOptions as opt, index (opt.value)}
+						<button
+							type="button"
+							id={`${listboxId}-option-${index}`}
+							role="option"
+							aria-selected={opt.value === field?.value?.()}
+							tabindex="-1"
+							class={[
+								'w-full px-4 py-2 text-left hover:bg-base-200',
+								{ 'bg-base-200': index === activeIndex }
+							]}
+							onmousedown={(event) => event.preventDefault()}
+							onclick={() => handleSelect(opt)}
+						>
+							{opt.label}
+						</button>
+					{/each}
+				</div>
+			{:else}
+				<p class="px-3 py-2 text-sm text-base-content/70">No hay resultados</p>
+			{/if}
 		</div>
 	{/if}
 </div>

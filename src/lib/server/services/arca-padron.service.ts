@@ -10,6 +10,8 @@ type DatosContactoARCA = {
 	razon_social?: string;
 	nombre?: string;
 	apellido?: string;
+	telefono?: string;
+	email?: string;
 	pais?: string;
 	provincia?: string;
 	ciudad?: string;
@@ -92,6 +94,15 @@ export async function consultarCuitARCA(cuit: string): Promise<DatosContactoARCA
 	const domicilio = obtenerDomicilioFiscal(persona.domicilio);
 	const nombre = textoOpcional(persona.nombre);
 	const apellido = textoOpcional(persona.apellido);
+	const telefono =
+		textoOpcional(persona.telefono) ||
+		textoOpcional(persona.telefonoContacto) ||
+		textoOpcional(domicilio?.telefono);
+	const email =
+		textoOpcional(persona.email) ||
+		textoOpcional(persona.correoElectronico) ||
+		textoOpcional(persona.emailContacto) ||
+		textoOpcional(domicilio?.email);
 	const razonSocial =
 		textoOpcional(persona.razonSocial) || [nombre, apellido].filter(Boolean).join(' ');
 
@@ -99,6 +110,8 @@ export async function consultarCuitARCA(cuit: string): Promise<DatosContactoARCA
 		razon_social: razonSocial || undefined,
 		nombre,
 		apellido,
+		telefono,
+		email,
 		pais: domicilio ? 'Argentina' : undefined,
 		provincia: obtenerProvincia(textoOpcional(domicilio?.descripcionProvincia)),
 		ciudad: textoOpcional(domicilio?.localidad),

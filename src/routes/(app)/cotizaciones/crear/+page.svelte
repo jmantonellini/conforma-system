@@ -3,13 +3,18 @@
 	import { goto } from '$app/navigation';
 	import { resolve } from '$app/paths';
 	import { crearCotizacion } from '$lib/remote/cotizaciones.remote';
-	import { obtenerContactosCliente } from '$lib/remote/contactos.remote';
+	import {
+		crearContactoRapido,
+		obtenerContactosCliente,
+		obtenerDatosCuitARCA
+	} from '$lib/remote/contactos.remote';
 	import SearchSelect from '$lib/components/ui/SearchSelect.svelte';
 	import FormFieldWrapper from '$lib/components/ui/FormFieldWrapper.svelte';
-	import { Can, FormActions, FormErrors, PageLayout } from '$lib/components/ui';
+	import { Can, FormActions, FormErrors, Modal, PageLayout } from '$lib/components/ui';
 	import { toast } from '$lib/stores/toast.svelte';
 	import { Paths } from '$lib/types';
 	import { CANALES_COTIZACION } from '$lib/utils/canales-cotizacion';
+	import { esCuitValido, formatearCuit } from '$lib/utils/cuit';
 
 	let form = crearCotizacion;
 	const limiteContactosSelect = 50;
@@ -19,6 +24,11 @@
 	let archivosSeleccionados = $state<File[]>([]);
 	let vistasPrevias = $state<{ archivo: File; url: string }[]>([]);
 	let subiendoArchivos = $state(false);
+	let modalContactoAbierto = $state(false);
+	let nuevoContacto = $state({ razon_social: '', telefono: '', email: '', cuit: '' });
+	let cuitFormateado = $state('');
+	let cuitConsultado = '';
+	let guardandoContacto = $state(false);
 
 	function seleccionarArchivos(event: Event) {
 		for (const vista of vistasPrevias) if (vista.url) URL.revokeObjectURL(vista.url);
@@ -75,6 +85,99 @@
 	let distribuidoresOptions = $state(crearOpcionesDistribuidores(clientes.data));
 	let solicitudBusquedaClientes = 0;
 	let solicitudBusquedaDistribuidores = 0;
+
+	function abrirAltaRapida(busqueda = '') {
+		const limpio = busqueda.trim();
+		const digitos = limpio.replace(/\D/g, '');
+		nuevoContacto = {
+			razon_social: limpio && !limpio.includes('@') && digitos !== limpio ? limpio : '',
+			telefono: digitos.length >= 6 && digitos === limpio.replace(/[^0-9]/g, '') ? limpio : '',
+			email: limpio.includes('@') ? limpio : '',
+			cuit: ''
+		};
+		cuitFormateado = '';
+		cuitConsultado = '';
+		modalContactoAbierto = true;
+	}
+
+	function actualizarCuit(event: Event) {
+		const input = event.currentTarget as HTMLInputElement;
+		const cuit = input.value.replace(/\D/g, '').slice(0, 11);
+		const digitosAntes = input.value
+			.slice(0, input.selectionStart ?? input.value.length)
+			.replace(/\D/g, '').length;
+		nuevoContacto.cuit = cuit;
+		cuitFormateado = formatearCuit(cuit);
+		input.value = cuitFormateado;
+		const cursor = digitosAntes + Number(digitosAntes > 2) + Number(digitosAntes > 10);
+		input.setSelectionRange(
+			Math.min(cursor, cuitFormateado.length),
+			Math.min(cursor, cuitFormateado.length)
+		);
+		if (cuit !== cuitConsultado) cuitConsultado = '';
+	}
+
+	async function consultarCuitContacto() {
+		const cuit = nuevoContacto.cuit.trim();
+		if (!cuit) return;
+		if (!esCuitValido(cuit)) {
+			toast.error('Ingresá un CUIT válido de 11 dígitos.');
+			return;
+		}
+		if (cuit === cuitConsultado) return;
+		cuitConsultado = cuit;
+		try {
+			const datos = await obtenerDatosCuitARCA(cuit);
+			if (nuevoContacto.cuit !== cuit) return;
+			if (!datos) {
+				toast.warning('ARCA no encontró datos para ese CUIT.');
+				return;
+			}
+			if (!nuevoContacto.razon_social.trim() && datos.razon_social)
+				nuevoContacto.razon_social = datos.razon_social;
+			if (!nuevoContacto.telefono.trim() && datos.telefono) nuevoContacto.telefono = datos.telefono;
+			if (!nuevoContacto.email.trim() && datos.email) nuevoContacto.email = datos.email;
+			toast.success('Datos de ARCA cargados en los campos vacíos.');
+		} catch {
+			if (nuevoContacto.cuit === cuit) cuitConsultado = '';
+			toast.error('No se pudo consultar ARCA. Revisá la conexión e intentá de nuevo.');
+		}
+	}
+
+	async function guardarContactoRapido() {
+		if (
+			!nuevoContacto.razon_social.trim() &&
+			!nuevoContacto.telefono.trim() &&
+			!nuevoContacto.email.trim()
+		) {
+			toast.error('Ingresá al menos un dato de contacto');
+			return;
+		}
+		guardandoContacto = true;
+		try {
+			const contacto = await crearContactoRapido({
+				razon_social:
+					nuevoContacto.razon_social.trim() ||
+					nuevoContacto.telefono.trim() ||
+					nuevoContacto.email.trim(),
+				telefono: nuevoContacto.telefono || undefined,
+				email: nuevoContacto.email || undefined,
+				cuit: nuevoContacto.cuit || undefined
+			});
+			const option = { value: String(contacto.id), label: contacto.razon_social };
+			clientesOptions = [option, ...clientesOptions.filter((item) => item.value !== option.value)];
+			form.fields.contacto_id.set(option.value);
+			modalContactoAbierto = false;
+			nuevoContacto = { razon_social: '', telefono: '', email: '', cuit: '' };
+			toast.success(
+				contacto.reutilizado ? 'Contacto existente seleccionado' : 'Contacto creado y seleccionado'
+			);
+		} catch (error) {
+			toast.error(error instanceof Error ? error.message : 'No se pudo guardar el contacto');
+		} finally {
+			guardandoContacto = false;
+		}
+	}
 
 	async function buscarContactos(search: string, tipo: 'cliente' | 'distribuidor') {
 		const soloDistribuidores = tipo === 'distribuidor';
@@ -137,9 +240,11 @@
 						id="contacto_id"
 						label="Razón Social"
 						options={clientesOptions}
-						placeholder="Buscar razón social cargada..."
+						placeholder="Buscar por nombre, teléfono, email o CUIT..."
 						field={form.fields.contacto_id}
 						onSearch={(search) => buscarContactos(search, 'cliente')}
+						onCreate={abrirAltaRapida}
+						createLabel="Crear nuevo contacto"
 					/>
 
 					<SearchSelect
@@ -159,7 +264,7 @@
 
 				<div class="grid gap-4 md:grid-cols-4">
 					<FormFieldWrapper label="Canal" id="canal">
-						<select class="select" {...form.fields.canal.as('select')}>
+						<select class="select select-sm" {...form.fields.canal.as('select')}>
 							{#each CANALES as c (c.value)}
 								<option value={c.value}>{c.label}</option>
 							{/each}
@@ -173,7 +278,7 @@
 						placeholder="Transcripción del audio o resumen del pedido del cliente. Ej: 'Necesita un caño de escape completo para un Gol 2015, pregunta si hacemos ese modelo y cuánto sale.'"
 						rows={4}
 						{...form.fields.descripcion.as('text')}
-						class="textarea w-full resize-none"
+						class="textarea textarea-sm w-full resize-none"
 					></textarea>
 				</FormFieldWrapper>
 
@@ -182,7 +287,7 @@
 						placeholder="Notas internas..."
 						rows={2}
 						{...form.fields.observaciones.as('text')}
-						class="textarea w-full resize-none"
+						class="textarea textarea-sm w-full resize-none"
 					></textarea>
 				</FormFieldWrapper>
 
@@ -191,7 +296,7 @@
 						type="file"
 						multiple
 						accept="image/jpeg,image/png,image/webp,audio/ogg,audio/mpeg,audio/mp4,audio/x-m4a,audio/wav,audio/x-wav,video/mp4,application/pdf"
-						class="file-input w-full"
+						class="file-input file-input-sm w-full"
 						disabled={subiendoArchivos}
 						onchange={seleccionarArchivos}
 					/>
@@ -228,3 +333,49 @@
 		</form>
 	</Can>
 </PageLayout>
+
+<Modal
+	bind:open={modalContactoAbierto}
+	title="Nuevo contacto"
+	onClose={() => {
+		nuevoContacto = { razon_social: '', telefono: '', email: '', cuit: '' };
+		cuitFormateado = '';
+		cuitConsultado = '';
+	}}
+>
+	<div class="grid gap-3">
+		<FormFieldWrapper id="nuevo-cuit" label="CUIT (opcional)">
+			<input
+				class="input w-full input-sm"
+				inputmode="numeric"
+				maxlength="13"
+				autocomplete="off"
+				value={cuitFormateado}
+				oninput={actualizarCuit}
+				onblur={consultarCuitContacto}
+			/>
+		</FormFieldWrapper>
+		<FormFieldWrapper id="nuevo-razon-social" label="Nombre o razón social" required>
+			<input class="input w-full input-sm" bind:value={nuevoContacto.razon_social} />
+		</FormFieldWrapper>
+		<FormFieldWrapper id="nuevo-telefono" label="Teléfono">
+			<input class="input w-full input-sm" type="tel" bind:value={nuevoContacto.telefono} />
+		</FormFieldWrapper>
+		<FormFieldWrapper id="nuevo-email" label="Email">
+			<input class="input w-full input-sm" type="email" bind:value={nuevoContacto.email} />
+		</FormFieldWrapper>
+	</div>
+	{#snippet actions()}
+		<button type="button" class="btn" onclick={() => (modalContactoAbierto = false)}
+			>Cancelar</button
+		>
+		<button
+			type="button"
+			class="btn btn-primary"
+			disabled={guardandoContacto}
+			onclick={guardarContactoRapido}
+		>
+			{guardandoContacto ? 'Guardando...' : 'Crear y seleccionar'}
+		</button>
+	{/snippet}
+</Modal>
