@@ -27,8 +27,14 @@ jobs:
             echo ">>> Git pull"
             git pull origin main
 
-            echo ">>> Rebuild"
-            docker compose up -d --build app
+            echo ">>> Build"
+            docker compose build app
+
+            echo ">>> Migraciones y seeds"
+            docker compose run --rm --no-deps app sh -c 'pnpm db:migrate && pnpm db:seed'
+
+            echo ">>> Iniciar aplicación"
+            docker compose up -d --no-build app
 
             echo ">>> Esperando arranque..."
             sleep 8

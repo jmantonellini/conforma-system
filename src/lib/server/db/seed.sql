@@ -8,23 +8,15 @@
 -- ROLES (ya existentes en backup, diferentes IDs)
 -- ============================================================
 
-UPDATE roles
-SET nombre = 'oficina_admin'
-WHERE lower(trim(nombre)) IN ('oficina', 'oficina admin', 'office_admin');
-
-INSERT INTO roles (id, nombre, descripcion, created_at) VALUES
-(1, 'operario', 'Consulta fabricación', NULL),
-(2, 'ventas', 'Crea pedidos y gestiona clientes', NULL),
-(3, 'tecnico', 'Gestiona productos y pedidos', NULL),
-(4, 'admin', 'Acceso total', NULL),
-(5, 'jefe_planta', 'Gestiona fabricación y pedidos', NULL),
-(7, 'oficina_tecnica', 'Acceso técnico a cotizaciones y pedidos sin importes ni contactos', NULL)
-ON CONFLICT (id) DO NOTHING;
-
-INSERT INTO roles (id, nombre, descripcion, created_at)
-SELECT 6, 'oficina_admin', 'Administración de oficina', NULL
-WHERE NOT EXISTS (SELECT 1 FROM roles WHERE nombre = 'oficina_admin')
-ON CONFLICT (id) DO NOTHING;
+INSERT INTO roles (nombre, descripcion) VALUES
+('operario', 'Consulta fabricación'),
+('ventas', 'Crea pedidos y gestiona clientes'),
+('tecnico', 'Gestiona productos y pedidos'),
+('admin', 'Acceso total'),
+('jefe_planta', 'Gestiona fabricación y pedidos'),
+('oficina_admin', 'Administración de oficina'),
+('oficina_tecnica', 'Acceso técnico a cotizaciones y pedidos sin importes ni contactos')
+ON CONFLICT (nombre) DO UPDATE SET descripcion = EXCLUDED.descripcion;
 
 INSERT INTO permisos (accion, modulo)
 SELECT acciones.accion, 'stock'
@@ -45,54 +37,51 @@ WHERE NOT EXISTS (
 -- PERMISOS
 -- ============================================================
 
-INSERT INTO permisos (id, accion, modulo, created_at) VALUES
-(1, 'view', 'clientes', NULL),
-(2, 'create', 'clientes', NULL),
-(3, 'edit', 'clientes', NULL),
-(4, 'delete', 'clientes', NULL),
-(5, 'view', 'productos', NULL),
-(6, 'create', 'productos', NULL),
-(7, 'edit', 'productos', NULL),
-(8, 'delete', 'productos', NULL),
-(9, 'view', 'pedidos', NULL),
-(10, 'create', 'pedidos', NULL),
-(11, 'edit', 'pedidos', NULL),
-(12, 'delete', 'pedidos', NULL),
-(13, 'view', 'taller', NULL),
-(14, 'edit', 'taller', NULL),
-(15, 'delete', 'taller', NULL),
-(16, 'view', 'usuarios', NULL),
-(17, 'create', 'usuarios', NULL),
-(18, 'edit', 'usuarios', NULL),
-(19, 'delete', 'usuarios', NULL),
-(20, 'view', 'configuracion', NULL),
-(21, 'edit', 'configuracion', NULL)
-ON CONFLICT (id) DO NOTHING;
+INSERT INTO permisos (accion, modulo)
+SELECT accion, modulo
+FROM (VALUES
+('view','clientes'), ('create','clientes'), ('edit','clientes'), ('delete','clientes'),
+('view','contactos'), ('create','contactos'), ('edit','contactos'), ('delete','contactos'),
+('view','productos'), ('create','productos'), ('edit','productos'), ('delete','productos'),
+('view','pedidos'), ('create','pedidos'), ('edit','pedidos'), ('delete','pedidos'),
+('view','taller'), ('edit','taller'), ('delete','taller'),
+('view','usuarios'), ('create','usuarios'), ('edit','usuarios'), ('delete','usuarios'),
+('view','configuracion'), ('edit','configuracion'),
+('view','envios'), ('create','envios'), ('edit','envios'), ('delete','envios')
+) AS datos(accion, modulo)
+WHERE NOT EXISTS (
+ SELECT 1 FROM permisos p WHERE p.modulo = datos.modulo AND p.accion = datos.accion
+);
 
 
 -- ============================================================
 -- ROLES_PERMISOS
 -- ============================================================
 
-INSERT INTO roles_permisos (rol_id, permiso_id, created_at) VALUES
-(1, 13, NULL),
-(4, 1, NULL), (4, 2, NULL), (4, 3, NULL), (4, 4, NULL), (4, 5, NULL),
-(4, 6, NULL), (4, 7, NULL), (4, 8, NULL), (4, 9, NULL), (4, 10, NULL),
-(4, 11, NULL), (4, 12, NULL), (4, 13, NULL), (4, 14, NULL), (4, 15, NULL),
-(4, 16, NULL), (4, 17, NULL), (4, 18, NULL), (4, 19, NULL), (4, 20, NULL),
-(4, 21, NULL),
-(2, 1, to_timestamp(1781809268)), (2, 2, to_timestamp(1781809268)), (2, 3, to_timestamp(1781809268)),
-(2, 5, to_timestamp(1781809268)), (2, 9, to_timestamp(1781809268)), (2, 10, to_timestamp(1781809268)),
-(2, 11, to_timestamp(1781809268)), (2, 14, to_timestamp(1781809268)), (2, 15, to_timestamp(1781809268)),
-(2, 6, to_timestamp(1781809268)), (2, 8, to_timestamp(1781809268)), (2, 7, to_timestamp(1781809268)),
-(2, 12, to_timestamp(1781809268)), (2, 4, to_timestamp(1781809268)),
-(3, 1, to_timestamp(1781809294)), (3, 5, to_timestamp(1781809294)), (3, 6, to_timestamp(1781809294)),
-(3, 7, to_timestamp(1781809294)), (3, 8, to_timestamp(1781809294)), (3, 9, to_timestamp(1781809294)),
-(3, 11, to_timestamp(1781809294)), (3, 14, to_timestamp(1781809294)), (3, 15, to_timestamp(1781809294)),
-(3, 13, to_timestamp(1781809294)),
-(5, 1, to_timestamp(1781809311)), (5, 5, to_timestamp(1781809311)), (5, 9, to_timestamp(1781809311)),
-(5, 11, to_timestamp(1781809311)), (5, 13, to_timestamp(1781809311)), (5, 14, to_timestamp(1781809311)),
-(5, 15, to_timestamp(1781809311))
+INSERT INTO roles_permisos (rol_id, permiso_id)
+SELECT r.id, p.id FROM roles r CROSS JOIN permisos p
+WHERE r.nombre = 'operario' AND p.modulo = 'taller' AND p.accion = 'view'
+ON CONFLICT DO NOTHING;
+
+INSERT INTO roles_permisos (rol_id, permiso_id)
+SELECT r.id, p.id FROM roles r CROSS JOIN permisos p
+WHERE r.nombre = 'ventas'
+  AND ((p.modulo IN ('clientes','contactos','productos','pedidos','cotizaciones','envios') AND p.accion IN ('view','create','edit','delete'))
+    OR (p.modulo IN ('taller','stock') AND p.accion IN ('view','edit')))
+ON CONFLICT DO NOTHING;
+
+INSERT INTO roles_permisos (rol_id, permiso_id)
+SELECT r.id, p.id FROM roles r CROSS JOIN permisos p
+WHERE r.nombre = 'tecnico'
+  AND ((p.modulo IN ('clientes','contactos','productos','pedidos','taller','stock') AND p.accion IN ('view','create','edit','delete'))
+    OR p.modulo = 'fabricacion')
+ON CONFLICT DO NOTHING;
+
+INSERT INTO roles_permisos (rol_id, permiso_id)
+SELECT r.id, p.id FROM roles r CROSS JOIN permisos p
+WHERE r.nombre = 'jefe_planta'
+  AND ((p.modulo IN ('clientes','productos','pedidos','taller','stock') AND p.accion IN ('view','create','edit','delete'))
+    OR (p.modulo = 'contactos' AND p.accion = 'view'))
 ON CONFLICT DO NOTHING;
 
 INSERT INTO roles_permisos (rol_id, permiso_id)
