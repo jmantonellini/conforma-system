@@ -5,6 +5,7 @@ import { adjuntos, pedidos, lineas_pedido, estados_pedido } from '$lib/server/db
 import { eq } from 'drizzle-orm';
 import { requirePermission } from '$lib/server/auth/permissions';
 import { eliminarObjeto } from '$lib/server/services/object-storage.service';
+import { puedeVerImportes } from '$lib/utils/permissions';
 import { getInsumos } from '$lib/remote/insumos.remote';
 import {
 	PedidoSchema,
@@ -66,10 +67,17 @@ export const getPedidos = query(
 		search: v.optional(v.string()),
 		estadoId: v.optional(v.number()),
 		page: v.optional(v.pipe(v.number(), v.toMinValue(1)), 1),
-		limit: v.optional(v.pipe(v.number(), v.minValue(1), v.maxValue(100)), 10)
+		limit: v.optional(v.pipe(v.number(), v.minValue(1), v.maxValue(100)), 50)
 	}),
-	async ({ search, estadoId, page = 1, limit = 10 }) => {
-		return getPedidosListado({ search, estadoId, page, limit });
+	async ({ search, estadoId, page = 1, limit = 50 }) => {
+		const user = await requirePermission('pedidos', 'view');
+		const resultado = await getPedidosListado({ search, estadoId, page, limit });
+		return puedeVerImportes(user)
+			? resultado
+			: {
+					...resultado,
+					data: resultado.data.map((pedido) => ({ ...pedido, total: null }))
+				};
 	}
 );
 

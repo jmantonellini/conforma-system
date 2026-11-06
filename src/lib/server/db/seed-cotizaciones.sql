@@ -76,6 +76,14 @@ WHERE r.nombre = 'tecnico'
 	  WHERE existente.rol_id = r.id AND existente.permiso_id = p.id
 	);
 
+-- Oficina técnica nueva: solo consulta cotizaciones, sin módulos de administración ni clientes.
+INSERT INTO "roles_permisos" ("rol_id", "permiso_id")
+SELECT r.id, p.id FROM "roles" r, "permisos" p
+WHERE r.nombre = 'oficina_tecnica'
+  AND p.modulo = 'cotizaciones'
+  AND p.accion = 'view'
+ON CONFLICT DO NOTHING;
+
 -- Gerente (admin): ya tiene todo por bypass de can().
 -- Si tenés un rol 'gerente' distinto de admin, descomentá:
 -- INSERT INTO "roles_permisos" ("rol_id", "permiso_id")

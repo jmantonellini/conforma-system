@@ -13,6 +13,10 @@
 	import { CANALES_COTIZACION } from '$lib/utils/canales-cotizacion';
 	import { eliminarCotizacion } from '$lib/remote/cotizaciones.remote';
 	import { toast } from '$lib/stores/toast.svelte';
+	import { puedeVerImportes } from '$lib/utils/permissions';
+	import { page } from '$app/state';
+
+	const puedeVerTotales = puedeVerImportes(page.data.user);
 
 	let { data }: PageProps = $props();
 
@@ -80,7 +84,7 @@
 				<th>Cliente / Contacto</th>
 				<th>Canal</th>
 				<th>Fecha</th>
-				<th class="text-right">Total</th>
+				{#if puedeVerTotales}<th class="text-right">Total</th>{/if}
 				<th>Estado</th>
 				<th>Asignada a</th>
 				<th class="text-center">Acciones</th>
@@ -95,9 +99,9 @@
 					</span>
 				</td>
 				<td>{cot.created_at ? formatearFecha(new Date(cot.created_at)) : '-'}</td>
-				<td class="text-right font-medium">
-					{cot.precio_total != null ? '$' + formatearDosDecimales(cot.precio_total) : '-'}
-				</td>
+				{#if puedeVerTotales}<td class="text-right font-medium">
+						{cot.precio_total != null ? '$' + formatearDosDecimales(cot.precio_total) : '-'}
+					</td>{/if}
 				<td>
 					<span class="badge badge-dash capitalize badge-{cot.estado_color}">
 						{cot.estado_nombre}

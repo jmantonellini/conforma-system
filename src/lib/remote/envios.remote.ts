@@ -7,6 +7,7 @@ import { requirePermission } from '$lib/server/auth/permissions';
 import { getHistorialPedido } from './pedidos.remote';
 
 export const getTransportistas = query(async () => {
+	await requirePermission('envios', 'view');
 	return db.select().from(transportistas).where(eq(transportistas.activo, true));
 });
 
@@ -17,6 +18,7 @@ export const getEnvios = query(
 		limit: v.optional(v.pipe(v.number(), v.minValue(1), v.maxValue(100)), 20)
 	}),
 	async ({ estado, page, limit }) => {
+		await requirePermission('envios', 'view');
 		const offset = (page - 1) * limit;
 		const where = estado ? eq(envios.estado, estado) : undefined;
 
@@ -49,6 +51,7 @@ export const getEnvios = query(
 );
 
 export const getEnviosByPedido = query(v.number(), async (pedidoId) => {
+	await requirePermission('envios', 'view');
 	return db
 		.select({
 			id: envios.id,
@@ -82,7 +85,7 @@ const refrescarCachesEnvio = async (pedidoId?: number) => {
 };
 
 export const crearEnvio = form(EnvioSchema, async (data) => {
-	await requirePermission('pedidos', 'edit');
+	await requirePermission('envios', 'edit');
 	await db.insert(envios).values({
 		pedido_id: data.pedido_id,
 		transportista_id: data.transportista_id,
@@ -101,7 +104,7 @@ export const crearEnvio = form(EnvioSchema, async (data) => {
 export const marcarEntregado = command(
 	v.pipe(v.string(), v.transform(Number), v.number()),
 	async (envioId) => {
-		await requirePermission('pedidos', 'edit');
+		await requirePermission('envios', 'edit');
 		const [envio] = await db
 			.select({ pedido_id: envios.pedido_id })
 			.from(envios)

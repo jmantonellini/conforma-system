@@ -8,12 +8,22 @@
 -- ROLES (ya existentes en backup, diferentes IDs)
 -- ============================================================
 
+UPDATE roles
+SET nombre = 'oficina_admin'
+WHERE lower(trim(nombre)) IN ('oficina', 'oficina admin', 'office_admin');
+
 INSERT INTO roles (id, nombre, descripcion, created_at) VALUES
 (1, 'operario', 'Consulta fabricación', NULL),
 (2, 'ventas', 'Crea pedidos y gestiona clientes', NULL),
 (3, 'tecnico', 'Gestiona productos y pedidos', NULL),
 (4, 'admin', 'Acceso total', NULL),
-(5, 'jefe_planta', 'Gestiona fabricación y pedidos', NULL)
+(5, 'jefe_planta', 'Gestiona fabricación y pedidos', NULL),
+(7, 'oficina_tecnica', 'Acceso técnico a cotizaciones y pedidos sin importes ni contactos', NULL)
+ON CONFLICT (id) DO NOTHING;
+
+INSERT INTO roles (id, nombre, descripcion, created_at)
+SELECT 6, 'oficina_admin', 'Administración de oficina', NULL
+WHERE NOT EXISTS (SELECT 1 FROM roles WHERE nombre = 'oficina_admin')
 ON CONFLICT (id) DO NOTHING;
 
 INSERT INTO permisos (accion, modulo)
@@ -21,6 +31,13 @@ SELECT acciones.accion, 'stock'
 FROM (VALUES ('view'), ('edit')) AS acciones(accion)
 WHERE NOT EXISTS (
 	SELECT 1 FROM permisos p WHERE p.modulo = 'stock' AND p.accion = acciones.accion
+);
+
+INSERT INTO permisos (accion, modulo)
+SELECT acciones.accion, 'envios'
+FROM (VALUES ('view'), ('edit'), ('create'), ('delete')) AS acciones(accion)
+WHERE NOT EXISTS (
+	SELECT 1 FROM permisos p WHERE p.modulo = 'envios' AND p.accion = acciones.accion
 );
 
 
@@ -76,6 +93,23 @@ INSERT INTO roles_permisos (rol_id, permiso_id, created_at) VALUES
 (5, 1, to_timestamp(1781809311)), (5, 5, to_timestamp(1781809311)), (5, 9, to_timestamp(1781809311)),
 (5, 11, to_timestamp(1781809311)), (5, 13, to_timestamp(1781809311)), (5, 14, to_timestamp(1781809311)),
 (5, 15, to_timestamp(1781809311))
+ON CONFLICT DO NOTHING;
+
+INSERT INTO roles_permisos (rol_id, permiso_id)
+SELECT oficina.id, permiso.id
+FROM roles oficina
+CROSS JOIN permisos permiso
+WHERE oficina.nombre = 'oficina_admin'
+  AND permiso.modulo <> 'configuracion'
+ON CONFLICT DO NOTHING;
+
+INSERT INTO roles_permisos (rol_id, permiso_id)
+SELECT oficina.id, permiso.id
+FROM roles oficina
+CROSS JOIN permisos permiso
+WHERE oficina.nombre = 'oficina_tecnica'
+  AND permiso.modulo IN ('cotizaciones', 'pedidos')
+  AND permiso.accion = 'view'
 ON CONFLICT DO NOTHING;
 
 INSERT INTO roles_permisos (rol_id, permiso_id, created_at)

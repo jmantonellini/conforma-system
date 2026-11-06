@@ -9,6 +9,10 @@
 	import { SvelteURLSearchParams } from 'svelte/reactivity';
 	import { formatearFecha } from '$lib/utils/fechas';
 	import { formatearDosDecimales } from '$lib/utils/precios';
+	import { puedeVerImportes } from '$lib/utils/permissions';
+	import { page } from '$app/state';
+
+	const puedeVerTotales = puedeVerImportes(page.data.user);
 
 	let { data }: PageProps = $props();
 
@@ -70,7 +74,7 @@
 				<th>Cliente</th>
 				<th>Fecha</th>
 				<th>Entrega</th>
-				<th class="text-right">Total</th>
+				{#if puedeVerTotales}<th class="text-right">Total</th>{/if}
 				<th>Estado</th>
 				<th class="text-center">Acciones</th>
 			{/snippet}
@@ -83,9 +87,9 @@
 				<td class:text-error={pedido.fecha_entrega && pedido.fecha_entrega < new Date()}>
 					{pedido.fecha_entrega ? formatearFecha(new Date(pedido.fecha_entrega)) : '-'}
 				</td>
-				<td class="text-right font-medium">
-					${formatearDosDecimales(pedido.total)}
-				</td>
+				{#if puedeVerTotales}<td class="text-right font-medium">
+						${formatearDosDecimales(pedido.total)}
+					</td>{/if}
 				<td>
 					<span class="badge badge-dash capitalize badge-{pedido.estado_color}">
 						{pedido.estado_nombre}

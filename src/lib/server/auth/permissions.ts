@@ -2,6 +2,7 @@ import { getRequestEvent } from '$app/server';
 import { db } from '$lib/server/db';
 import { permisos, roles, roles_permisos, sesiones, usuarios } from '$lib/server/db/schema';
 import { and, eq } from 'drizzle-orm';
+import { ROLES } from '$lib/utils/permissions';
 
 export async function requirePermission(modulo: string, accion = 'view') {
 	const event = getRequestEvent();
@@ -27,7 +28,7 @@ export async function requirePermission(modulo: string, accion = 'view') {
 		.limit(1);
 
 	if (!user) throw new Error('No autorizado');
-	if (user.rol?.nombre === 'admin') return user;
+	if (user.rol?.nombre === ROLES.ADMIN) return user;
 
 	const [permiso] = await db
 		.select({ id: permisos.id })

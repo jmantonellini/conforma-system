@@ -20,6 +20,7 @@ import {
 import { and, aliasedTable, count, desc, eq, ilike, inArray, or, sql } from 'drizzle-orm';
 import { requirePermission } from '$lib/server/auth/permissions';
 import type { MaterialSnapshot } from '$lib/types/cotizacion-editor';
+import { puedeVerImportes } from '$lib/utils/permissions';
 
 const crearCondicionBusquedaCotizacion = ({
 	search,
@@ -62,7 +63,7 @@ export const getCotizaciones = query(
 		limit: v.optional(v.pipe(v.number(), v.minValue(1), v.maxValue(100)), 20)
 	}),
 	async ({ search, estadoId, asignadaA, page = 1, limit = 20 }) => {
-		await requirePermission('cotizaciones', 'view');
+		const user = await requirePermission('cotizaciones', 'view');
 		const offset = (page - 1) * limit;
 		const where = crearCondicionBusquedaCotizacion({ search, estadoId, asignadaA });
 
@@ -97,7 +98,9 @@ export const getCotizaciones = query(
 			.where(where);
 
 		return {
-			data,
+			data: puedeVerImportes(user)
+				? data
+				: data.map((cotizacion) => ({ ...cotizacion, precio_total: null })),
 			total: totalResult?.count || 0,
 			totalPages: Math.ceil((totalResult?.count || 0) / limit),
 			currentPage: page
