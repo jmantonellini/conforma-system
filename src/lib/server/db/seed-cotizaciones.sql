@@ -30,7 +30,8 @@ WHERE (o.slug = 'ingresada'      AND d.slug = 'asignada')
    OR (o.slug = 'lista_para_enviar' AND d.slug = 'enviada')
    OR (o.slug = 'lista_para_enviar' AND d.slug = 'rechazada')
    OR (o.slug = 'enviada'        AND d.slug = 'aprobada')
-	OR (o.slug = 'enviada'        AND d.slug = 'rechazada')
+   OR (o.slug = 'aprobada'       AND d.slug = 'enviada')
+   OR (o.slug = 'enviada'        AND d.slug = 'rechazada')
 ON CONFLICT (tipo, estado_origen_id, estado_destino_id) DO NOTHING;
 
 -- ============ PERMISOS ============

@@ -519,6 +519,25 @@ export const cambiarEstadoCotizacion = command(
 
 		if (!cotizacion) throw new Error('Cotización no encontrada');
 
+		const [estadoOrigen, estadoDestino] = await Promise.all([
+			db
+				.select({ slug: estados_cotizacion.slug })
+				.from(estados_cotizacion)
+				.where(eq(estados_cotizacion.id, cotizacion.estado_id))
+				.limit(1)
+				.then((rows) => rows[0]),
+			db
+				.select({ slug: estados_cotizacion.slug, nombre: estados_cotizacion.nombre })
+				.from(estados_cotizacion)
+				.where(eq(estados_cotizacion.id, estado_destino_id))
+				.limit(1)
+				.then((rows) => rows[0])
+		]);
+
+		if (cotizacion.pedido_id && estadoOrigen?.slug === 'aprobada') {
+			throw new Error('No se puede modificar una cotización aprobada que ya generó un pedido');
+		}
+
 		const transicion = await obtenerTransicionPermitida({
 			tipo: 'cotizacion',
 			estadoOrigenId: cotizacion.estado_id,
@@ -527,17 +546,31 @@ export const cambiarEstadoCotizacion = command(
 
 		if (!transicion) throw new Error('Transición no permitida');
 
-		const [estadoDestino] = await db
-			.select()
-			.from(estados_cotizacion)
-			.where(eq(estados_cotizacion.id, estado_destino_id))
-			.limit(1);
 		const comentarioNormalizado = comentario?.trim() || null;
 		if (estadoDestino?.slug === 'rechazada' && !comentarioNormalizado) {
 			throw new Error('Indicá el motivo del rechazo');
 		}
 
 		await db.transaction(async (tx) => {
+			const [cotizacionActual] = await tx
+				.select({ estado_id: cotizaciones.estado_id, pedido_id: cotizaciones.pedido_id })
+				.from(cotizaciones)
+				.where(eq(cotizaciones.id, cotizacion_id))
+				.for('update')
+				.limit(1);
+
+			if (!cotizacionActual) throw new Error('Cotización no encontrada');
+
+			const [estadoOrigenActual] = await tx
+				.select({ slug: estados_cotizacion.slug })
+				.from(estados_cotizacion)
+				.where(eq(estados_cotizacion.id, cotizacionActual.estado_id))
+				.limit(1);
+
+			if (cotizacionActual.pedido_id && estadoOrigenActual?.slug === 'aprobada') {
+				throw new Error('No se puede modificar una cotización aprobada que ya generó un pedido');
+			}
+
 			const updates: Partial<typeof cotizaciones.$inferSelect> = {
 				estado_id: estado_destino_id,
 				updated_at: now
@@ -640,6 +673,21 @@ export const convertirCotizacionAPedido = command(v.number(), async (cotizacionI
 	let pedidoId: number;
 
 	await db.transaction(async (tx) => {
+		const [cotizacionActual] = await tx
+			.select({ estado_id: cotizaciones.estado_id, pedido_id: cotizaciones.pedido_id })
+			.from(cotizaciones)
+			.where(eq(cotizaciones.id, cotizacionId))
+			.for('update')
+			.limit(1);
+
+		if (!cotizacionActual) throw new Error('Cotización no encontrada');
+		if (cotizacionActual.pedido_id) {
+			throw new Error('Esta cotización ya tiene un pedido generado');
+		}
+		if (estadoAprobada && cotizacionActual.estado_id !== estadoAprobada.id) {
+			throw new Error('La cotización debe estar Aprobada para generar el pedido');
+		}
+
 		const [pedido] = await tx
 			.insert(pedidos)
 			.values({
