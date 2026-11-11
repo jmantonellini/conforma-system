@@ -13,7 +13,7 @@
 	const form = crearContacto;
 	const rolSolicitado = page.url.searchParams.get('rol');
 	const rolInicial =
-		rolSolicitado === 'ninguno' || rolSolicitado === 'proveedor' ? rolSolicitado : 'cliente'
+		rolSolicitado === 'ninguno' || rolSolicitado === 'proveedor' ? rolSolicitado : 'cliente';
 	let rol = $state(rolInicial);
 	let esDistribuidor = $state(false);
 	let porcentajeCompensacion = $state(0);

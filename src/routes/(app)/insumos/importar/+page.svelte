@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { mensajeError } from '$lib/utils/errores';
 	import { goto } from '$app/navigation';
 	import { resolve } from '$app/paths';
 	import { Can, PageLayout } from '$lib/components/ui';
@@ -46,7 +47,7 @@
 			filas = resultado.filas ?? [];
 			toast.success(`${resultado.cantidad ?? 0} filas listas para importar`);
 		} catch (error) {
-			errores = [error instanceof Error ? error.message : 'No se pudo analizar el archivo'];
+			errores = [mensajeError(error, 'No se pudo analizar el archivo')];
 		} finally {
 			importando = false;
 		}

@@ -1,45 +1,14 @@
-import { command, form, getRequestEvent, query } from '$app/server';
+import { command, form, query } from '$app/server';
 import { db } from '$lib/server/db';
-import { empleados, roles, sesiones, usuarios } from '$lib/server/db/schema';
+import { empleados, roles, usuarios } from '$lib/server/db/schema';
 import bcrypt from 'bcryptjs';
 import { eq } from 'drizzle-orm';
 import * as v from 'valibot';
 import { ActualizarUsuarioSchema, CrearUsuarioSchema } from './usuarios.schema';
 import { getEmpleados } from './empleados.remote';
-import { requirePermission } from '$lib/server/auth/permissions';
+import { requirePermission, usuarioDeSesion } from '$lib/server/auth/permissions';
 
-export const getCurrentUser = query(async () => {
-	const event = getRequestEvent();
-
-	const sessionId = event.cookies.get('session');
-
-	if (!sessionId) return null;
-
-	const [session] = await db.select().from(sesiones).where(eq(sesiones.id, sessionId)).limit(1);
-
-	if (!session || session.user_id == null || new Date(session.expires_at) < new Date()) {
-		return null;
-	}
-
-	const [user] = await db
-		.select({
-			id: usuarios.id,
-			username: usuarios.username,
-			rol: {
-				id: roles.id,
-				nombre: roles.nombre,
-				descripcion: roles.descripcion
-			}
-		})
-		.from(usuarios)
-		.leftJoin(roles, eq(roles.id, usuarios.rol_id))
-		.where(eq(usuarios.id, session.user_id))
-		.limit(1);
-
-	if (!user) return null;
-
-	return user;
-});
+export const getCurrentUser = query(usuarioDeSesion);
 
 export const getUsuarios = query(async () => {
 	await requirePermission('configuracion', 'view');

@@ -1,3 +1,4 @@
+import { error } from '@sveltejs/kit';
 import { form, query } from '$app/server';
 import { db } from '$lib/server/db';
 import { pagos, pedidos } from '$lib/server/db/schema';
@@ -58,7 +59,7 @@ export const registrarPago = form(RegistrarPagoSchema, async (data) => {
 	await requirePermission('pedidos', 'edit');
 	await requirePermission('importes', 'view');
 	const user = await getCurrentUser();
-	if (!user) throw new Error('No autorizado');
+	if (!user) error(401, 'No autorizado');
 
 	const pedido = await db
 		.select()
@@ -66,9 +67,9 @@ export const registrarPago = form(RegistrarPagoSchema, async (data) => {
 		.where(eq(pedidos.id, data.pedido_id))
 		.then((r) => r[0]);
 
-	if (!pedido) throw new Error('Pedido no encontrado');
+	if (!pedido) error(404, 'Pedido no encontrado');
 	if (data.metodo_pago === 'cuotas' && !data.cantidad_cuotas) {
-		throw new Error('Indicá la cantidad de cuotas');
+		error(400, 'Indicá la cantidad de cuotas');
 	}
 
 	const pagosActuales = await db
@@ -80,7 +81,7 @@ export const registrarPago = form(RegistrarPagoSchema, async (data) => {
 		(pedido.anticipo || 0) + pagosActuales.reduce((s, p) => s + (p.monto || 0), 0);
 
 	if (totalPagado + data.monto > (pedido.precio_total || 0)) {
-		throw new Error('El pago excede el total del pedido');
+		error(400, 'El pago excede el total del pedido');
 	}
 
 	await db.insert(pagos).values({

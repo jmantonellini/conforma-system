@@ -2,12 +2,12 @@ import * as v from 'valibot';
 import { command, form, query } from '$app/server';
 import { and, asc, count, desc, eq, exists, ilike, or, sql, type SQL } from 'drizzle-orm';
 import { db } from '$lib/server/db';
-import { contactos, proveedores, pedidos, estados_pedido } from '$lib/server/db/schema';
+import { contactos, proveedores, pedidos, estados } from '$lib/server/db/schema';
 import { requirePermission, tienePermiso } from '$lib/server/auth/permissions';
 import { consultarCuitARCA } from '$lib/server/services/arca-padron.service';
 import { listarContactosCliente } from '$lib/server/services/contactos.service';
 import { esCuitValido } from '$lib/utils/cuit';
-import { redirect } from '@sveltejs/kit';
+import { redirect, error } from '@sveltejs/kit';
 import { resolve } from '$app/paths';
 
 const ContactoBaseSchema = {
@@ -536,7 +536,7 @@ export const actualizarProveedor = form(ProveedorUpdateSchema, async ({ id, ...d
 export const obtenerContactoPorId = query(v.number(), async (id) => {
 	const user = await requirePermission('contactos', 'view');
 	const [contacto] = await db.select().from(contactos).where(eq(contactos.id, id)).limit(1);
-	if (!contacto) throw new Error('Contacto no encontrado');
+	if (!contacto) error(404, 'Contacto no encontrado');
 	const [proveedor] = await db
 		.select()
 		.from(proveedores)
@@ -559,11 +559,11 @@ export const obtenerPedidosContacto = query(v.number(), async (contactoId) => {
 			numero_pedido: pedidos.numero_pedido,
 			fecha_pedido: pedidos.fecha_pedido,
 			precio_total: pedidos.precio_total,
-			estado: estados_pedido.nombre,
-			estado_color: estados_pedido.color
+			estado: estados.nombre,
+			estado_color: estados.color
 		})
 		.from(pedidos)
-		.leftJoin(estados_pedido, eq(pedidos.estado_id, estados_pedido.id))
+		.leftJoin(estados, eq(pedidos.estado_id, estados.id))
 		.where(eq(pedidos.contacto_id, contactoId))
 		.orderBy(sql`${pedidos.fecha_pedido} DESC`);
 	if (await tienePermiso(user, 'importes', 'view')) return pedidosContacto;
@@ -572,6 +572,6 @@ export const obtenerPedidosContacto = query(v.number(), async (contactoId) => {
 
 export const obtenerProveedorPorId = query(v.number(), async (id) => {
 	const [proveedor] = await db.select().from(proveedores).where(eq(proveedores.id, id)).limit(1);
-	if (!proveedor) throw new Error('Proveedor no encontrado');
+	if (!proveedor) error(404, 'Proveedor no encontrado');
 	return proveedor;
 });

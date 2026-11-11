@@ -1,5 +1,6 @@
+import { error } from '@sveltejs/kit';
 import { and, eq, sql } from 'drizzle-orm';
-import { db } from '$lib/server/db';
+import type { Tx } from '$lib/server/db';
 import { hayStockSuficiente } from '$lib/utils/inventario-insumos';
 import {
 	empleados,
@@ -11,8 +12,6 @@ import {
 	producto_insumos
 } from '$lib/server/db/schema';
 import type { MaterialSnapshot } from '$lib/types/linea-comercial';
-
-type Tx = Parameters<typeof db.transaction>[0] extends (tx: infer T) => unknown ? T : never;
 
 export type TipoMovimientoInsumo = 'ingreso' | 'consumo';
 
@@ -45,12 +44,13 @@ export async function registrarMovimientoInsumoTx(
 		.where(eq(insumos.id, movimiento.insumo_id))
 		.for('update')
 		.limit(1);
-	if (!insumo || !insumo.activo) throw new Error('Insumo no encontrado o inactivo');
+	if (!insumo || !insumo.activo) error(404, 'Insumo no encontrado o inactivo');
 
 	if (movimiento.tipo === 'consumo') {
 		const saldo = await obtenerSaldoInsumoTx(tx, movimiento.insumo_id);
 		if (!hayStockSuficiente(saldo, movimiento.cantidad)) {
-			throw new Error(
+			error(
+				400,
 				`Stock insuficiente para ${insumo.codigo}. Disponible: ${saldo}, solicitado: ${movimiento.cantidad}`
 			);
 		}
@@ -62,7 +62,7 @@ export async function registrarMovimientoInsumoTx(
 			? await insercion.onConflictDoNothing().returning({ id: movimientos_insumos.id })
 			: await insercion.returning({ id: movimientos_insumos.id });
 	if (!registrado && movimiento.fuente === 'receta') {
-		throw new Error('La receta de esta orden ya fue consumida');
+		error(400, 'La receta de esta orden ya fue consumida');
 	}
 	return registrado;
 }
@@ -80,7 +80,7 @@ export async function obtenerInsumosRequeridosOrdenTx(tx: Tx, ordenId: number) {
 		.leftJoin(lineas_pedido, eq(lineas_pedido.id, ordenes_fabricacion.linea_pedido_id))
 		.where(eq(ordenes_fabricacion.id, ordenId))
 		.limit(1);
-	if (!orden) throw new Error('Orden de fabricación no encontrada');
+	if (!orden) error(404, 'Orden de fabricación no encontrada');
 
 	const cantidades = new Map<number, number>();
 	const acumularProducto = async (
@@ -88,7 +88,7 @@ export async function obtenerInsumosRequeridosOrdenTx(tx: Tx, ordenId: number) {
 		multiplicador: number,
 		visitados: Set<number>
 	) => {
-		if (visitados.has(productoId)) throw new Error('La receta contiene un ciclo de productos');
+		if (visitados.has(productoId)) error(400, 'La receta contiene un ciclo de productos');
 		const siguientes = new Set(visitados).add(productoId);
 		const [materiales, componentes] = await Promise.all([
 			tx
@@ -123,7 +123,7 @@ export async function obtenerInsumosRequeridosOrdenTx(tx: Tx, ordenId: number) {
 		? (orden.insumos_snapshot as MaterialSnapshot[])
 		: [];
 	if (!orden.producto_id && !snapshot.length) {
-		throw new Error('Esta orden no tiene una receta de insumos para consumir');
+		error(400, 'Esta orden no tiene una receta de insumos para consumir');
 	}
 	if (snapshot.length) {
 		for (const material of snapshot) {
@@ -144,7 +144,7 @@ export async function obtenerInsumosRequeridosOrdenTx(tx: Tx, ordenId: number) {
 		insumo_id,
 		cantidad: cantidad * orden.cantidad_total
 	})).filter((item) => item.cantidad > 0);
-	if (!requeridos.length) throw new Error('La receta no tiene insumos para consumir');
+	if (!requeridos.length) error(400, 'La receta no tiene insumos para consumir');
 	return requeridos.sort((a, b) => a.insumo_id - b.insumo_id);
 }
 

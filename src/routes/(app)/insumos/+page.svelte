@@ -148,7 +148,7 @@
 					{/if}
 				</td>
 				<td
-					><span class="badge badge-sm whitespace-nowrap badge-ghost"
+					><span class="badge badge-ghost badge-sm whitespace-nowrap"
 						><Highlight
 							text={typeof insumo.tipo === 'object' ? insumo.tipo?.nombre : insumo.tipo}
 							query={search}

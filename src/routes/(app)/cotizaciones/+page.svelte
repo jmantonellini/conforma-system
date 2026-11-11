@@ -103,7 +103,7 @@
 						{cot.precio_total != null ? '$' + formatearDosDecimales(cot.precio_total) : '-'}
 					</td>{/if}
 				<td>
-					<span class="badge badge-sm badge-dash capitalize badge-{cot.estado_color}">
+					<span class="badge badge-dash badge-sm capitalize badge-{cot.estado_color}">
 						{cot.estado_nombre}
 					</span>
 				</td>

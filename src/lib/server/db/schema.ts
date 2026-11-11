@@ -16,54 +16,45 @@ import type { AnyPgColumn } from 'drizzle-orm/pg-core';
 import { sql } from 'drizzle-orm';
 import { EstadosTarea, Prioridades } from '$lib/types';
 
-export const estados_fabricacion = pgTable('estados_fabricacion', {
-	id: serial('id').primaryKey(),
-	nombre: text('nombre').notNull().unique(),
-	slug: text('slug').notNull().unique(),
-	grupo: text('grupo').notNull(),
-	orden: integer('orden').notNull(),
-	color: text('color'),
-	es_final: boolean('es_final').default(false),
-	created_at: timestamp('created_at').defaultNow()
-});
+export const FLUJOS_ESTADO = ['cotizacion', 'pedido', 'fabricacion'] as const;
+export type FlujoEstado = (typeof FLUJOS_ESTADO)[number];
 
-export const estados_pedido = pgTable('estados_pedido', {
-	id: serial('id').primaryKey(),
-	nombre: text('nombre').notNull().unique(),
-	slug: text('slug').notNull().unique(),
-	grupo: text('grupo').notNull(),
-	orden: integer('orden').notNull(),
-	color: text('color'),
-	es_final: boolean('es_final').default(false),
-	created_at: timestamp('created_at').defaultNow()
-});
-
-export const estados_cotizacion = pgTable('estados_cotizacion', {
-	id: serial('id').primaryKey(),
-	nombre: text('nombre').notNull().unique(),
-	slug: text('slug').notNull().unique(),
-	grupo: text('grupo').notNull(),
-	orden: integer('orden').notNull(),
-	color: text('color'),
-	es_final: boolean('es_final').default(false),
-	created_at: timestamp('created_at').defaultNow()
-});
+export const estados = pgTable(
+	'estados',
+	{
+		id: serial('id').primaryKey(),
+		flujo: text('flujo', { enum: FLUJOS_ESTADO }).notNull(),
+		nombre: text('nombre').notNull(),
+		slug: text('slug').notNull(),
+		grupo: text('grupo').notNull(),
+		orden: integer('orden').notNull(),
+		color: text('color'),
+		es_final: boolean('es_final').notNull().default(false),
+		created_at: timestamp('created_at').defaultNow()
+	},
+	(table) => [
+		uniqueIndex('idx_estados_flujo_slug').on(table.flujo, table.slug),
+		uniqueIndex('idx_estados_flujo_nombre').on(table.flujo, table.nombre)
+	]
+);
 
 export const transiciones_estado = pgTable(
 	'transiciones_estado',
 	{
 		id: serial('id').primaryKey(),
-		tipo: text('tipo').notNull(), // "fabricacion" | "pedido"
-		estado_origen_id: integer('estado_origen_id').notNull(),
-		estado_destino_id: integer('estado_destino_id').notNull(),
-		requiere_rol: text('requiere_rol'),
+		estado_origen_id: integer('estado_origen_id')
+			.references(() => estados.id, { onDelete: 'cascade' })
+			.notNull(),
+		estado_destino_id: integer('estado_destino_id')
+			.references(() => estados.id, { onDelete: 'cascade' })
+			.notNull(),
 		created_at: timestamp('created_at').defaultNow()
 	},
 	(table) => [
-		uniqueIndex('idx_transicion_unica').on(
-			table.tipo,
-			table.estado_origen_id,
-			table.estado_destino_id
+		uniqueIndex('idx_transicion_unica').on(table.estado_origen_id, table.estado_destino_id),
+		check(
+			'transiciones_estado_distintos',
+			sql`${table.estado_origen_id} <> ${table.estado_destino_id}`
 		)
 	]
 );
@@ -149,7 +140,7 @@ export const cotizaciones = pgTable('cotizaciones', {
 	canal: text('canal').notNull().default('whatsapp'), // whatsapp | llamada | email | presencial | otro
 	descripcion: text('descripcion').notNull(),
 	estado_id: integer('estado_id')
-		.references(() => estados_cotizacion.id, { onDelete: 'restrict' })
+		.references(() => estados.id, { onDelete: 'restrict' })
 		.notNull(),
 	asignada_a: integer('asignada_a').references(() => empleados.id, { onDelete: 'set null' }),
 	creada_por: integer('creada_por').references(() => usuarios.id, { onDelete: 'set null' }),
@@ -339,7 +330,7 @@ export const pedidos = pgTable('pedidos', {
 	fecha_entrega_prometida: timestamp('fecha_entrega_prometida'),
 	fecha_entrega_real: timestamp('fecha_entrega_real'),
 	estado_id: integer('estado_id')
-		.references(() => estados_pedido.id, { onDelete: 'restrict' })
+		.references(() => estados.id, { onDelete: 'restrict' })
 		.notNull(),
 	precio_total: real('precio_total'),
 	anticipo: real('anticipo'),
@@ -617,11 +608,8 @@ export const unidades_fabricacion = pgTable(
 			.notNull(),
 		numero_serie: text('numero_serie').notNull(),
 		estado_id: integer('estado_id')
-			.references(() => estados_fabricacion.id, { onDelete: 'restrict' })
+			.references(() => estados.id, { onDelete: 'restrict' })
 			.notNull(),
-		historial_estados: jsonb('historial_estados')
-			.$type<Array<{ estado_id: number; fecha: string; comentario?: string }>>()
-			.default(sql`'[]'::jsonb`),
 		comentario_estado: text('comentario_estado'),
 		es_defectuoso: boolean('es_defectuoso').default(false),
 		defecto_descripcion: text('defecto_descripcion'),
@@ -818,13 +806,13 @@ export const logs_cambios_estado = pgTable(
 	'logs_cambios_estado',
 	{
 		id: serial('id').primaryKey(),
-		entidad_tipo: text('entidad_tipo').notNull(), // "unidad" | "pedido"
+		entidad_tipo: text('entidad_tipo', { enum: ['cotizacion', 'pedido', 'unidad'] }).notNull(),
 		entidad_id: integer('entidad_id').notNull(),
 		usuario_id: integer('usuario_id')
 			.references(() => usuarios.id, { onDelete: 'set null' })
 			.notNull(),
 		estado_anterior_id: integer('estado_anterior_id'),
-		estado_nuevo_id: integer('estado_nuevo_id').notNull(),
+		estado_nuevo_id: integer('estado_nuevo_id'),
 		comentario: text('comentario'),
 		created_at: timestamp('created_at').defaultNow()
 	},
@@ -926,9 +914,7 @@ export type LineaPedido = typeof lineas_pedido.$inferSelect;
 export type Producto = typeof productos.$inferSelect;
 export type OrdenFabricacion = typeof ordenes_fabricacion.$inferSelect;
 export type UnidadFabricacion = typeof unidades_fabricacion.$inferSelect;
-export type EstadoFabricacion = typeof estados_fabricacion.$inferSelect;
-export type EstadoPedido = typeof estados_pedido.$inferSelect;
-export type EstadoCotizacion = typeof estados_cotizacion.$inferSelect;
+export type Estado = typeof estados.$inferSelect;
 export type Cotizacion = typeof cotizaciones.$inferSelect;
 export type LineaCotizacion = typeof lineas_cotizacion.$inferSelect;
 export type Adjunto = typeof adjuntos.$inferSelect;

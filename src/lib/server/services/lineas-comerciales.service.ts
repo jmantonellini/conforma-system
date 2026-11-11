@@ -1,6 +1,7 @@
+import { error } from '@sveltejs/kit';
 import { randomUUID } from 'node:crypto';
 import { eq, inArray } from 'drizzle-orm';
-import { db } from '$lib/server/db';
+import type { Tx } from '$lib/server/db';
 import { insumos, tipos_insumo, unidades_medida } from '$lib/server/db/schema';
 import {
 	getProductoConRecetaService,
@@ -12,8 +13,6 @@ import type {
 	TipoLineaComercial
 } from '$lib/types/linea-comercial';
 import { calcularCostoComposicion, redondearPrecio } from '$lib/utils/precios';
-
-type Tx = Parameters<typeof db.transaction>[0] extends (tx: infer T) => unknown ? T : never;
 
 export type LineaComercialEntrada = {
 	tipo?: TipoLineaComercial;
@@ -69,7 +68,7 @@ export async function resolverLineaComercial(
 	if (tipo === 'producto') {
 		producto_id = Number(linea.producto_id);
 		if (!Number.isSafeInteger(producto_id) || producto_id < 1) {
-			throw new Error('Seleccioná un producto válido');
+			error(400, 'Seleccioná un producto válido');
 		}
 		const [producto, precio] = await Promise.all([
 			getProductoConRecetaService(producto_id),
@@ -81,7 +80,7 @@ export async function resolverLineaComercial(
 			linea.precio_lista_unitario ?? linea.precio_unitario ?? precio.precio_venta
 		);
 		if (precio_lista_unitario < precio.precio_venta) {
-			throw new Error('El precio de lista no puede ser menor al precio base del producto');
+			error(400, 'El precio de lista no puede ser menor al precio base del producto');
 		}
 		margen_producto = precio.margen_porcentaje;
 		insumos_snapshot = producto.recetaDirecta.map((material) => {
@@ -127,7 +126,7 @@ export async function resolverLineaComercial(
 					.limit(1)
 			]);
 			if (!tipoInsumo[0] || !unidad[0]) {
-				throw new Error('El tipo o la unidad seleccionados no existen');
+				error(400, 'El tipo o la unidad seleccionados no existen');
 			}
 			const [creado] = await tx
 				.insert(insumos)
@@ -149,17 +148,17 @@ export async function resolverLineaComercial(
 			insumo_id = Number(linea.insumo_id);
 		}
 		if (!Number.isSafeInteger(insumo_id) || insumo_id < 1) {
-			throw new Error('Seleccioná un insumo válido');
+			error(400, 'Seleccioná un insumo válido');
 		}
 		const [insumo] = await tx.select().from(insumos).where(eq(insumos.id, insumo_id)).limit(1);
-		if (!insumo) throw new Error('Insumo no encontrado');
+		if (!insumo) error(404, 'Insumo no encontrado');
 		descripcion = insumo.nombre;
 		costo_materiales = redondearPrecio(insumo.costo_unitario);
 		precio_lista_unitario = redondearPrecio(
 			linea.precio_lista_unitario ?? linea.precio_unitario ?? insumo.costo_unitario
 		);
 		if (precio_lista_unitario < costo_materiales) {
-			throw new Error('El precio del insumo no puede ser menor al costo unitario');
+			error(400, 'El precio del insumo no puede ser menor al costo unitario');
 		}
 		insumos_snapshot = [
 			{
@@ -173,11 +172,11 @@ export async function resolverLineaComercial(
 			}
 		];
 	} else {
-		if (!descripcion) throw new Error('La descripción del concepto es requerida');
+		if (!descripcion) error(400, 'La descripción del concepto es requerida');
 		const asociados = linea.insumos_asociados ?? [];
 		const ids = asociados.map((material) => material.insumo_id);
 		if (new Set(ids).size !== ids.length) {
-			throw new Error('No repitas el mismo insumo en la composición');
+			error(400, 'No repitas el mismo insumo en la composición');
 		}
 		if (ids.length) {
 			const materiales = await tx
@@ -193,7 +192,7 @@ export async function resolverLineaComercial(
 			const porId = new Map(materiales.map((material) => [material.id, material]));
 			insumos_snapshot = asociados.map((asociado) => {
 				const material = porId.get(asociado.insumo_id);
-				if (!material) throw new Error('Uno de los insumos asociados ya no existe');
+				if (!material) error(400, 'Uno de los insumos asociados ya no existe');
 				const costo_unitario = redondearPrecio(material.costo_unitario);
 				return {
 					insumo_id: material.id,

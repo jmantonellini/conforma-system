@@ -1,8 +1,7 @@
-import { db } from '$lib/server/db';
+import { error } from '@sveltejs/kit';
+import type { Tx } from '$lib/server/db';
 import { producto_componentes, producto_insumos } from '$lib/server/db/schema';
 import { eq } from 'drizzle-orm';
-
-type Tx = Parameters<typeof db.transaction>[0] extends (tx: infer T) => any ? T : never;
 
 export type RecetaLineaProducto = {
 	insumo_id?: number;
@@ -29,7 +28,7 @@ export function parsearRecetaProducto(recetaJson?: string): RecetaLineaProducto[
 				};
 			});
 	} catch {
-		throw new Error('La receta del producto no es válida');
+		error(400, 'La receta del producto no es válida');
 	}
 }
 
@@ -38,7 +37,7 @@ export function validarComponentes(
 	productoId: number
 ) {
 	if (productosRelacionados.some((componente) => componente.componente_id === productoId)) {
-		throw new Error('Un producto no puede contenerse a sí mismo');
+		error(400, 'Un producto no puede contenerse a sí mismo');
 	}
 }
 

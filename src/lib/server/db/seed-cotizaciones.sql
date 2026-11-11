@@ -1,38 +1,7 @@
--- Seed del módulo Cotizaciones: estados, transiciones y permisos por rol.
+-- Seed del módulo Cotizaciones: permisos por rol.
 -- Correr después de la migración: psql $DATABASE_URL -f 03-seed-cotizaciones.sql
 
--- ============ ESTADOS ============
-INSERT INTO "estados_cotizacion" ("nombre", "slug", "grupo", "orden", "color", "es_final") VALUES
-	('Ingresada',       'ingresada',         'entrada',   1, 'info',      false),
-	('Asignada',        'asignada',          'revision',  2, 'secondary', false),
-	('En cotización',   'en_cotizacion',     'revision',  3, 'warning',   false),
-	('Lista p/ enviar', 'lista_para_enviar', 'respuesta', 4, 'accent',    false),
-	('Enviada',         'enviada',           'respuesta', 5, 'primary',   false),
-	('Aprobada',        'aprobada',          'final',     6, 'success',   true),
-	('Rechazada',       'rechazada',         'final',     7, 'error',     true)
-ON CONFLICT (slug) DO UPDATE SET
-	 nombre = EXCLUDED.nombre,
-	 grupo = EXCLUDED.grupo,
-	 orden = EXCLUDED.orden,
-	 color = EXCLUDED.color,
-	 es_final = EXCLUDED.es_final;
-
--- ============ TRANSICIONES (state machine, tipo 'cotizacion') ============
--- Se reutiliza la tabla transiciones_estado existente.
-INSERT INTO "transiciones_estado" ("tipo", "estado_origen_id", "estado_destino_id", "requiere_rol")
-SELECT 'cotizacion', o.id, d.id, NULL FROM "estados_cotizacion" o, "estados_cotizacion" d
-WHERE (o.slug = 'ingresada'      AND d.slug = 'asignada')
-   OR (o.slug = 'ingresada'      AND d.slug = 'rechazada')
-   OR (o.slug = 'asignada'       AND d.slug = 'en_cotizacion')
-   OR (o.slug = 'asignada'       AND d.slug = 'rechazada')
-   OR (o.slug = 'en_cotizacion'  AND d.slug = 'lista_para_enviar')
-   OR (o.slug = 'en_cotizacion'  AND d.slug = 'rechazada')
-   OR (o.slug = 'lista_para_enviar' AND d.slug = 'enviada')
-   OR (o.slug = 'lista_para_enviar' AND d.slug = 'rechazada')
-   OR (o.slug = 'enviada'        AND d.slug = 'aprobada')
-   OR (o.slug = 'aprobada'       AND d.slug = 'enviada')
-   OR (o.slug = 'enviada'        AND d.slug = 'rechazada')
-ON CONFLICT (tipo, estado_origen_id, estado_destino_id) DO NOTHING;
+-- Estados y transiciones viven en la migración 0013 y se administran desde Configuración.
 
 -- ============ PERMISOS ============
 INSERT INTO "permisos" ("accion", "modulo")

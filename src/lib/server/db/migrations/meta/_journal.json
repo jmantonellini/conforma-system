@@ -92,6 +92,13 @@
 			"when": 1794365875296,
 			"tag": "0012_remove_insumos_consumir",
 			"breakpoints": true
+		},
+		{
+			"idx": 13,
+			"version": "7",
+			"when": 1794416599750,
+			"tag": "0013_unificar_estados",
+			"breakpoints": true
 		}
 	]
 }

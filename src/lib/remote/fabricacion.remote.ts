@@ -1,21 +1,23 @@
 import * as v from 'valibot';
+import { error } from '@sveltejs/kit';
 import { form, command, requested } from '$app/server';
-import { db } from '$lib/server/db';
+import { db, type Tx } from '$lib/server/db';
 import {
-	adjuntos,
-	ordenes_fabricacion,
-	unidades_fabricacion,
-	lineas_pedido,
-	pedidos,
-	productos,
-	estados_fabricacion,
-	transiciones_estado,
+	estados,
 	logs_cambios_estado,
-	estados_pedido,
-	movimientos_stock
+	movimientos_stock,
+	ordenes_fabricacion,
+	productos,
+	unidades_fabricacion,
+	lineas_pedido
 } from '$lib/server/db/schema';
-import { eq, sql, and } from 'drizzle-orm';
-import { getCurrentUser } from './usuarios.remote';
+import { and, desc, eq, ne } from 'drizzle-orm';
+import { requirePermission } from '$lib/server/auth/permissions';
+import { estadoPorSlug, registrarCambioEstado, validarTransicion } from '$lib/server/estados';
+import { clavesAdjuntos, eliminarArchivos } from '$lib/server/services/adjuntos.service';
+import { moverPedidoAutomatico } from '$lib/server/services/pedidos.service';
+import { registrarIngresoProduccionTx } from '$lib/server/services/stock.service';
+import { PEDIDO_SLUG } from '$lib/types';
 import { CrearOrdenSchema } from './fabricacion.schema';
 import { getPedidos } from './pedidos.remote';
 import {
@@ -23,39 +25,45 @@ import {
 	getOrdenesFabricacion,
 	getHistorialUnidades
 } from './fabricacion-consultas.remote';
-import { PEDIDO_SLUG } from '$lib/types';
-import { eliminarObjeto } from '$lib/server/services/object-storage.service';
-import { registrarIngresoProduccionTx } from '$lib/server/services/stock.service';
-import { requirePermission } from '$lib/server/auth/permissions';
 import { getStockDisponibilidad } from './stock.remote';
 
+const idDesdeTexto = v.pipe(v.union([v.string(), v.number()]), v.transform(Number), v.integer());
+
 // ============================================================
-// FORMS
+// ALTA
 // ============================================================
 
 export const crearOrdenFabricacion = form(CrearOrdenSchema, async (data) => {
-	const user = await getCurrentUser();
-	if (!user) throw new Error('No autorizado');
+	const user = await requirePermission('fabricacion', 'create');
 	const esParaStock = data.origen === 'stock';
 	if (esParaStock) await requirePermission('stock', 'edit');
 	if (esParaStock ? !data.producto_id : !data.linea_pedido_id) {
-		throw new Error(esParaStock ? 'Selecciona un producto' : 'Selecciona una línea de pedido');
+		error(400, esParaStock ? 'Seleccioná un producto' : 'Seleccioná una línea de pedido');
 	}
-
 	const cantidadTotal = Number(data.cantidad_total);
 	if (!Number.isSafeInteger(cantidadTotal) || cantidadTotal < 1) {
-		throw new Error('La cantidad debe ser un entero mayor a cero');
+		error(400, 'La cantidad debe ser un entero mayor a cero');
 	}
+	const estadoInicial = await estadoPorSlug('fabricacion', 'preparando_material');
+
 	const [orden, unidades] = await db.transaction(async (tx) => {
+		let pedidoId: number | undefined;
 		if (esParaStock) {
 			const [producto] = await tx
 				.select({ id: productos.id })
 				.from(productos)
-				.where(eq(productos.id, data.producto_id!))
-				.limit(1);
-			if (!producto) throw new Error('Producto no encontrado');
+				.where(eq(productos.id, data.producto_id!));
+			if (!producto) error(404, 'Producto no encontrado');
+		} else {
+			const [linea] = await tx
+				.select({ pedido_id: lineas_pedido.pedido_id })
+				.from(lineas_pedido)
+				.where(eq(lineas_pedido.id, data.linea_pedido_id!));
+			if (!linea) error(404, 'Línea de pedido no encontrada');
+			pedidoId = linea.pedido_id;
 		}
-		const [ordenCreada] = await tx
+
+		const [creada] = await tx
 			.insert(ordenes_fabricacion)
 			.values({
 				nombre_trabajo: data.nombre_trabajo,
@@ -70,328 +78,190 @@ export const crearOrdenFabricacion = form(CrearOrdenSchema, async (data) => {
 			})
 			.returning();
 
-		const [estadoInicial] = await tx
-			.select()
-			.from(estados_fabricacion)
-			.where(eq(estados_fabricacion.slug, 'preparando_material'));
-		if (!estadoInicial) throw new Error('Estado inicial no configurado');
-
-		const unidadesCreadas = await tx
+		const unidades = await tx
 			.insert(unidades_fabricacion)
 			.values(
-				Array.from({ length: cantidadTotal }, (_, index) => ({
-					orden_fabricacion_id: ordenCreada.id,
-					numero_serie: `${ordenCreada.id}-${(index + 1).toString().padStart(3, '0')}`,
-					estado_id: estadoInicial.id,
-					historial_estados: []
+				Array.from({ length: cantidadTotal }, (_, indice) => ({
+					orden_fabricacion_id: creada.id,
+					numero_serie: `${creada.id}-${String(indice + 1).padStart(3, '0')}`,
+					estado_id: estadoInicial.id
 				}))
 			)
 			.returning();
 
-		if (!esParaStock) {
-			const [pedido] = await tx
-				.select({ id: lineas_pedido.pedido_id, estado_id: pedidos.estado_id })
-				.from(lineas_pedido)
-				.innerJoin(pedidos, eq(lineas_pedido.pedido_id, pedidos.id))
-				.where(eq(lineas_pedido.id, data.linea_pedido_id!))
-				.limit(1);
-			if (pedido) {
-				const [pendiente, enProd] = await Promise.all([
-					tx
-						.select({ id: estados_pedido.id })
-						.from(estados_pedido)
-						.where(eq(estados_pedido.slug, 'pendiente')),
-					tx
-						.select({ id: estados_pedido.id })
-						.from(estados_pedido)
-						.where(eq(estados_pedido.slug, 'en_produccion'))
-				]);
-				if (pedido.estado_id === pendiente[0]?.id && enProd[0]) {
-					await tx
-						.update(pedidos)
-						.set({ estado_id: enProd[0].id })
-						.where(eq(pedidos.id, pedido.id));
-				}
-			}
+		if (pedidoId) {
+			await moverPedidoAutomatico(tx, pedidoId, {
+				desde: [PEDIDO_SLUG.PENDIENTE],
+				hacia: PEDIDO_SLUG.EN_PRODUCCION,
+				usuarioId: user.id,
+				comentario: `Orden de fabricación #${creada.id} creada`
+			});
 		}
-		return [ordenCreada, unidadesCreadas] as const;
+		return [creada, unidades] as const;
 	});
 
+	requested(getOrdenesFabricacion, 1).refreshAll();
 	return { success: true, orden, unidades };
 });
 
 // ============================================================
-// COMMANDS
+// MÁQUINA DE ESTADOS DE UNIDADES
 // ============================================================
+
+/** Si todas las unidades de todas las órdenes del pedido terminaron, lo marca como completado. */
+async function completarPedidoSiTermino(tx: Tx, ordenId: number, usuarioId: number) {
+	const [orden] = await tx
+		.select({ pedido_id: lineas_pedido.pedido_id })
+		.from(ordenes_fabricacion)
+		.innerJoin(lineas_pedido, eq(lineas_pedido.id, ordenes_fabricacion.linea_pedido_id))
+		.where(eq(ordenes_fabricacion.id, ordenId));
+	if (!orden) return;
+
+	const [pendiente] = await tx
+		.select({ id: unidades_fabricacion.id })
+		.from(unidades_fabricacion)
+		.innerJoin(estados, eq(estados.id, unidades_fabricacion.estado_id))
+		.innerJoin(
+			ordenes_fabricacion,
+			eq(ordenes_fabricacion.id, unidades_fabricacion.orden_fabricacion_id)
+		)
+		.innerJoin(lineas_pedido, eq(lineas_pedido.id, ordenes_fabricacion.linea_pedido_id))
+		.where(and(eq(lineas_pedido.pedido_id, orden.pedido_id), eq(estados.es_final, false)))
+		.limit(1);
+	if (pendiente) return;
+
+	await moverPedidoAutomatico(tx, orden.pedido_id, {
+		desde: [PEDIDO_SLUG.PENDIENTE, PEDIDO_SLUG.EN_PRODUCCION, PEDIDO_SLUG.DEMORADO],
+		hacia: PEDIDO_SLUG.COMPLETADO,
+		usuarioId,
+		comentario: 'Fabricación finalizada'
+	});
+}
+
+async function cambiarEstado(unidadId: number, destinoId: number, comentario: string | undefined) {
+	const user = await requirePermission('fabricacion', 'edit');
+
+	const ordenId = await db.transaction(async (tx) => {
+		const [unidad] = await tx
+			.select({
+				id: unidades_fabricacion.id,
+				estado_id: unidades_fabricacion.estado_id,
+				es_defectuoso: unidades_fabricacion.es_defectuoso,
+				orden_id: ordenes_fabricacion.id,
+				es_para_stock: ordenes_fabricacion.es_para_stock,
+				producto_id: ordenes_fabricacion.producto_id,
+				ingreso_stock: movimientos_stock.id
+			})
+			.from(unidades_fabricacion)
+			.innerJoin(
+				ordenes_fabricacion,
+				eq(ordenes_fabricacion.id, unidades_fabricacion.orden_fabricacion_id)
+			)
+			.leftJoin(
+				movimientos_stock,
+				eq(movimientos_stock.unidad_fabricacion_id, unidades_fabricacion.id)
+			)
+			.where(eq(unidades_fabricacion.id, unidadId))
+			.for('update', { of: unidades_fabricacion });
+		if (!unidad) error(404, `Unidad ${unidadId} no encontrada`);
+
+		const destino = await validarTransicion(tx, unidad.estado_id, destinoId);
+		if (unidad.ingreso_stock && !destino.es_final) {
+			error(409, 'No se puede reabrir una unidad que ya ingresó al stock');
+		}
+
+		await tx
+			.update(unidades_fabricacion)
+			.set({ estado_id: destino.id, comentario_estado: comentario?.trim() || null })
+			.where(eq(unidades_fabricacion.id, unidadId));
+		await registrarCambioEstado(tx, {
+			flujo: 'fabricacion',
+			entidadId: unidadId,
+			usuarioId: user.id,
+			anteriorId: unidad.estado_id,
+			nuevoId: destino.id,
+			comentario
+		});
+
+		if (destino.es_final) {
+			if (unidad.es_para_stock && unidad.producto_id && !unidad.es_defectuoso) {
+				await registrarIngresoProduccionTx(tx, {
+					productoId: unidad.producto_id,
+					unidadId,
+					usuarioId: user.id
+				});
+			}
+			await completarPedidoSiTermino(tx, unidad.orden_id, user.id);
+		}
+		return unidad.orden_id;
+	});
+
+	requested(getPedidos, 1).refreshAll();
+	getStockDisponibilidad().refresh();
+	getOrdenFabricacion(ordenId).refresh();
+	getHistorialUnidades(ordenId).refresh();
+	return { success: true };
+}
 
 export const cambiarEstadoUnidad = command(
 	v.object({
-		unidad_id: v.pipe(v.string(), v.transform(Number), v.number()),
-		estado_destino_id: v.pipe(v.string(), v.transform(Number), v.number()),
+		unidad_id: idDesdeTexto,
+		estado_destino_id: idDesdeTexto,
 		comentario: v.optional(v.string())
 	}),
-	async ({ unidad_id, estado_destino_id, comentario }) => {
-		const user = await getCurrentUser();
-		if (!user) throw new Error('No autorizado');
-
-		const now = new Date();
-
-		// 1. Obtener unidad
-		const unidad = await db
-			.select()
-			.from(unidades_fabricacion)
-			.where(eq(unidades_fabricacion.id, unidad_id))
-			.then((rows) => rows[0]);
-
-		if (!unidad) throw new Error(`Unidad ${unidad_id} no encontrada`);
-
-		// 2. Validar transición
-		const transicion = await db
-			.select()
-			.from(transiciones_estado)
-			.where(
-				and(
-					eq(transiciones_estado.tipo, 'fabricacion'),
-					eq(transiciones_estado.estado_origen_id, unidad.estado_id),
-					eq(transiciones_estado.estado_destino_id, estado_destino_id)
-				)
-			)
-			.then((rows) => rows[0]);
-
-		if (!transicion) {
-			const [actual, destino] = await Promise.all([
-				db
-					.select()
-					.from(estados_fabricacion)
-					.where(eq(estados_fabricacion.id, unidad.estado_id))
-					.then((r) => r[0]),
-				db
-					.select()
-					.from(estados_fabricacion)
-					.where(eq(estados_fabricacion.id, estado_destino_id))
-					.then((r) => r[0])
-			]);
-			throw new Error(
-				`Transición no permitida: ${actual?.nombre ?? '?'} → ${destino?.nombre ?? '?'}`
-			);
-		}
-
-		// 3. Actualizar unidad
-		const historial = unidad.historial_estados ?? [];
-		historial.push({
-			estado_id: unidad.estado_id,
-			fecha: now.toISOString(),
-			comentario: comentario ?? undefined
-		});
-
-		const estadoDestino = await db
-			.select()
-			.from(estados_fabricacion)
-			.where(eq(estados_fabricacion.id, estado_destino_id))
-			.then((rows) => rows[0]);
-
-		await db.transaction(async (tx) => {
-			const [orden] = await tx
-				.select({
-					es_para_stock: ordenes_fabricacion.es_para_stock,
-					producto_id: ordenes_fabricacion.producto_id
-				})
-				.from(ordenes_fabricacion)
-				.where(eq(ordenes_fabricacion.id, unidad.orden_fabricacion_id))
-				.limit(1);
-			if (orden?.es_para_stock && !estadoDestino?.es_final) {
-				const [ingreso] = await tx
-					.select({ id: movimientos_stock.id })
-					.from(movimientos_stock)
-					.where(eq(movimientos_stock.unidad_fabricacion_id, unidad.id))
-					.limit(1);
-				if (ingreso) {
-					throw new Error('No se puede reabrir una unidad que ya ingresó al stock');
-				}
-			}
-
-			await tx
-				.update(unidades_fabricacion)
-				.set({
-					estado_id: estado_destino_id,
-					historial_estados: historial,
-					comentario_estado: comentario ?? null,
-					updated_at: now
-				})
-				.where(eq(unidades_fabricacion.id, unidad_id));
-
-			await tx.insert(logs_cambios_estado).values({
-				entidad_tipo: 'unidad',
-				entidad_id: unidad_id,
-				usuario_id: user.id,
-				estado_anterior_id: unidad.estado_id,
-				estado_nuevo_id: estado_destino_id,
-				comentario: comentario ?? null,
-				created_at: now
-			});
-
-			if (estadoDestino?.es_final) {
-				if (orden?.es_para_stock && orden.producto_id && !unidad.es_defectuoso) {
-					await registrarIngresoProduccionTx(tx, {
-						productoId: orden.producto_id,
-						unidadId: unidad.id,
-						usuarioId: user.id
-					});
-				}
-
-				const pedido = await tx
-					.select({ id: lineas_pedido.pedido_id })
-					.from(ordenes_fabricacion)
-					.innerJoin(lineas_pedido, eq(ordenes_fabricacion.linea_pedido_id, lineas_pedido.id))
-					.where(eq(ordenes_fabricacion.id, unidad.orden_fabricacion_id))
-					.then((r) => r[0]);
-
-				if (pedido?.id) {
-					const res = await tx.execute(sql`
-				SELECT 
-					COUNT(*)::int as total,
-					COUNT(*) FILTER (WHERE ef.es_final = true)::int as terminadas
-				FROM unidades_fabricacion uf
-				JOIN ordenes_fabricacion of ON uf.orden_fabricacion_id = of.id
-				JOIN lineas_pedido lp ON of.linea_pedido_id = lp.id
-				JOIN estados_fabricacion ef ON uf.estado_id = ef.id
-				WHERE lp.pedido_id = ${pedido.id}
-			`);
-
-					const { total, terminadas } = res.rows[0] as { total: number; terminadas: number };
-
-					if (total && total === terminadas) {
-						const comp = await tx
-							.select({ id: estados_pedido.id })
-							.from(estados_pedido)
-							.where(eq(estados_pedido.slug, PEDIDO_SLUG.COMPLETADO))
-							.then((r) => r[0]);
-
-						if (comp) {
-							await tx
-								.update(pedidos)
-								.set({ estado_id: comp.id, updated_at: now })
-								.where(eq(pedidos.id, pedido.id));
-
-							await tx.insert(logs_cambios_estado).values({
-								entidad_tipo: 'pedido',
-								entidad_id: pedido.id,
-								usuario_id: user.id,
-								estado_nuevo_id: comp.id,
-								comentario: 'Fabricación finalizada',
-								created_at: now
-							});
-						}
-					}
-				}
-			}
-		});
-
-		// Refrescar
-		Promise.all([
-			getPedidos({ search: '', page: 1 }).refresh(),
-			getStockDisponibilidad().refresh(),
-			getOrdenFabricacion(unidad.orden_fabricacion_id).refresh(),
-			getHistorialUnidades(unidad.orden_fabricacion_id).refresh()
-		]).catch(() => {});
-
-		return { success: true };
-	}
+	({ unidad_id, estado_destino_id, comentario }) =>
+		cambiarEstado(unidad_id, estado_destino_id, comentario)
 );
 
+/** Vuelve una unidad pausada al último estado no pausado de su historial. */
 export const reanudarUnidad = command(
-	v.object({
-		unidad_id: v.pipe(v.string(), v.transform(Number), v.number()),
-		comentario: v.optional(v.string())
-	}),
+	v.object({ unidad_id: idDesdeTexto, comentario: v.optional(v.string()) }),
 	async ({ unidad_id, comentario }) => {
-		const user = await getCurrentUser();
-		if (!user) throw new Error('No autorizado');
-
-		const unidad = await db
-			.select()
-			.from(unidades_fabricacion)
-			.where(eq(unidades_fabricacion.id, unidad_id))
-			.then((rows) => rows[0]);
-
-		if (!unidad) throw new Error(`Unidad ${unidad_id} no encontrada`);
-
-		const estadoActual = await db
-			.select()
-			.from(estados_fabricacion)
-			.where(eq(estados_fabricacion.id, unidad.estado_id))
-			.then((rows) => rows[0]);
-
-		if (estadoActual?.slug !== 'pausado') {
-			throw new Error('La unidad no está pausada');
-		}
-
-		const historial = unidad.historial_estados ?? [];
-		if (historial.length === 0) throw new Error('No hay historial');
-
-		// Traer todos los estados del historial de una vez
-		const estadosIds = [...new Set(historial.map((h) => h.estado_id))];
-		const estadosMap = new Map(
-			(
-				await db
-					.select()
-					.from(estados_fabricacion)
-					.where(sql`${estados_fabricacion.id} IN ${estadosIds}`)
-			).map((e) => [e.id, e])
-		);
-
-		const estadoReanudar = historial
-			.slice()
-			.reverse()
-			.find((h) => estadosMap.get(h.estado_id)?.slug !== 'pausado');
-
-		if (!estadoReanudar) {
-			throw new Error('No hay estado anterior para reanudar');
-		}
-
-		return cambiarEstadoUnidad({
-			unidad_id: String(unidad_id),
-			estado_destino_id: String(estadoReanudar.estado_id),
-			comentario: comentario ?? `Reanudado desde ${estadoActual.nombre}`
-		});
-	}
-);
-
-export const eliminarOrdenFabricacion = command(
-	v.pipe(v.string(), v.transform(Number), v.number()),
-	async (id) => {
-		const user = await getCurrentUser();
-		if (!user) throw new Error('No autorizado');
-
-		const unidades = await db
+		const pausado = await estadoPorSlug('fabricacion', 'pausado');
+		const [unidad] = await db
 			.select({ estado_id: unidades_fabricacion.estado_id })
 			.from(unidades_fabricacion)
-			.where(eq(unidades_fabricacion.orden_fabricacion_id, id));
+			.where(eq(unidades_fabricacion.id, unidad_id));
+		if (!unidad) error(404, `Unidad ${unidad_id} no encontrada`);
+		if (unidad.estado_id !== pausado.id) error(409, 'La unidad no está pausada');
 
-		const estadosFinales = await db
-			.select({ id: estados_fabricacion.id })
-			.from(estados_fabricacion)
-			.where(eq(estados_fabricacion.es_final, true))
-			.then((rows) => new Set(rows.map((r) => r.id)));
+		const [anterior] = await db
+			.select({ estado_id: logs_cambios_estado.estado_anterior_id })
+			.from(logs_cambios_estado)
+			.where(
+				and(
+					eq(logs_cambios_estado.entidad_tipo, 'unidad'),
+					eq(logs_cambios_estado.entidad_id, unidad_id),
+					eq(logs_cambios_estado.estado_nuevo_id, pausado.id),
+					ne(logs_cambios_estado.estado_anterior_id, pausado.id)
+				)
+			)
+			.orderBy(desc(logs_cambios_estado.created_at), desc(logs_cambios_estado.id))
+			.limit(1);
+		if (!anterior?.estado_id) error(409, 'No hay estado anterior para reanudar');
 
-		const algunaFinal = unidades.some((u) => estadosFinales.has(u.estado_id));
-		if (algunaFinal) {
-			throw new Error('No se puede eliminar una orden con unidades terminadas');
-		}
-		const archivos = await db
-			.select({ archivo_key: adjuntos.archivo_key })
-			.from(adjuntos)
-			.where(eq(adjuntos.orden_fabricacion_id, id));
-
-		await db.transaction(async (tx) => {
-			await tx
-				.delete(unidades_fabricacion)
-				.where(eq(unidades_fabricacion.orden_fabricacion_id, id));
-			await tx.delete(ordenes_fabricacion).where(eq(ordenes_fabricacion.id, id));
-		});
-		await Promise.all(archivos.map((archivo) => eliminarObjeto(archivo.archivo_key)));
-		requested(getOrdenesFabricacion, 1).refreshAll();
-
-		return { success: true };
+		return cambiarEstado(
+			unidad_id,
+			anterior.estado_id,
+			comentario ?? `Reanudado desde ${pausado.nombre}`
+		);
 	}
 );
+
+export const eliminarOrdenFabricacion = command(idDesdeTexto, async (id) => {
+	await requirePermission('fabricacion', 'delete');
+	const [terminada] = await db
+		.select({ id: unidades_fabricacion.id })
+		.from(unidades_fabricacion)
+		.innerJoin(estados, eq(estados.id, unidades_fabricacion.estado_id))
+		.where(and(eq(unidades_fabricacion.orden_fabricacion_id, id), eq(estados.es_final, true)))
+		.limit(1);
+	if (terminada) error(409, 'No se puede eliminar una orden con unidades terminadas');
+
+	const claves = await clavesAdjuntos('fabricacion', id);
+	// Las unidades y los adjuntos se eliminan en cascada.
+	await db.delete(ordenes_fabricacion).where(eq(ordenes_fabricacion.id, id));
+	await eliminarArchivos(claves);
+	requested(getOrdenesFabricacion, 1).refreshAll();
+	return { success: true };
+});

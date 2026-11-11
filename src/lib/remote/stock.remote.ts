@@ -1,3 +1,4 @@
+import { error } from '@sveltejs/kit';
 import * as v from 'valibot';
 import { command, query } from '$app/server';
 import { requirePermission } from '$lib/server/auth/permissions';
@@ -24,7 +25,7 @@ export const registrarMovimientoStock = command(
 	async (data) => {
 		await requirePermission('stock', 'edit');
 		const user = await getCurrentUser();
-		if (!user) throw new Error('No autorizado');
+		if (!user) error(401, 'No autorizado');
 
 		const movimiento = await registrarMovimientoStockServicio({
 			tipo: data.tipo,

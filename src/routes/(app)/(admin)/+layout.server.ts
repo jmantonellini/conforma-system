@@ -7,5 +7,4 @@ export const load = (async ({ cookies }) => {
 	};
 }) satisfies LayoutServerLoad;
 
-
 // LOGICA PARA SOLO ADMIN

@@ -160,8 +160,8 @@
 						</span>
 					</td>
 					<td>
-						<span class={`badge whitespace-nowrap badge-sm badge-${o.estado.color}`}>
-							{o.estado.nombre}
+						<span class={`badge badge-sm whitespace-nowrap badge-${o.estado?.color}`}>
+							{o.estado?.nombre}
 						</span>
 					</td>
 					<td>

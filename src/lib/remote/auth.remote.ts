@@ -3,7 +3,7 @@ import { db } from '$lib/server/db';
 import { usuarios, sesiones, feedback } from '$lib/server/db/schema';
 import { eq } from 'drizzle-orm';
 import bcrypt from 'bcryptjs';
-import { redirect } from '@sveltejs/kit';
+import { redirect, error } from '@sveltejs/kit';
 import { LoginSchema } from './auth.schema';
 import * as v from 'valibot';
 import { Paths } from '$lib/types';
@@ -18,7 +18,7 @@ export const login = form(LoginSchema, async (data) => {
 		.limit(1);
 
 	if (!user || !user.activo || !(await bcrypt.compare(data.password, user.password_hash))) {
-		throw new Error('Credenciales inválidas');
+		error(400, 'Credenciales inválidas');
 	}
 
 	const sessionId = crypto.randomUUID();
@@ -50,7 +50,7 @@ export const register = form(LoginSchema, async (data) => {
 		.limit(1);
 
 	if (existingUser) {
-		throw new Error('El usuario ya existe');
+		error(400, 'El usuario ya existe');
 	}
 
 	// Generar hash de la contraseña

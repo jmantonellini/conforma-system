@@ -1,18 +1,19 @@
 import * as v from 'valibot';
 import { command, form, query } from '$app/server';
 import { db } from '$lib/server/db';
+import { error } from '@sveltejs/kit';
 import {
+	FLUJOS_ESTADO,
 	categorias_productos,
 	configuracion_empresa,
-	estados_fabricacion,
-	estados_pedido,
-	estados_cotizacion,
 	cotizaciones,
-	transiciones_estado,
+	estados,
 	pedidos,
+	transiciones_estado,
 	unidades_fabricacion
 } from '$lib/server/db/schema';
-import { and, asc, eq, or } from 'drizzle-orm';
+import { asc, eq, getTableColumns, inArray } from 'drizzle-orm';
+import { listarEstados } from '$lib/server/estados';
 import { requirePermission } from '$lib/server/auth/permissions';
 import { toSlug } from '$lib/utils/ids';
 
@@ -94,11 +95,10 @@ export const eliminarCategoriaProducto = command(idSchema, async ({ id }) => {
 	return { success: true };
 });
 
-export const getEstadosFabricacionAdmin = query(async () =>
-	db.select().from(estados_fabricacion).orderBy(asc(estados_fabricacion.orden))
-);
+const flujoSchema = v.picklist(FLUJOS_ESTADO);
 
 const estadoSchema = v.object({
+	flujo: flujoSchema,
 	nombre: v.pipe(v.string(), v.trim(), v.nonEmpty()),
 	slug: v.pipe(v.string(), v.trim(), v.nonEmpty()),
 	grupo: v.pipe(v.string(), v.trim(), v.nonEmpty()),
@@ -107,229 +107,90 @@ const estadoSchema = v.object({
 	es_final: v.optional(v.boolean(), false)
 });
 
-const tipoEstadoSchema = v.picklist(['cotizacion', 'pedido', 'fabricacion']);
+/** Tabla y columna que referencian estados de cada flujo (para impedir borrar estados en uso). */
+const ENTIDADES_POR_FLUJO = {
+	cotizacion: { columna: cotizaciones.estado_id, nombre: 'cotizaciones' },
+	pedido: { columna: pedidos.estado_id, nombre: 'pedidos' },
+	fabricacion: { columna: unidades_fabricacion.estado_id, nombre: 'unidades de fabricación' }
+} as const;
 
-export const getTransicionesEstadoAdmin = query(tipoEstadoSchema, async (tipo) =>
-	db
-		.select()
+export const getEstadosAdmin = query(flujoSchema, async (flujo) => {
+	await requirePermission('configuracion', 'view');
+	return listarEstados(flujo);
+});
+
+export const getTransicionesEstadoAdmin = query(flujoSchema, async (flujo) => {
+	await requirePermission('configuracion', 'view');
+	return db
+		.select(getTableColumns(transiciones_estado))
 		.from(transiciones_estado)
-		.where(eq(transiciones_estado.tipo, tipo))
-		.orderBy(asc(transiciones_estado.estado_origen_id), asc(transiciones_estado.estado_destino_id))
+		.innerJoin(estados, eq(estados.id, transiciones_estado.estado_origen_id))
+		.where(eq(estados.flujo, flujo))
+		.orderBy(asc(transiciones_estado.estado_origen_id), asc(transiciones_estado.estado_destino_id));
+});
+
+export const guardarEstado = command(
+	v.object({ id: v.optional(v.number()), ...estadoSchema.entries }),
+	async ({ id, ...data }) => {
+		await requirePermission('configuracion', 'edit');
+		const [estado] = id
+			? await db.update(estados).set(data).where(eq(estados.id, id)).returning()
+			: await db.insert(estados).values(data).returning();
+		getEstadosAdmin(data.flujo).refresh();
+		return estado;
+	}
 );
 
+export const eliminarEstado = command(idSchema, async ({ id }) => {
+	await requirePermission('configuracion', 'edit');
+	const [estado] = await db.select().from(estados).where(eq(estados.id, id)).limit(1);
+	if (!estado) error(404, 'Estado no encontrado');
+
+	const { columna, nombre } = ENTIDADES_POR_FLUJO[estado.flujo];
+	const [enUso] = await db
+		.select({ id: columna })
+		.from(columna.table)
+		.where(eq(columna, id))
+		.limit(1);
+	if (enUso) error(409, `No se puede eliminar: hay ${nombre} en este estado.`);
+
+	// Las transiciones del estado se borran en cascada.
+	await db.delete(estados).where(eq(estados.id, id));
+	getEstadosAdmin(estado.flujo).refresh();
+	getTransicionesEstadoAdmin(estado.flujo).refresh();
+	return { success: true };
+});
+
 export const crearTransicionEstadoAdmin = command(
-	v.object({
-		tipo: tipoEstadoSchema,
-		estado_origen_id: v.number(),
-		estado_destino_id: v.number()
-	}),
-	async ({ tipo, estado_origen_id, estado_destino_id }) => {
+	v.object({ estado_origen_id: v.number(), estado_destino_id: v.number() }),
+	async ({ estado_origen_id, estado_destino_id }) => {
 		await requirePermission('configuracion', 'edit');
 		if (estado_origen_id === estado_destino_id) {
-			throw new Error('El estado de origen y destino deben ser distintos.');
+			error(400, 'El estado de origen y destino deben ser distintos.');
 		}
-
-		const estados =
-			tipo === 'cotizacion'
-				? await db.select({ id: estados_cotizacion.id }).from(estados_cotizacion)
-				: tipo === 'pedido'
-					? await db.select({ id: estados_pedido.id }).from(estados_pedido)
-					: await db.select({ id: estados_fabricacion.id }).from(estados_fabricacion);
-		const ids = new Set(estados.map((estado) => estado.id));
-		if (!ids.has(estado_origen_id) || !ids.has(estado_destino_id)) {
-			throw new Error('Los estados deben pertenecer al mismo flujo.');
-		}
-
-		const [existente] = await db
-			.select({ id: transiciones_estado.id })
-			.from(transiciones_estado)
-			.where(
-				and(
-					eq(transiciones_estado.tipo, tipo),
-					eq(transiciones_estado.estado_origen_id, estado_origen_id),
-					eq(transiciones_estado.estado_destino_id, estado_destino_id)
-				)
-			)
-			.limit(1);
-		if (existente) throw new Error('Esa transición ya existe.');
+		const flujos = await db
+			.selectDistinct({ flujo: estados.flujo })
+			.from(estados)
+			.where(inArray(estados.id, [estado_origen_id, estado_destino_id]));
+		if (flujos.length !== 1) error(400, 'Los estados deben pertenecer al mismo flujo.');
 
 		const [transicion] = await db
 			.insert(transiciones_estado)
-			.values({ tipo, estado_origen_id, estado_destino_id })
+			.values({ estado_origen_id, estado_destino_id })
+			.onConflictDoNothing()
 			.returning();
-		getTransicionesEstadoAdmin(tipo).refresh();
+		if (!transicion) error(409, 'Esa transición ya existe.');
+		getTransicionesEstadoAdmin(flujos[0].flujo).refresh();
 		return transicion;
 	}
 );
 
 export const eliminarTransicionEstadoAdmin = command(
-	v.object({ id: v.number(), tipo: tipoEstadoSchema }),
-	async ({ id, tipo }) => {
+	v.object({ id: v.number(), flujo: flujoSchema }),
+	async ({ id, flujo }) => {
 		await requirePermission('configuracion', 'edit');
-		await db
-			.delete(transiciones_estado)
-			.where(and(eq(transiciones_estado.id, id), eq(transiciones_estado.tipo, tipo)));
-		getTransicionesEstadoAdmin(tipo).refresh();
+		await db.delete(transiciones_estado).where(eq(transiciones_estado.id, id));
+		getTransicionesEstadoAdmin(flujo).refresh();
 		return { success: true };
 	}
 );
-
-export const crearEstadoFabricacion = command(estadoSchema, async (data) => {
-	await requirePermission('configuracion', 'edit');
-	const [estado] = await db.insert(estados_fabricacion).values(data).returning();
-	getEstadosFabricacionAdmin().refresh();
-	return estado;
-});
-
-export const actualizarEstadoFabricacion = command(
-	v.object({ id: v.number(), ...estadoSchema.entries }),
-	async ({ id, ...data }) => {
-		await requirePermission('configuracion', 'edit');
-		const [estado] = await db
-			.update(estados_fabricacion)
-			.set(data)
-			.where(eq(estados_fabricacion.id, id))
-			.returning();
-		getEstadosFabricacionAdmin().refresh();
-		return estado;
-	}
-);
-
-export const eliminarEstadoFabricacion = command(idSchema, async ({ id }) => {
-	await requirePermission('configuracion', 'edit');
-	await db.transaction(async (tx) => {
-		const [unidad] = await tx
-			.select({ id: unidades_fabricacion.id })
-			.from(unidades_fabricacion)
-			.where(eq(unidades_fabricacion.estado_id, id))
-			.limit(1);
-		if (unidad) {
-			throw new Error('No se puede eliminar: hay unidades de fabricación en este estado.');
-		}
-		await tx
-			.delete(transiciones_estado)
-			.where(
-				and(
-					eq(transiciones_estado.tipo, 'fabricacion'),
-					or(
-						eq(transiciones_estado.estado_origen_id, id),
-						eq(transiciones_estado.estado_destino_id, id)
-					)
-				)
-			);
-		await tx.delete(estados_fabricacion).where(eq(estados_fabricacion.id, id));
-	});
-	getEstadosFabricacionAdmin().refresh();
-	getTransicionesEstadoAdmin('fabricacion').refresh();
-	return { success: true };
-});
-
-export const getEstadosPedidoAdmin = query(async () =>
-	db.select().from(estados_pedido).orderBy(asc(estados_pedido.orden))
-);
-
-export const getEstadosCotizacionAdmin = query(async () =>
-	db.select().from(estados_cotizacion).orderBy(asc(estados_cotizacion.orden))
-);
-
-export const crearEstadoPedidoAdmin = command(estadoSchema, async (data) => {
-	await requirePermission('configuracion', 'edit');
-	const [estado] = await db.insert(estados_pedido).values(data).returning();
-	getEstadosPedidoAdmin().refresh();
-	return estado;
-});
-
-export const actualizarEstadoPedidoAdmin = command(
-	v.object({ id: v.number(), ...estadoSchema.entries }),
-	async ({ id, ...data }) => {
-		await requirePermission('configuracion', 'edit');
-		const [estado] = await db
-			.update(estados_pedido)
-			.set(data)
-			.where(eq(estados_pedido.id, id))
-			.returning();
-		getEstadosPedidoAdmin().refresh();
-		return estado;
-	}
-);
-
-export const eliminarEstadoPedidoAdmin = command(idSchema, async ({ id }) => {
-	await requirePermission('configuracion', 'edit');
-	await db.transaction(async (tx) => {
-		const [pedido] = await tx
-			.select({ id: pedidos.id })
-			.from(pedidos)
-			.where(eq(pedidos.estado_id, id))
-			.limit(1);
-		if (pedido) {
-			throw new Error('No se puede eliminar: hay pedidos en este estado.');
-		}
-		await tx
-			.delete(transiciones_estado)
-			.where(
-				and(
-					eq(transiciones_estado.tipo, 'pedido'),
-					or(
-						eq(transiciones_estado.estado_origen_id, id),
-						eq(transiciones_estado.estado_destino_id, id)
-					)
-				)
-			);
-		await tx.delete(estados_pedido).where(eq(estados_pedido.id, id));
-	});
-	getEstadosPedidoAdmin().refresh();
-	getTransicionesEstadoAdmin('pedido').refresh();
-	return { success: true };
-});
-
-export const crearEstadoCotizacionAdmin = command(estadoSchema, async (data) => {
-	await requirePermission('configuracion', 'edit');
-	const [estado] = await db.insert(estados_cotizacion).values(data).returning();
-	getEstadosCotizacionAdmin().refresh();
-	return estado;
-});
-
-export const actualizarEstadoCotizacionAdmin = command(
-	v.object({ id: v.number(), ...estadoSchema.entries }),
-	async ({ id, ...data }) => {
-		await requirePermission('configuracion', 'edit');
-		const [estado] = await db
-			.update(estados_cotizacion)
-			.set(data)
-			.where(eq(estados_cotizacion.id, id))
-			.returning();
-		getEstadosCotizacionAdmin().refresh();
-		return estado;
-	}
-);
-
-export const eliminarEstadoCotizacionAdmin = command(idSchema, async ({ id }) => {
-	await requirePermission('configuracion', 'edit');
-	await db.transaction(async (tx) => {
-		const [cotizacion] = await tx
-			.select({ id: cotizaciones.id })
-			.from(cotizaciones)
-			.where(eq(cotizaciones.estado_id, id))
-			.limit(1);
-		if (cotizacion) {
-			throw new Error(
-				'No se puede eliminar: hay cotizaciones en este estado. Cambialas de estado primero.'
-			);
-		}
-		await tx
-			.delete(transiciones_estado)
-			.where(
-				and(
-					eq(transiciones_estado.tipo, 'cotizacion'),
-					or(
-						eq(transiciones_estado.estado_origen_id, id),
-						eq(transiciones_estado.estado_destino_id, id)
-					)
-				)
-			);
-		await tx.delete(estados_cotizacion).where(eq(estados_cotizacion.id, id));
-	});
-	getEstadosCotizacionAdmin().refresh();
-	getTransicionesEstadoAdmin('cotizacion').refresh();
-	return { success: true };
-});

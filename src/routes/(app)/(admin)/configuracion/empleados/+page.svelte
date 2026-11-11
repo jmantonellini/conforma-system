@@ -54,7 +54,7 @@
 <PageLayout>
 	<div class="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
 		<button onclick={() => history.back()} class="btn btn-ghost btn-sm">← Volver</button>
-		<button class="btn btn-sm btn-primary" onclick={abrirCrear}> + Nuevo Empleado </button>
+		<button class="btn btn-primary btn-sm" onclick={abrirCrear}> + Nuevo Empleado </button>
 	</div>
 
 	<div>

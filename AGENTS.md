@@ -29,3 +29,17 @@ You MUST use this tool whenever writing Svelte code before sending it to the use
 
 Generates a Svelte Playground link with the provided code.
 After completing the code, ask the user if they want a playground link. Only call this tool after user confirmation and NEVER if code was written to files in their project.
+
+## daisyUI
+
+UI is built with **daisyUI 5** on **Tailwind CSS 4** (CSS-first config in `src/routes/layout.css`, no `tailwind.config.js`). Themes: `light` (default) and `dark` (prefers-dark).
+
+- Use the `daisyui` skill (Claude Code) or `.github/instructions/daisyui.instructions.md` (Copilot) before writing markup. Reference: https://daisyui.com/llms.txt
+- Prefer daisyUI component classes (`btn`, `card`, `modal`, `table`, `input`, `select`, `fieldset`…) and semantic colors (`primary`, `base-100`, `base-content`, `error`…) over raw Tailwind colors, so both themes work.
+- Only fall back to Tailwind utilities for layout/spacing or when no daisyUI component fits.
+
+## Svelte tooling for agents
+
+- MCP server: `.mcp.json` (Claude Code) and `.vscode/mcp.json` (VS Code) point to `https://mcp.svelte.dev/mcp`.
+- Skills: `svelte-core-bestpractices`, `svelte-code-writer` (in `.github/skills`, symlinked into `.claude/skills`).
+- Subagent: `svelte-file-editor` (in `.github/agents`, symlinked into `.claude/agents`) — use it for creating/editing `.svelte`, `.svelte.ts`, `.svelte.js` files.

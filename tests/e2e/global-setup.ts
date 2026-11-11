@@ -43,9 +43,9 @@ export default async function globalSetup() {
 			[passwordHash, adminRoleId]
 		);
 		await client.query(
-			`INSERT INTO estados_cotizacion (nombre, slug, grupo, orden)
-			 VALUES ('Ingresada E2E', 'ingresada', 'ingresada', 0)
-			 ON CONFLICT (slug) DO NOTHING`
+			`INSERT INTO estados (flujo, nombre, slug, grupo, orden)
+			 VALUES ('cotizacion', 'Ingresada E2E', 'ingresada', 'ingresada', 0)
+			 ON CONFLICT (flujo, slug) DO NOTHING`
 		);
 		await client.query(
 			"DELETE FROM sesiones WHERE user_id = (SELECT id FROM usuarios WHERE username = 'e2e-admin')"
@@ -56,7 +56,9 @@ export default async function globalSetup() {
 			 ON CONFLICT (id) DO UPDATE SET user_id = EXCLUDED.user_id, expires_at = EXCLUDED.expires_at`,
 			[users[0].id]
 		);
-		await client.query("DELETE FROM cotizaciones WHERE cliente_nombre LIKE 'E2E %'");
+		await client.query(
+			"DELETE FROM cotizaciones WHERE contacto_id IN (SELECT id FROM contactos WHERE razon_social LIKE 'E2E %')"
+		);
 		await client.query("DELETE FROM contactos WHERE razon_social LIKE 'E2E %'");
 	} finally {
 		await client.end();

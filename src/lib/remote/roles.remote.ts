@@ -1,3 +1,4 @@
+import { error } from '@sveltejs/kit';
 import * as v from 'valibot';
 import { query, command } from '$app/server';
 import { db } from '$lib/server/db';
@@ -23,7 +24,7 @@ export const getPermisos = query(async () => {
 
 export const getPermisosByRol = query(v.number(), async (rol_id) => {
 	const user = await getCurrentUser();
-	if (!user) throw new Error('No autorizado');
+	if (!user) error(401, 'No autorizado');
 	if (user.rol?.id !== rol_id) await requirePermission('configuracion', 'view');
 	return await db
 		.select({

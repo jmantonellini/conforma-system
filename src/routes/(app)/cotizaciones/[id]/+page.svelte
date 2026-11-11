@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { mensajeError } from '$lib/utils/errores';
 	import { goto, invalidateAll } from '$app/navigation';
 	import { resolve } from '$app/paths';
 	import { page } from '$app/state';
@@ -73,7 +74,7 @@
 			await invalidateAll();
 			return true;
 		} catch (error) {
-			toast.error(error instanceof Error ? error.message : 'Transición no permitida');
+			toast.error(mensajeError(error, 'Transición no permitida'));
 			return false;
 		}
 	}
@@ -115,7 +116,7 @@
 			toast.success('Nota agregada');
 			await invalidateAll();
 		} catch (error) {
-			toast.error(error instanceof Error ? error.message : 'No se pudo agregar la nota');
+			toast.error(mensajeError(error, 'No se pudo agregar la nota'));
 		} finally {
 			guardandoNota = false;
 		}
@@ -127,7 +128,7 @@
 			toast.success('Pedido generado');
 			goto(resolve(`/pedidos/${pedidoId}`));
 		} catch (error) {
-			toast.error(error instanceof Error ? error.message : 'No se pudo generar el pedido');
+			toast.error(mensajeError(error, 'No se pudo generar el pedido'));
 		}
 	}
 

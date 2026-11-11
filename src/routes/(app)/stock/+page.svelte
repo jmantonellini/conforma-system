@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { mensajeError } from '$lib/utils/errores';
 	import { resolve } from '$app/paths';
 	import { Can, FormFieldWrapper, Modal, PageLayout } from '$lib/components/ui';
 	import { Stock } from '$lib/components/ui/icons';
@@ -92,7 +93,7 @@
 			toast.success('Movimiento registrado');
 			cerrarDialogo();
 		} catch (error) {
-			toast.error(error instanceof Error ? error.message : 'No se pudo registrar el movimiento');
+			toast.error(mensajeError(error, 'No se pudo registrar el movimiento'));
 		} finally {
 			guardando = false;
 		}

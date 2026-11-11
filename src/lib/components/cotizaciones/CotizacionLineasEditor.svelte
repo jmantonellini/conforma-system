@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { mensajeError } from '$lib/utils/errores';
 	import { invalidateAll } from '$app/navigation';
 	import { untrack } from 'svelte';
 	import LineasConceptosEditor from '$lib/components/cotizaciones/LineasConceptosEditor.svelte';
@@ -170,7 +171,7 @@
 			toast.success('Cotización guardada');
 			await invalidateAll();
 		} catch (error) {
-			toast.error(error instanceof Error ? error.message : 'Error al guardar la cotización');
+			toast.error(mensajeError(error, 'Error al guardar la cotización'));
 		} finally {
 			guardando = false;
 		}

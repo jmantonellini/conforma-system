@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { mensajeError } from '$lib/utils/errores';
 	import { page } from '$app/state';
 	import { invalidateAll } from '$app/navigation';
 	import { resolve } from '$app/paths';
@@ -26,12 +27,12 @@
 		'image/jpeg,image/png,image/webp,audio/ogg,audio/mpeg,audio/mp4,audio/x-m4a,audio/wav,audio/x-wav,video/mp4,application/pdf';
 	const modulosPorTipo: Record<
 		TipoEntidadAdjunto,
-		'cotizaciones' | 'pedidos' | 'productos' | 'taller'
+		'cotizaciones' | 'pedidos' | 'productos' | 'fabricacion'
 	> = {
 		cotizacion: 'cotizaciones',
 		pedido: 'pedidos',
 		producto: 'productos',
-		fabricacion: 'taller'
+		fabricacion: 'fabricacion'
 	};
 	const permisoModulo = (tipoAdjunto: TipoEntidadAdjunto) => modulosPorTipo[tipoAdjunto];
 	const puedeSubir = $derived(
@@ -138,7 +139,7 @@
 			if (!response.ok) throw new Error('No se pudo eliminar el archivo');
 			await invalidateAll();
 		} catch (error) {
-			toast.error(error instanceof Error ? error.message : 'No se pudo eliminar el archivo');
+			toast.error(mensajeError(error, 'No se pudo eliminar el archivo'));
 		}
 	}
 </script>

@@ -1,68 +1,63 @@
 import * as v from 'valibot';
-import { db } from '$lib/server/db';
+import { error } from '@sveltejs/kit';
+import { db, type Tx } from '$lib/server/db';
 import {
 	pedidos,
 	lineas_pedido,
 	pedido_insumos,
-	estados_pedido,
+	estados,
 	productos,
 	insumos,
 	ordenes_fabricacion,
-	unidades_fabricacion,
-	estados_fabricacion,
-	logs_cambios_estado,
 	pagos,
 	envios,
 	transportistas,
-	transiciones_estado,
-	empleados,
-	usuarios,
 	cotizaciones,
-	adjuntos as adjuntosTable,
 	contactos,
 	reservas_stock,
 	ubicaciones_stock
 } from '$lib/server/db/schema';
-import {
-	and,
-	desc,
-	eq,
-	exists,
-	gte,
-	inArray,
-	ilike,
-	lte,
-	not,
-	or,
-	sql,
-	SQL,
-	aliasedTable
-} from 'drizzle-orm';
-import { generarNumeroPedido } from '$lib/server/utils/pedidos';
+import { aliasedTable, and, desc, eq, gte, ilike, isNull, lte, notInArray, sql } from 'drizzle-orm';
 import { PEDIDO_SLUG } from '$lib/types';
-import { getCurrentUser } from '$lib/remote/usuarios.remote';
-import { requirePermission } from '$lib/server/auth/permissions';
 import {
-	obtenerTransicionPedidoPermitida,
-	aplicarCambioPedidoEstado
-} from '$lib/server/services/pedidos-estado.service';
+	estadoPorSlug,
+	historialEstados,
+	registrarCambioEstado,
+	transicionesDesde,
+	validarTransicion
+} from '$lib/server/estados';
 import {
 	resolverLineaComercial,
-	type LineaComercialEntrada,
-	type LineaComercialResuelta
+	type LineaComercialEntrada
 } from '$lib/server/services/lineas-comerciales.service';
-import { formatearDosDecimales } from '$lib/utils/precios';
+import { listarAdjuntosRelacionados } from '$lib/server/services/adjuntos.service';
+import { resumenOrdenes } from '$lib/server/services/fabricacion.service';
 import {
 	procesarReservasPedidoTx,
 	reservarStockParaLineaTx
 } from '$lib/server/services/stock.service';
+import { siguienteNumero } from '$lib/server/utils/numeracion';
+import {
+	formatearDosDecimales,
+	normalizarPrecioPendiente,
+	redondearPrecio
+} from '$lib/utils/precios';
+
+const idOpcional = v.pipe(
+	v.optional(v.union([v.string(), v.number()])),
+	v.transform((valor) => Number(valor) || undefined)
+);
+const precio = v.pipe(
+	v.optional(v.union([v.string(), v.number(), v.null()])),
+	v.transform((valor) => normalizarPrecioPendiente(valor))
+);
 
 export const LineaPedidoSchema = v.object({
 	tipo: v.optional(v.picklist(['producto', 'insumo', 'concepto']), 'producto'),
 	visible_cliente: v.optional(v.boolean(), true),
-	producto_id: v.optional(v.string()),
-	stock_ubicacion_id: v.optional(v.number()),
-	insumo_id: v.optional(v.number()),
+	producto_id: v.optional(v.pipe(v.union([v.string(), v.number()]), v.transform(String))),
+	stock_ubicacion_id: idOpcional,
+	insumo_id: idOpcional,
 	nuevo_insumo: v.optional(
 		v.object({
 			nombre: v.pipe(v.string(), v.nonEmpty('El nombre del insumo es requerido')),
@@ -74,8 +69,8 @@ export const LineaPedidoSchema = v.object({
 		})
 	),
 	cantidad: v.pipe(v.number(), v.toMinValue(1)),
-	precio: v.pipe(v.number(), v.toMinValue(0)),
-	precio_lista: v.optional(v.pipe(v.number(), v.toMinValue(0)), 0),
+	precio,
+	precio_lista: precio,
 	costo_materiales: v.optional(v.pipe(v.number(), v.toMinValue(0)), 0),
 	descripcion: v.optional(v.string()),
 	insumos_asociados: v.optional(
@@ -91,7 +86,7 @@ export const LineaPedidoSchema = v.object({
 
 export const PedidoSchema = v.object({
 	contacto_id: v.pipe(v.string(), v.toNumber()),
-	contacto_distribuidor_id: v.optional(v.pipe(v.string(), v.transform(Number), v.number())),
+	contacto_distribuidor_id: idOpcional,
 	usar_credito_distribuidor: v.optional(v.boolean(), false),
 	monto_credito_distribuidor: v.optional(v.pipe(v.number(), v.toMinValue(0)), 0),
 	porcentaje_comision_distribuidor: v.optional(
@@ -100,71 +95,22 @@ export const PedidoSchema = v.object({
 	),
 	lineas: v.pipe(
 		v.string(),
-		v.check((raw) => {
-			try {
-				return Array.isArray(JSON.parse(raw));
-			} catch {
-				return false;
-			}
-		}, 'Agregá al menos un concepto válido'),
-		v.transform((raw) => JSON.parse(raw) as unknown),
+		v.parseJson(undefined, 'Agregá al menos un concepto válido'),
 		v.array(LineaPedidoSchema),
-		v.minLength(1)
+		v.minLength(1, 'Agregá al menos un concepto válido')
 	),
 	fecha_entrega_prometida: v.optional(v.string()),
 	anticipo: v.optional(v.pipe(v.number(), v.toMinValue(0)), 0),
 	observaciones: v.optional(v.string())
 });
 
-export const crearCondicionBusquedaPedido = ({
-	search,
-	estadoId
-}: {
-	search?: string;
-	estadoId?: number;
-}) => {
-	if (search && estadoId) {
-		return and(ilike(pedidos.numero_pedido, `%${search}%`), eq(pedidos.estado_id, estadoId));
-	}
+export type NuevoPedido = v.InferOutput<typeof PedidoSchema>;
 
-	if (search) {
-		return ilike(pedidos.numero_pedido, `%${search}%`);
-	}
-
-	if (estadoId) {
-		return eq(pedidos.estado_id, estadoId);
-	}
-
-	return undefined;
-};
-
-export const calcularTotalesPedido = ({
-	lineas,
-	anticipo,
-	empresaDistribuidorId,
-	usarCreditoDistribuidor,
-	montoCreditoDistribuidor
-}: {
-	lineas: { cantidad: number; precio: number; visible_cliente?: boolean }[];
-	anticipo: number;
-	empresaDistribuidorId?: number | null;
-	usarCreditoDistribuidor?: boolean;
-	montoCreditoDistribuidor?: number;
-}) => {
-	const precio_total = Number(
-		lineas
-			.filter((linea) => linea.visible_cliente !== false)
-			.reduce((suma, linea) => suma + linea.cantidad * linea.precio, 0)
-			.toFixed(2)
-	);
-	const monto_credito =
-		empresaDistribuidorId && usarCreditoDistribuidor
-			? Math.min(Number(montoCreditoDistribuidor ?? 0), precio_total)
-			: 0;
-	const saldo_pendiente = Number(Math.max(precio_total - anticipo - monto_credito, 0).toFixed(2));
-
-	return { precio_total, monto_credito, saldo_pendiente };
-};
+async function bloquearPedido(tx: Tx, id: number) {
+	const [pedido] = await tx.select().from(pedidos).where(eq(pedidos.id, id)).for('update');
+	if (!pedido) error(404, 'Pedido no encontrado');
+	return pedido;
+}
 
 export async function obtenerPedidoDetalle(id: number) {
 	const [pedido] = await db
@@ -186,179 +132,87 @@ export async function obtenerPedidoDetalle(id: number) {
 			observaciones: pedidos.observaciones,
 			anticipo: pedidos.anticipo,
 			total: pedidos.precio_total,
-			estado: {
-				id: pedidos.estado_id,
-				nombre: estados_pedido.nombre,
-				color: estados_pedido.color
-			}
+			estado: { id: pedidos.estado_id, nombre: estados.nombre, color: estados.color }
 		})
 		.from(pedidos)
 		.leftJoin(contactos, eq(pedidos.contacto_id, contactos.id))
-		.leftJoin(estados_pedido, eq(pedidos.estado_id, estados_pedido.id))
+		.leftJoin(estados, eq(pedidos.estado_id, estados.id))
 		.where(eq(pedidos.id, id))
 		.limit(1);
+	if (!pedido) error(404, 'Pedido no encontrado');
 
-	if (!pedido) throw new Error('Pedido no encontrado');
-
-	const transiciones = await db
-		.select({
-			id: transiciones_estado.id,
-			estado_destino_id: transiciones_estado.estado_destino_id,
-			requiere_rol: transiciones_estado.requiere_rol,
-			destino_nombre: estados_pedido.nombre,
-			destino_slug: estados_pedido.slug,
-			destino_color: estados_pedido.color
-		})
-		.from(transiciones_estado)
-		.innerJoin(estados_pedido, eq(transiciones_estado.estado_destino_id, estados_pedido.id))
-		.where(
-			and(
-				eq(transiciones_estado.tipo, 'pedido'),
-				eq(transiciones_estado.estado_origen_id, pedido.estado.id)
-			)
-		);
-
-	const lineas = await db
-		.select({
-			id: lineas_pedido.id,
-			cantidad: lineas_pedido.cantidad,
-			precio_unitario: lineas_pedido.precio_unitario,
-			precio_lista_unitario: lineas_pedido.precio_lista_unitario,
-			margen_porcentaje: lineas_pedido.margen_porcentaje,
-			costo_materiales: lineas_pedido.costo_materiales,
-			subtotal: lineas_pedido.subtotal,
-			es_personalizado: lineas_pedido.es_personalizado,
-			descripcion_personalizada: lineas_pedido.descripcion_personalizada,
-			producto_id: lineas_pedido.producto_id,
-			producto_codigo: productos.codigo,
-			producto_nombre: productos.nombre,
-			orden_id: ordenes_fabricacion.id
-		})
-		.from(lineas_pedido)
-		.leftJoin(productos, eq(lineas_pedido.producto_id, productos.id))
-		.leftJoin(ordenes_fabricacion, eq(lineas_pedido.id, ordenes_fabricacion.linea_pedido_id))
-		.where(eq(lineas_pedido.pedido_id, id));
-
-	const lineasConProduccion = await Promise.all(
-		lineas.map(async (linea) => {
-			if (!linea.orden_id) return { ...linea, produccion: null };
-
-			const [unidades, estadosFab] = await Promise.all([
-				db
-					.select({ estado_id: unidades_fabricacion.estado_id })
-					.from(unidades_fabricacion)
-					.where(eq(unidades_fabricacion.orden_fabricacion_id, linea.orden_id)),
-				db.select().from(estados_fabricacion)
-			]);
-
-			const terminadas = unidades.filter(
-				(u) => estadosFab.find((e) => e.id === u.estado_id)?.es_final
-			).length;
-			const total = unidades.length;
-
-			return {
-				...linea,
-				produccion: {
-					orden_id: linea.orden_id,
-					terminadas,
-					total,
-					es_final: terminadas === total && total > 0
-				}
-			};
-		})
-	);
-	const reservasStock = lineas.length
-		? await db
-				.select({
-					linea_pedido_id: reservas_stock.linea_pedido_id,
+	const resumen = resumenOrdenes();
+	const distribuidor = aliasedTable(contactos, 'distribuidor');
+	const [transiciones, filas, insumosAdicionales, [cotizacion]] = await Promise.all([
+		transicionesDesde(pedido.estado.id),
+		db
+			.select({
+				id: lineas_pedido.id,
+				cantidad: lineas_pedido.cantidad,
+				precio_unitario: lineas_pedido.precio_unitario,
+				precio_lista_unitario: lineas_pedido.precio_lista_unitario,
+				margen_porcentaje: lineas_pedido.margen_porcentaje,
+				costo_materiales: lineas_pedido.costo_materiales,
+				subtotal: lineas_pedido.subtotal,
+				es_personalizado: lineas_pedido.es_personalizado,
+				descripcion_personalizada: lineas_pedido.descripcion_personalizada,
+				producto_id: lineas_pedido.producto_id,
+				producto_codigo: productos.codigo,
+				producto_nombre: productos.nombre,
+				orden_id: ordenes_fabricacion.id,
+				unidades_total: resumen.total,
+				unidades_terminadas: resumen.terminadas,
+				reserva_stock: {
 					cantidad: reservas_stock.cantidad,
 					estado: reservas_stock.estado,
 					ubicacion_stock_id: reservas_stock.ubicacion_stock_id,
-					ubicacion_nombre: sql<string>`COALESCE(${contactos.razon_social}, ${ubicaciones_stock.nombre})`
-				})
-				.from(reservas_stock)
-				.innerJoin(ubicaciones_stock, eq(reservas_stock.ubicacion_stock_id, ubicaciones_stock.id))
-				.leftJoin(contactos, eq(ubicaciones_stock.contacto_distribuidor_id, contactos.id))
-				.where(
-					inArray(
-						reservas_stock.linea_pedido_id,
-						lineas.map((linea) => linea.id)
-					)
-				)
-		: [];
-	const reservasPorLinea = new Map(
-		reservasStock.map((reserva) => [reserva.linea_pedido_id, reserva])
-	);
-	const lineasConStock = lineasConProduccion.map((linea) => ({
+					ubicacion_nombre: sql<string>`COALESCE(${distribuidor.razon_social}, ${ubicaciones_stock.nombre})`
+				}
+			})
+			.from(lineas_pedido)
+			.leftJoin(productos, eq(lineas_pedido.producto_id, productos.id))
+			.leftJoin(ordenes_fabricacion, eq(lineas_pedido.id, ordenes_fabricacion.linea_pedido_id))
+			.leftJoin(resumen, eq(resumen.orden_id, ordenes_fabricacion.id))
+			.leftJoin(reservas_stock, eq(reservas_stock.linea_pedido_id, lineas_pedido.id))
+			.leftJoin(ubicaciones_stock, eq(reservas_stock.ubicacion_stock_id, ubicaciones_stock.id))
+			.leftJoin(distribuidor, eq(distribuidor.id, ubicaciones_stock.contacto_distribuidor_id))
+			.where(eq(lineas_pedido.pedido_id, id))
+			.orderBy(lineas_pedido.orden_linea, lineas_pedido.id),
+		db
+			.select({
+				id: pedido_insumos.id,
+				insumo_id: pedido_insumos.insumo_id,
+				codigo: insumos.codigo,
+				nombre: insumos.nombre,
+				cantidad: pedido_insumos.cantidad,
+				unidad: pedido_insumos.unidad,
+				costo_unitario: pedido_insumos.costo_unitario,
+				precio_lista_unitario: pedido_insumos.precio_lista_unitario,
+				precio_unitario: pedido_insumos.precio_unitario
+			})
+			.from(pedido_insumos)
+			.innerJoin(insumos, eq(pedido_insumos.insumo_id, insumos.id))
+			.where(eq(pedido_insumos.pedido_id, id)),
+		db
+			.select({ id: cotizaciones.id })
+			.from(cotizaciones)
+			.where(eq(cotizaciones.pedido_id, id))
+			.limit(1)
+	]);
+
+	const lineas = filas.map(({ unidades_total, unidades_terminadas, reserva_stock, ...linea }) => ({
 		...linea,
-		reserva_stock: reservasPorLinea.get(linea.id) ?? null
+		produccion: linea.orden_id
+			? {
+					orden_id: linea.orden_id,
+					terminadas: unidades_terminadas ?? 0,
+					total: unidades_total ?? 0,
+					es_final: Boolean(unidades_total) && unidades_terminadas === unidades_total
+				}
+			: null,
+		reserva_stock: reserva_stock ? { linea_pedido_id: linea.id, ...reserva_stock } : null
 	}));
-
-	const insumosAdicionales = await db
-		.select({
-			id: pedido_insumos.id,
-			insumo_id: pedido_insumos.insumo_id,
-			codigo: insumos.codigo,
-			nombre: insumos.nombre,
-			cantidad: pedido_insumos.cantidad,
-			unidad: pedido_insumos.unidad,
-			costo_unitario: pedido_insumos.costo_unitario,
-			precio_lista_unitario: pedido_insumos.precio_lista_unitario,
-			precio_unitario: pedido_insumos.precio_unitario
-		})
-		.from(pedido_insumos)
-		.innerJoin(insumos, eq(pedido_insumos.insumo_id, insumos.id))
-		.where(eq(pedido_insumos.pedido_id, id));
-
-	const [cotizacion] = await db
-		.select({ id: cotizaciones.id })
-		.from(cotizaciones)
-		.where(eq(cotizaciones.pedido_id, id))
-		.limit(1);
-	const condicionesAdjuntos = [eq(adjuntosTable.pedido_id, id)];
-	if (cotizacion?.id) condicionesAdjuntos.push(eq(adjuntosTable.cotizacion_id, cotizacion.id));
-	const ordenesRelacionadas = lineasConStock.flatMap((linea) =>
-		linea.produccion ? [linea.produccion.orden_id] : []
-	);
-	if (ordenesRelacionadas.length) {
-		condicionesAdjuntos.push(inArray(adjuntosTable.orden_fabricacion_id, ordenesRelacionadas));
-	}
-	const adjuntosRelacionados = await db
-		.select({
-			id: adjuntosTable.id,
-			nombre_original: adjuntosTable.nombre_original,
-			mime_type: adjuntosTable.mime_type,
-			es_plano: adjuntosTable.es_plano,
-			tamano_bytes: adjuntosTable.tamano_bytes,
-			created_at: adjuntosTable.created_at,
-			cotizacion_id: adjuntosTable.cotizacion_id,
-			pedido_id: adjuntosTable.pedido_id,
-			orden_fabricacion_id: adjuntosTable.orden_fabricacion_id
-		})
-		.from(adjuntosTable)
-		.where(or(...condicionesAdjuntos))
-		.orderBy(desc(adjuntosTable.id));
-	const adjuntos = adjuntosRelacionados
-		.map((adjunto) => ({
-			id: adjunto.id,
-			nombre_original: adjunto.nombre_original,
-			mime_type: adjunto.mime_type,
-			es_plano: adjunto.es_plano,
-			tamano_bytes: adjunto.tamano_bytes,
-			created_at: adjunto.created_at,
-			propietario: adjunto.cotizacion_id
-				? { tipo: 'cotizacion' as const, id: adjunto.cotizacion_id }
-				: adjunto.pedido_id
-					? { tipo: 'pedido' as const, id: adjunto.pedido_id }
-					: { tipo: 'fabricacion' as const, id: adjunto.orden_fabricacion_id! }
-		}))
-		.sort(
-			(primero, segundo) =>
-				new Date(segundo.created_at ?? 0).getTime() - new Date(primero.created_at ?? 0).getTime()
-		);
-	const ordenes = lineasConStock
-		.filter((linea) => linea.produccion)
-		.map((linea) => linea.produccion!.orden_id);
+	const ordenes = lineas.flatMap((linea) => (linea.orden_id ? [linea.orden_id] : []));
 
 	return {
 		pedido: {
@@ -369,9 +223,13 @@ export async function obtenerPedidoDetalle(id: number) {
 				orden_fabricacion_id: ordenes.length === 1 ? ordenes[0] : null
 			}
 		},
-		lineas: lineasConStock,
+		lineas,
 		insumosAdicionales,
-		adjuntos
+		adjuntos: await listarAdjuntosRelacionados({
+			pedidoId: id,
+			cotizacionId: cotizacion?.id,
+			ordenIds: ordenes
+		})
 	};
 }
 
@@ -386,74 +244,61 @@ export async function getPedidosListado({
 	page?: number;
 	limit?: number;
 }) {
-	const offset = (page - 1) * limit;
-	const where = crearCondicionBusquedaPedido({ search, estadoId });
-
-	const data = await db
-		.select({
-			id: pedidos.id,
-			numero_pedido: pedidos.numero_pedido,
-			cliente_nombre: contactos.razon_social,
-			fecha_pedido: pedidos.fecha_pedido,
-			fecha_entrega: pedidos.fecha_entrega_prometida,
-			total: pedidos.precio_total,
-			estado_id: pedidos.estado_id,
-			estado_nombre: estados_pedido.nombre,
-			estado_color: estados_pedido.color
-		})
-		.from(pedidos)
-		.leftJoin(contactos, eq(pedidos.contacto_id, contactos.id))
-		.leftJoin(estados_pedido, eq(pedidos.estado_id, estados_pedido.id))
-		.where(where)
-		.orderBy(desc(pedidos.id))
-		.limit(limit)
-		.offset(offset);
-
-	const [totalResult] = await db
-		.select({ count: sql<number>`count(*)::int` })
-		.from(pedidos)
-		.where(where);
-
-	return {
-		data,
-		total: totalResult?.count || 0,
-		totalPages: Math.ceil((totalResult?.count || 0) / limit),
-		currentPage: page
-	};
-}
-
-export async function getHistorialPedidoServicio(pedidoId: number) {
-	const estadoAnterior = aliasedTable(estados_pedido, 'estado_anterior');
-	const estadoNuevo = aliasedTable(estados_pedido, 'estado_nuevo');
-
-	const [cambiosEstado, pagosPedido, enviosPedido, pedidoInfo] = await Promise.all([
+	const where = and(
+		search ? ilike(pedidos.numero_pedido, `%${search}%`) : undefined,
+		estadoId ? eq(pedidos.estado_id, estadoId) : undefined
+	);
+	const [data, [{ total }]] = await Promise.all([
 		db
 			.select({
-				id: logs_cambios_estado.id,
-				estado_anterior: {
-					nombre: estadoAnterior.nombre,
-					color: estadoAnterior.color
-				},
-				estado_nuevo: {
-					nombre: estadoNuevo.nombre,
-					color: estadoNuevo.color
-				},
-				comentario: logs_cambios_estado.comentario,
-				fecha: logs_cambios_estado.created_at,
-				empleado: empleados.nombre
+				id: pedidos.id,
+				numero_pedido: pedidos.numero_pedido,
+				cliente_nombre: contactos.razon_social,
+				fecha_pedido: pedidos.fecha_pedido,
+				fecha_entrega: pedidos.fecha_entrega_prometida,
+				total: pedidos.precio_total,
+				estado_id: pedidos.estado_id,
+				estado_nombre: estados.nombre,
+				estado_color: estados.color
 			})
-			.from(logs_cambios_estado)
-			.leftJoin(usuarios, eq(logs_cambios_estado.usuario_id, usuarios.id))
-			.leftJoin(empleados, eq(usuarios.empleado_id, empleados.id))
-			.leftJoin(estadoAnterior, eq(logs_cambios_estado.estado_anterior_id, estadoAnterior.id))
-			.leftJoin(estadoNuevo, eq(logs_cambios_estado.estado_nuevo_id, estadoNuevo.id))
-			.where(
-				and(
-					eq(logs_cambios_estado.entidad_tipo, 'pedido'),
-					eq(logs_cambios_estado.entidad_id, pedidoId)
-				)
-			)
-			.orderBy(desc(logs_cambios_estado.created_at)),
+			.from(pedidos)
+			.leftJoin(contactos, eq(pedidos.contacto_id, contactos.id))
+			.leftJoin(estados, eq(pedidos.estado_id, estados.id))
+			.where(where)
+			.orderBy(desc(pedidos.id))
+			.limit(limit)
+			.offset((page - 1) * limit),
+		db
+			.select({ total: sql<number>`count(*)::int` })
+			.from(pedidos)
+			.where(where)
+	]);
+
+	return { data, total, totalPages: Math.ceil(total / limit), currentPage: page };
+}
+
+type EventoHistorial = {
+	id: string;
+	tipo: 'estado' | 'pago' | 'envio' | 'entrega';
+	titulo: string;
+	fecha: Date | null;
+	detalle: string | null;
+	empleado: string | null;
+	estado_anterior: { nombre: string | null; color: string | null } | null;
+	estado_nuevo: { nombre: string | null; color: string | null } | null;
+};
+
+const evento = (
+	datos: Pick<EventoHistorial, 'id' | 'tipo' | 'titulo' | 'fecha' | 'detalle'> &
+		Partial<EventoHistorial>
+): EventoHistorial => ({ empleado: null, estado_anterior: null, estado_nuevo: null, ...datos });
+
+const unir = (...partes: (string | null | undefined | false)[]) =>
+	partes.filter(Boolean).join(' · ');
+
+export async function getHistorialPedidoServicio(pedidoId: number) {
+	const [cambiosEstado, pagosPedido, enviosPedido, [pedido]] = await Promise.all([
+		historialEstados('pedido', [pedidoId]),
 		db.select().from(pagos).where(eq(pagos.pedido_id, pedidoId)),
 		db
 			.select({
@@ -473,365 +318,295 @@ export async function getHistorialPedidoServicio(pedidoId: number) {
 			.select({ anticipo: pedidos.anticipo, created_at: pedidos.created_at })
 			.from(pedidos)
 			.where(eq(pedidos.id, pedidoId))
-			.then((rows) => rows[0])
 	]);
 
-	type EventoHistorial = {
-		id: string;
-		tipo: 'estado' | 'pago' | 'envio' | 'entrega';
-		titulo: string;
-		fecha: Date | null;
-		detalle: string | null;
-		empleado: string | null;
-		estado_anterior: { nombre: string | null; color: string | null } | null;
-		estado_nuevo: { nombre: string | null; color: string | null } | null;
-	};
-
 	const eventos: EventoHistorial[] = [
-		...cambiosEstado.map((cambio) => ({
-			id: `estado-${cambio.id}`,
-			tipo: 'estado' as const,
-			titulo: 'Cambio de estado',
-			fecha: cambio.fecha,
-			detalle: cambio.comentario,
-			empleado: cambio.empleado,
-			estado_anterior: cambio.estado_anterior,
-			estado_nuevo: cambio.estado_nuevo
-		})),
-		...(pedidoInfo?.anticipo && pedidoInfo.anticipo > 0
+		...cambiosEstado.map((cambio) =>
+			evento({
+				...cambio,
+				id: `estado-${cambio.id}`,
+				tipo: 'estado',
+				titulo: 'Cambio de estado',
+				detalle: cambio.comentario
+			})
+		),
+		...(pedido?.anticipo
 			? [
-					{
+					evento({
 						id: `anticipo-${pedidoId}`,
-						tipo: 'pago' as const,
+						tipo: 'pago',
 						titulo: 'Anticipo inicial',
-						fecha: pedidoInfo.created_at,
-						detalle: `$${formatearDosDecimales(pedidoInfo.anticipo)}`,
-						empleado: null,
-						estado_anterior: null,
-						estado_nuevo: null
-					}
+						fecha: pedido.created_at,
+						detalle: `$${formatearDosDecimales(pedido.anticipo)}`
+					})
 				]
 			: []),
-		...pagosPedido.map((pago) => ({
-			id: `pago-${pago.id}`,
-			tipo: 'pago' as const,
-			titulo: 'Pago registrado',
-			fecha: pago.fecha_pago ?? pago.created_at,
-			detalle: [`$${formatearDosDecimales(pago.monto)}`, pago.metodo_pago, pago.observaciones]
-				.filter(Boolean)
-				.join(' · '),
-			empleado: null,
-			estado_anterior: null,
-			estado_nuevo: null
-		})),
+		...pagosPedido.map((pago) =>
+			evento({
+				id: `pago-${pago.id}`,
+				tipo: 'pago',
+				titulo: 'Pago registrado',
+				fecha: pago.fecha_pago ?? pago.created_at,
+				detalle: unir(`$${formatearDosDecimales(pago.monto)}`, pago.metodo_pago, pago.observaciones)
+			})
+		),
 		...enviosPedido.flatMap((envio) => {
-			const detalleEnvio = [
-				envio.transportista,
-				envio.numero_guia ? `Guía ${envio.numero_guia}` : null,
-				`${envio.cantidad_bultos ?? 1} bultos`,
-				envio.observaciones
-			]
-				.filter(Boolean)
-				.join(' · ');
-			const eventosEnvio: EventoHistorial[] = [
-				{
-					id: `envio-${envio.id}`,
-					tipo: 'envio',
-					titulo: 'Envío registrado',
-					fecha: envio.created_at,
-					detalle: detalleEnvio,
-					empleado: null,
-					estado_anterior: null,
-					estado_nuevo: null
-				}
-			];
-
-			if (envio.estado === 'entregado' && envio.fecha_entrega) {
-				eventosEnvio.push({
-					id: `entrega-${envio.id}`,
-					tipo: 'entrega',
-					titulo: 'Envío entregado',
-					fecha: envio.fecha_entrega,
-					detalle: envio.numero_guia ? `Guía ${envio.numero_guia}` : envio.transportista,
-					empleado: null,
-					estado_anterior: null,
-					estado_nuevo: null
-				});
-			}
-
-			return eventosEnvio;
+			const guia = envio.numero_guia && `Guía ${envio.numero_guia}`;
+			const registrado = evento({
+				id: `envio-${envio.id}`,
+				tipo: 'envio',
+				titulo: 'Envío registrado',
+				fecha: envio.created_at,
+				detalle: unir(
+					envio.transportista,
+					guia,
+					`${envio.cantidad_bultos ?? 1} bultos`,
+					envio.observaciones
+				)
+			});
+			return envio.estado === 'entregado' && envio.fecha_entrega
+				? [
+						registrado,
+						evento({
+							id: `entrega-${envio.id}`,
+							tipo: 'entrega',
+							titulo: 'Envío entregado',
+							fecha: envio.fecha_entrega,
+							detalle: guia || envio.transportista
+						})
+					]
+				: [registrado];
 		})
 	];
 
 	return eventos.sort((a, b) => (b.fecha?.getTime() ?? 0) - (a.fecha?.getTime() ?? 0));
 }
 
-export async function crearPedidoServicio(data: {
-	contacto_id: number;
-	contacto_distribuidor_id?: number | null;
-	usar_credito_distribuidor?: boolean;
-	monto_credito_distribuidor?: number;
-	porcentaje_comision_distribuidor?: number;
-	lineas: (LineaComercialEntrada & {
-		precio: number;
-		precio_lista?: number;
-		stock_ubicacion_id?: number;
-	})[];
-	fecha_entrega_prometida?: string;
-	anticipo?: number;
-	observaciones?: string;
-}) {
-	const user = await getCurrentUser();
-	if (!user) throw new Error('Usuario no autenticado');
+export async function crearPedidoServicio(data: NuevoPedido, usuarioId: number) {
+	const estadoInicial = await estadoPorSlug('pedido', PEDIDO_SLUG.PENDIENTE);
 
-	await requirePermission('pedidos', 'create');
-	if (data.lineas.some((linea) => linea.stock_ubicacion_id)) {
-		await requirePermission('stock', 'edit');
-	}
-	if (data.lineas.some((linea) => linea.nuevo_insumo)) {
-		await requirePermission('insumos', 'create');
-	}
-	const numero_pedido = await generarNumeroPedido();
 	return db.transaction(async (tx) => {
-		const lineasResueltas: (LineaComercialResuelta & {
-			precio: number;
-			orden_linea: number;
-			stock_ubicacion_id?: number;
-		})[] = [];
+		const lineas = [];
 		for (const [orden_linea, linea] of data.lineas.entries()) {
 			const resuelta = await resolverLineaComercial(
 				tx,
 				{
-					...linea,
+					...(linea as LineaComercialEntrada),
 					precio_unitario: linea.precio_lista ?? linea.precio,
 					precio_lista_unitario: linea.precio_lista ?? linea.precio
 				},
 				'PED'
 			);
-			lineasResueltas.push({
-				...resuelta,
-				precio: resuelta.precio_unitario,
-				orden_linea,
-				stock_ubicacion_id: linea.stock_ubicacion_id
-			});
+			lineas.push({ ...resuelta, orden_linea, stock_ubicacion_id: linea.stock_ubicacion_id });
 		}
 
-		const { precio_total, monto_credito, saldo_pendiente } = calcularTotalesPedido({
-			lineas: lineasResueltas,
-			anticipo: data.anticipo ?? 0,
-			empresaDistribuidorId: data.contacto_distribuidor_id,
-			usarCreditoDistribuidor: data.usar_credito_distribuidor,
-			montoCreditoDistribuidor: data.monto_credito_distribuidor
-		});
-		const porcentajeComision = Number(data.porcentaje_comision_distribuidor ?? 0);
-		const montoComision = Number((precio_total * (porcentajeComision / 100)).toFixed(2));
+		const distribuidorId = data.contacto_distribuidor_id ?? null;
+		const precioTotal = redondearPrecio(
+			lineas
+				.filter((linea) => linea.visible_cliente)
+				.reduce((suma, linea) => suma + linea.cantidad * linea.precio_unitario, 0)
+		);
+		const usaCredito = Boolean(distribuidorId && data.usar_credito_distribuidor);
+		const credito = usaCredito ? Math.min(data.monto_credito_distribuidor, precioTotal) : 0;
+		const anticipo = data.anticipo ?? 0;
+
+		const numeroPedido = await siguienteNumero(tx, pedidos.numero_pedido, 'P');
 		const [pedido] = await tx
 			.insert(pedidos)
 			.values({
+				numero_pedido: numeroPedido,
 				contacto_id: data.contacto_id,
-				contacto_distribuidor_id:
-					data.contacto_distribuidor_id && data.contacto_distribuidor_id > 0
-						? data.contacto_distribuidor_id
-						: null,
-				usar_credito_distribuidor: Boolean(
-					data.contacto_distribuidor_id && data.usar_credito_distribuidor
+				contacto_distribuidor_id: distribuidorId,
+				usar_credito_distribuidor: usaCredito,
+				monto_credito_distribuidor: credito,
+				porcentaje_comision_distribuidor: data.porcentaje_comision_distribuidor,
+				monto_comision_distribuidor: redondearPrecio(
+					precioTotal * (data.porcentaje_comision_distribuidor / 100)
 				),
-				monto_credito_distribuidor: monto_credito,
-				porcentaje_comision_distribuidor: porcentajeComision,
-				monto_comision_distribuidor: montoComision,
-				numero_pedido,
 				fecha_pedido: new Date(),
 				fecha_entrega_prometida: data.fecha_entrega_prometida
 					? new Date(data.fecha_entrega_prometida)
 					: null,
-				estado_id: 1,
-				precio_total,
-				anticipo: data.anticipo ?? 0,
-				saldo_pendiente,
+				estado_id: estadoInicial.id,
+				precio_total: precioTotal,
+				anticipo,
+				saldo_pendiente: redondearPrecio(Math.max(precioTotal - anticipo - credito, 0)),
 				observaciones: data.observaciones
 			})
 			.returning();
 
-		for (const linea of lineasResueltas) {
-			if (linea.tipo === 'insumo') {
-				if (!linea.insumo_id) throw new Error('Insumo no encontrado');
-				await tx.insert(pedido_insumos).values({
+		const deInsumos = lineas.filter((linea) => linea.tipo === 'insumo');
+		const deProductos = lineas.filter((linea) => linea.tipo !== 'insumo');
+		if (deInsumos.length) {
+			await tx.insert(pedido_insumos).values(
+				deInsumos.map((linea) => ({
 					pedido_id: pedido.id,
-					insumo_id: linea.insumo_id,
+					insumo_id: linea.insumo_id!,
 					cantidad: linea.cantidad,
 					unidad: linea.insumos_snapshot[0]?.unidad ?? 'unidad',
 					costo_unitario: linea.costo_materiales,
 					precio_lista_unitario: linea.precio_lista_unitario,
 					precio_unitario: linea.visible_cliente ? linea.precio_unitario : 0,
-					observaciones: `Insumo incluido en el pedido ${numero_pedido}`
-				});
-				continue;
-			}
+					observaciones: `Insumo incluido en el pedido ${numeroPedido}`
+				}))
+			);
+		}
+		const insertadas = deProductos.length
+			? await tx
+					.insert(lineas_pedido)
+					.values(
+						deProductos.map((linea) => ({
+							pedido_id: pedido.id,
+							producto_id: linea.producto_id,
+							cantidad: linea.cantidad,
+							precio_unitario: linea.visible_cliente ? linea.precio_unitario : 0,
+							precio_lista_unitario: linea.precio_lista_unitario,
+							margen_porcentaje: linea.margen_producto,
+							costo_materiales: linea.costo_materiales,
+							insumos_snapshot: linea.insumos_snapshot,
+							es_personalizado: linea.es_personalizado,
+							descripcion_personalizada: linea.es_personalizado ? linea.descripcion : null,
+							orden_linea: linea.orden_linea
+						}))
+					)
+					.returning({ id: lineas_pedido.id, orden_linea: lineas_pedido.orden_linea })
+			: [];
 
-			const [lineaPedido] = await tx
-				.insert(lineas_pedido)
-				.values({
-					pedido_id: pedido.id,
-					producto_id: linea.producto_id,
-					cantidad: linea.cantidad,
-					precio_unitario: linea.visible_cliente ? linea.precio_unitario : 0,
-					precio_lista_unitario: linea.precio_lista_unitario,
-					margen_porcentaje: linea.margen_producto,
-					costo_materiales: linea.costo_materiales,
-					insumos_snapshot: linea.insumos_snapshot,
-					es_personalizado: linea.es_personalizado,
-					descripcion_personalizada: linea.es_personalizado ? linea.descripcion : null,
-					orden_linea: linea.orden_linea
-				})
-				.returning({ id: lineas_pedido.id });
-			if (linea.stock_ubicacion_id) {
-				if (!linea.producto_id) throw new Error('Solo se puede reservar stock para productos');
-				await reservarStockParaLineaTx(tx, {
-					lineaPedidoId: lineaPedido.id,
-					productoId: linea.producto_id,
-					ubicacionId: linea.stock_ubicacion_id,
-					cantidad: linea.cantidad
-				});
-			}
+		const idPorOrden = new Map(insertadas.map((fila) => [fila.orden_linea, fila.id]));
+		for (const linea of deProductos.filter((linea) => linea.stock_ubicacion_id)) {
+			if (!linea.producto_id) error(400, 'Solo se puede reservar stock para productos');
+			await reservarStockParaLineaTx(tx, {
+				lineaPedidoId: idPorOrden.get(linea.orden_linea)!,
+				productoId: linea.producto_id,
+				ubicacionId: linea.stock_ubicacion_id!,
+				cantidad: linea.cantidad
+			});
 		}
 
-		await tx.insert(logs_cambios_estado).values({
-			entidad_tipo: 'pedido',
-			entidad_id: pedido.id,
-			usuario_id: user.id,
-			estado_anterior_id: pedido.estado_id,
-			estado_nuevo_id: pedido.estado_id,
-			comentario: 'Pedido creado',
-			created_at: new Date()
+		await registrarCambioEstado(tx, {
+			flujo: 'pedido',
+			entidadId: pedido.id,
+			usuarioId,
+			anteriorId: null,
+			nuevoId: estadoInicial.id,
+			comentario: 'Pedido creado'
 		});
-
 		return pedido;
 	});
 }
 
-export async function cambiarEstadoPedidoServicio({
-	pedido_id,
-	estado_destino_id,
-	comentario
-}: {
-	pedido_id: number;
-	estado_destino_id: number;
-	comentario?: string;
-}) {
-	await requirePermission('pedidos', 'edit');
-	const user = await getCurrentUser();
-	if (!user) throw new Error('No autorizado');
+/** Efectos de negocio al entrar a un estado: entrega (fecha, comisión, consumo de stock) o cierre. */
+async function aplicarEfectosEstado(
+	tx: Tx,
+	pedido: typeof pedidos.$inferSelect,
+	destino: { slug: string; es_final: boolean },
+	usuarioId: number
+) {
+	if (destino.slug !== PEDIDO_SLUG.ENTREGADO) {
+		if (destino.es_final) await procesarReservasPedidoTx(tx, pedido.id, 'liberar', usuarioId);
+		return {};
+	}
 
-	const now = new Date();
-	const pedido = await db
-		.select()
-		.from(pedidos)
-		.where(eq(pedidos.id, pedido_id))
-		.then((rows) => rows[0]);
-	if (!pedido) throw new Error('Pedido no encontrado');
+	const comision = Number(pedido.monto_comision_distribuidor ?? 0);
+	const descuentaComision =
+		pedido.contacto_distribuidor_id && !pedido.comision_distribuidor_descontada && comision > 0;
+	if (descuentaComision) {
+		const [distribuidor] = await tx
+			.update(contactos)
+			.set({ saldo_disponible: sql`${contactos.saldo_disponible} - ${comision}` })
+			.where(
+				and(
+					eq(contactos.id, pedido.contacto_distribuidor_id!),
+					gte(contactos.saldo_disponible, comision)
+				)
+			)
+			.returning({ id: contactos.id });
+		if (!distribuidor) {
+			error(409, 'El saldo del distribuidor no alcanza para descontar la comisión');
+		}
+	}
+	await procesarReservasPedidoTx(tx, pedido.id, 'consumir', usuarioId);
+	return {
+		fecha_entrega_real: new Date(),
+		...(descuentaComision && { comision_distribuidor_descontada: true })
+	};
+}
 
-	const transicion = await obtenerTransicionPedidoPermitida({
-		estadoOrigenId: pedido.estado_id,
-		estadoDestinoId: estado_destino_id
-	});
-	if (!transicion) throw new Error('Transición no permitida');
-
+export async function cambiarEstadoPedidoServicio(
+	{
+		pedido_id,
+		estado_destino_id,
+		comentario
+	}: { pedido_id: number; estado_destino_id: number; comentario?: string },
+	usuarioId: number
+) {
 	await db.transaction(async (tx) => {
-		const [pedidoBloqueado] = await tx
-			.select()
-			.from(pedidos)
-			.where(eq(pedidos.id, pedido_id))
-			.for('update');
-		if (!pedidoBloqueado) throw new Error('Pedido no encontrado');
+		const pedido = await bloquearPedido(tx, pedido_id);
+		const destino = await validarTransicion(tx, pedido.estado_id, estado_destino_id);
+		const efectos = await aplicarEfectosEstado(tx, pedido, destino, usuarioId);
 
-		const estadoDestino = await tx
-			.select({ slug: estados_pedido.slug, es_final: estados_pedido.es_final })
-			.from(estados_pedido)
-			.where(eq(estados_pedido.id, estado_destino_id))
-			.then((rows) => rows[0]);
-		const updates: Partial<typeof pedidos.$inferSelect> = {
-			estado_id: estado_destino_id,
-			updated_at: now
-		};
-
-		if (estadoDestino?.slug === PEDIDO_SLUG.ENTREGADO) {
-			updates.fecha_entrega_real = now;
-			const contactoDistribuidorId = pedidoBloqueado.contacto_distribuidor_id;
-			if (
-				contactoDistribuidorId &&
-				!pedidoBloqueado.comision_distribuidor_descontada &&
-				Number(pedidoBloqueado.monto_comision_distribuidor ?? 0) > 0
-			) {
-				const montoComision = Number(pedidoBloqueado.monto_comision_distribuidor ?? 0);
-				const [distribuidor] = await tx
-					.update(contactos)
-					.set({
-						saldo_disponible: sql`GREATEST(COALESCE(${contactos.saldo_disponible}, 0) - ${montoComision}, 0)`,
-						updated_at: now
-					})
-					.where(
-						and(
-							eq(contactos.id, contactoDistribuidorId),
-							gte(contactos.saldo_disponible, montoComision)
-						)
-					)
-					.returning({ saldo_disponible: contactos.saldo_disponible });
-
-				if (!distribuidor) {
-					throw new Error('El saldo del distribuidor no alcanza para descontar la comisión');
-				}
-				updates.comision_distribuidor_descontada = true;
-			}
-		}
-
-		await aplicarCambioPedidoEstado({
-			tx,
+		await tx
+			.update(pedidos)
+			.set({ estado_id: destino.id, ...efectos })
+			.where(eq(pedidos.id, pedido_id));
+		await registrarCambioEstado(tx, {
+			flujo: 'pedido',
 			entidadId: pedido_id,
-			usuarioId: user.id,
-			estadoAnteriorId: pedido.estado_id,
-			estadoNuevoId: estado_destino_id,
-			comentario: comentario ?? null,
-			createdAt: now,
-			actualizarEntidad: async (txInner) => {
-				await txInner.update(pedidos).set(updates).where(eq(pedidos.id, pedido_id));
-			}
+			usuarioId,
+			anteriorId: pedido.estado_id,
+			nuevoId: destino.id,
+			comentario
 		});
-		if (estadoDestino?.slug === PEDIDO_SLUG.ENTREGADO) {
-			await procesarReservasPedidoTx(tx, pedido_id, 'consumir', user.id);
-		} else if (estadoDestino?.es_final) {
-			await procesarReservasPedidoTx(tx, pedido_id, 'liberar', user.id);
-		}
 	});
-
 	return { success: true };
 }
 
+/**
+ * Cambio de estado disparado por el sistema (p. ej. desde fabricación). No valida transiciones,
+ * pero solo avanza si el pedido está en alguno de los estados `desde`, y deja registro en el historial.
+ */
+export async function moverPedidoAutomatico(
+	tx: Tx,
+	pedidoId: number,
+	{
+		desde,
+		hacia,
+		usuarioId,
+		comentario
+	}: { desde?: string[]; hacia: string; usuarioId: number; comentario: string }
+) {
+	const destino = await estadoPorSlug('pedido', hacia, tx);
+	const [pedido] = await tx
+		.select({ estado_id: pedidos.estado_id, slug: estados.slug })
+		.from(pedidos)
+		.innerJoin(estados, eq(estados.id, pedidos.estado_id))
+		.where(eq(pedidos.id, pedidoId))
+		.for('update', { of: pedidos });
+	if (!pedido || pedido.estado_id === destino.id || (desde && !desde.includes(pedido.slug))) return;
+
+	await tx.update(pedidos).set({ estado_id: destino.id }).where(eq(pedidos.id, pedidoId));
+	await registrarCambioEstado(tx, {
+		flujo: 'pedido',
+		entidadId: pedidoId,
+		usuarioId,
+		anteriorId: pedido.estado_id,
+		nuevoId: destino.id,
+		comentario
+	});
+}
+
 export async function getPedidosActivosServicio({ semana }: { semana?: boolean }) {
-	const estadosFinales = await db
-		.select({ id: estados_pedido.id })
-		.from(estados_pedido)
-		.where(or(eq(estados_pedido.grupo, 'final'), eq(estados_pedido.grupo, 'excepcion')));
-
-	const idsFinales = estadosFinales.map((e) => e.id);
-	let where: SQL<unknown> | undefined = sql`true;`;
-
-	if (idsFinales.length > 0) {
-		where = not(inArray(pedidos.estado_id, idsFinales));
-	}
-
+	let rangoSemana;
 	if (semana) {
-		const hoy = new Date();
-		const inicioSemana = new Date(hoy);
-		inicioSemana.setDate(hoy.getDate() - hoy.getDay());
-		inicioSemana.setHours(0, 0, 0, 0);
-		const finSemana = new Date(inicioSemana);
-		finSemana.setDate(inicioSemana.getDate() + 6);
-		finSemana.setHours(23, 59, 59, 999);
-
-		where = and(
-			where,
-			gte(pedidos.fecha_entrega_prometida, inicioSemana),
-			lte(pedidos.fecha_entrega_prometida, finSemana)
+		const inicio = new Date();
+		inicio.setDate(inicio.getDate() - inicio.getDay());
+		inicio.setHours(0, 0, 0, 0);
+		const fin = new Date(inicio);
+		fin.setDate(inicio.getDate() + 6);
+		fin.setHours(23, 59, 59, 999);
+		rangoSemana = and(
+			gte(pedidos.fecha_entrega_prometida, inicio),
+			lte(pedidos.fecha_entrega_prometida, fin)
 		);
 	}
 
@@ -840,36 +615,26 @@ export async function getPedidosActivosServicio({ semana }: { semana?: boolean }
 			id: pedidos.id,
 			numero_pedido: pedidos.numero_pedido,
 			cliente_nombre: contactos.razon_social,
-			estado_nombre: estados_pedido.nombre,
-			estado_color: estados_pedido.color,
+			estado_nombre: estados.nombre,
+			estado_color: estados.color,
 			fecha_entrega_prometida: pedidos.fecha_entrega_prometida,
 			total: pedidos.precio_total,
 			saldo_pendiente: pedidos.saldo_pendiente
 		})
 		.from(pedidos)
+		.innerJoin(estados, eq(pedidos.estado_id, estados.id))
 		.leftJoin(contactos, eq(pedidos.contacto_id, contactos.id))
-		.leftJoin(estados_pedido, eq(pedidos.estado_id, estados_pedido.id))
-		.where(where);
+		.where(and(notInArray(estados.grupo, ['final', 'excepcion']), rangoSemana));
 }
 
-export async function getEstadosPedidoServicio() {
-	return await db.select().from(estados_pedido).orderBy(estados_pedido.nombre);
-}
-
-export async function getLineasPedidoSinOrdenServicio({
+export function getLineasPedidoSinOrdenServicio({
 	pedido_id,
 	limit = 50
 }: {
 	pedido_id?: number;
 	limit?: number;
 }) {
-	const conditions = [];
-
-	if (pedido_id) {
-		conditions.push(eq(lineas_pedido.pedido_id, pedido_id));
-	}
-
-	return await db
+	return db
 		.select({
 			id: lineas_pedido.id,
 			pedido_numero: pedidos.numero_pedido,
@@ -879,32 +644,21 @@ export async function getLineasPedidoSinOrdenServicio({
 			es_personalizado: lineas_pedido.es_personalizado
 		})
 		.from(lineas_pedido)
-		.leftJoin(pedidos, eq(lineas_pedido.pedido_id, pedidos.id))
+		.innerJoin(pedidos, eq(lineas_pedido.pedido_id, pedidos.id))
 		.leftJoin(productos, eq(lineas_pedido.producto_id, productos.id))
+		.leftJoin(ordenes_fabricacion, eq(ordenes_fabricacion.linea_pedido_id, lineas_pedido.id))
+		.leftJoin(
+			reservas_stock,
+			and(
+				eq(reservas_stock.linea_pedido_id, lineas_pedido.id),
+				eq(reservas_stock.estado, 'reservada')
+			)
+		)
 		.where(
 			and(
-				not(
-					exists(
-						db
-							.select()
-							.from(ordenes_fabricacion)
-							.where(eq(ordenes_fabricacion.linea_pedido_id, lineas_pedido.id))
-					)
-				),
-				not(
-					exists(
-						db
-							.select()
-							.from(reservas_stock)
-							.where(
-								and(
-									eq(reservas_stock.linea_pedido_id, lineas_pedido.id),
-									eq(reservas_stock.estado, 'reservada')
-								)
-							)
-					)
-				),
-				...conditions
+				isNull(ordenes_fabricacion.id),
+				isNull(reservas_stock.id),
+				pedido_id ? eq(lineas_pedido.pedido_id, pedido_id) : undefined
 			)
 		)
 		.limit(limit);

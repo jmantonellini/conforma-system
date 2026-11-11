@@ -28,10 +28,10 @@
 </script>
 
 <PageLayout>
-	<div class="mb-6 flex flex-col gap-4 lg:flex-row items-center lg:justify-between">
+	<div class="mb-6 flex flex-col items-center gap-4 lg:flex-row lg:justify-between">
 		<button onclick={() => history.back()} class="btn btn-ghost btn-sm">← Volver</button>
 		<button
-			class="btn btn-sm btn-primary"
+			class="btn btn-primary btn-sm"
 			onclick={() => {
 				showModal = true;
 				editingUsuario = null;

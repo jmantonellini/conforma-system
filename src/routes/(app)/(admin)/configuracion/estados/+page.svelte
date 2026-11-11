@@ -3,33 +3,35 @@
 	import { Edit, Delete } from '$lib/components/ui/icons';
 	import {
 		actualizarCategoriaProducto,
-		actualizarEstadoFabricacion,
-		actualizarEstadoCotizacionAdmin,
-		actualizarEstadoPedidoAdmin,
 		crearCategoriaProducto,
-		crearEstadoCotizacionAdmin,
-		crearEstadoFabricacion,
-		crearEstadoPedidoAdmin,
-		eliminarCategoriaProducto,
-		eliminarEstadoCotizacionAdmin,
-		eliminarEstadoFabricacion,
-		eliminarEstadoPedidoAdmin,
 		crearTransicionEstadoAdmin,
+		eliminarCategoriaProducto,
+		eliminarEstado,
 		eliminarTransicionEstadoAdmin,
 		getCategoriasProductoAdmin,
-		getEstadosCotizacionAdmin,
-		getEstadosFabricacionAdmin,
-		getEstadosPedidoAdmin,
-		getTransicionesEstadoAdmin
+		getEstadosAdmin,
+		getTransicionesEstadoAdmin,
+		guardarEstado
 	} from '$lib/remote/configuracion.remote';
 	import { toast } from '$lib/stores/toast.svelte';
+	import { mensajeError } from '$lib/utils/errores';
 	import { page } from '$app/state';
 
-	type Section = 'categorias' | 'fabricacion' | 'pedidos' | 'cotizaciones';
-	type ModalType = Section | null;
+	type Flujo = 'fabricacion' | 'pedido' | 'cotizacion';
+	type Section = 'categorias' | Flujo;
 
-	let activeSection = $state<Section>('categorias');
-	let modalType = $state<ModalType>(null);
+	const SECCIONES: Record<Section, string> = {
+		categorias: 'Categorías de productos',
+		fabricacion: 'Estados de fabricación',
+		pedido: 'Estados de pedidos',
+		cotizacion: 'Estados de cotización'
+	};
+
+	const seccionInicial = page.url.searchParams.get('seccion');
+	let activeSection = $state<Section>(
+		seccionInicial && seccionInicial in SECCIONES ? (seccionInicial as Section) : 'categorias'
+	);
+	let modalType = $state<Section | null>(null);
 	let editingId = $state<number | null>(null);
 	let nombre = $state('');
 	let descripcion = $state('');
@@ -43,62 +45,31 @@
 	let estadoOrigenId = $state('');
 	let estadoDestinoId = $state('');
 
-	let categorias = $derived(await getCategoriasProductoAdmin());
-	let estadosFabricacion = $derived(await getEstadosFabricacionAdmin());
-	let estadosPedido = $derived(await getEstadosPedidoAdmin());
-	let estadosCotizacion = $derived(await getEstadosCotizacionAdmin());
-	let transicionesFabricacion = $derived(await getTransicionesEstadoAdmin('fabricacion'));
-	let transicionesPedido = $derived(await getTransicionesEstadoAdmin('pedido'));
-	let transicionesCotizacion = $derived(await getTransicionesEstadoAdmin('cotizacion'));
-	type EstadoSection = Exclude<Section, 'categorias'>;
-	const estadosPorSeccion = $derived({
-		fabricacion: estadosFabricacion,
-		pedidos: estadosPedido,
-		cotizaciones: estadosCotizacion
-	});
-	const transicionesPorSeccion = $derived({
-		fabricacion: transicionesFabricacion,
-		pedidos: transicionesPedido,
-		cotizaciones: transicionesCotizacion
-	});
-	let estadoSection = $derived(
-		activeSection in estadosPorSeccion ? (activeSection as EstadoSection) : 'fabricacion'
-	);
-	let estadosSeleccionados = $derived(estadosPorSeccion[estadoSection]);
-	let transicionesSeleccionadas = $derived(transicionesPorSeccion[estadoSection]);
-	const tiposPorSeccion = {
-		fabricacion: 'fabricacion',
-		pedidos: 'pedido',
-		cotizaciones: 'cotizacion'
-	} as const;
-	let tipoEstadoActual = $derived(tiposPorSeccion[estadoSection]);
-	let esCategorias = $derived(activeSection === 'categorias');
-	let esFabricacion = $derived(activeSection === 'fabricacion');
-	let esPedidos = $derived(activeSection === 'pedidos');
-	let esCotizaciones = $derived(activeSection === 'cotizaciones');
-	let esVistaEstados = $derived(vistaEstado === 'estados');
-	let esCategoriasModal = $derived(modalType === 'categorias');
+	const flujo = $derived<Flujo>(activeSection === 'categorias' ? 'fabricacion' : activeSection);
+	const categorias = $derived(await getCategoriasProductoAdmin());
+	const estadosSeleccionados = $derived(await getEstadosAdmin(flujo));
+	const transicionesSeleccionadas = $derived(await getTransicionesEstadoAdmin(flujo));
+	const esCategorias = $derived(activeSection === 'categorias');
+	const esVistaEstados = $derived(vistaEstado === 'estados');
+	const esCategoriasModal = $derived(modalType === 'categorias');
 
-	$effect(() => {
-		const section = page.url.searchParams.get('seccion');
-		if (section && ['fabricacion', 'pedidos', 'cotizaciones', 'categorias'].includes(section)) {
-			activeSection = section as Section;
-		}
-	});
-
-	function abrirNuevo(tipo: Exclude<Section, 'categorias'> | 'categorias') {
-		modalType = tipo;
-		editingId = null;
-		nombre = '';
-		descripcion = '';
-		slug = '';
-		grupo = 'proceso';
-		orden = 1;
-		color = 'info';
-		esFinal = false;
+	function abrirNuevo(tipo: Section) {
+		abrirEditar(tipo, { id: null, nombre: '' });
 	}
 
-	function abrirEditar(tipo: Section, item: any) {
+	function abrirEditar(
+		tipo: Section,
+		item: {
+			id: number | null;
+			nombre: string;
+			descripcion?: string | null;
+			slug?: string;
+			grupo?: string;
+			orden?: number;
+			color?: string | null;
+			es_final?: boolean;
+		}
+	) {
 		modalType = tipo;
 		editingId = item.id;
 		nombre = item.nombre;
@@ -118,50 +89,39 @@
 	async function guardar() {
 		if (!modalType) return;
 		try {
-			if (esCategoriasModal) {
+			if (modalType === 'categorias') {
 				const data = { nombre, descripcion: descripcion || undefined };
 				if (editingId) await actualizarCategoriaProducto({ id: editingId, ...data });
-				else {
-					const resultado = await crearCategoriaProducto(data);
-					if (!resultado.creada) {
-						toast.warning('Ya existe una categoría con ese nombre');
-						return;
-					}
+				else if (!(await crearCategoriaProducto(data)).creada) {
+					toast.warning('Ya existe una categoría con ese nombre');
+					return;
 				}
 			} else {
-				const data = { nombre, slug, grupo, orden: Number(orden), color, es_final: esFinal };
-				const acciones = {
-					fabricacion: { crear: crearEstadoFabricacion, actualizar: actualizarEstadoFabricacion },
-					pedidos: { crear: crearEstadoPedidoAdmin, actualizar: actualizarEstadoPedidoAdmin },
-					cotizaciones: {
-						crear: crearEstadoCotizacionAdmin,
-						actualizar: actualizarEstadoCotizacionAdmin
-					}
-				};
-				const accion = acciones[modalType as EstadoSection];
-				if (editingId) await accion.actualizar({ id: editingId, ...data });
-				else await accion.crear(data);
+				await guardarEstado({
+					id: editingId ?? undefined,
+					flujo: modalType,
+					nombre,
+					slug,
+					grupo,
+					orden: Number(orden),
+					color,
+					es_final: esFinal
+				});
 			}
 			toast.success(editingId ? 'Configuración actualizada' : 'Configuración creada');
 			cerrarModal();
 		} catch (error) {
-			toast.error(error instanceof Error ? error.message : 'No se pudo guardar');
+			toast.error(mensajeError(error, 'No se pudo guardar'));
 		}
 	}
 
 	async function eliminar(tipo: Section, id: number) {
 		if (!confirm('¿Eliminar este registro?')) return;
 		try {
-			const acciones = {
-				categorias: eliminarCategoriaProducto,
-				fabricacion: eliminarEstadoFabricacion,
-				pedidos: eliminarEstadoPedidoAdmin,
-				cotizaciones: eliminarEstadoCotizacionAdmin
-			};
-			await acciones[tipo]({ id });
+			await (tipo === 'categorias' ? eliminarCategoriaProducto({ id }) : eliminarEstado({ id }));
 			toast.success('Registro eliminado');
 		} catch (error) {
-			toast.error(error instanceof Error ? error.message : 'No se pudo eliminar');
+			toast.error(mensajeError(error, 'No se pudo eliminar'));
 		}
 	}
 
@@ -171,34 +131,27 @@
 		modalTransicionAbierto = true;
 	}
 
-	function cerrarModalTransicion() {
-		modalTransicionAbierto = false;
-		estadoOrigenId = '';
-		estadoDestinoId = '';
-	}
-
 	async function guardarTransicion() {
 		if (!estadoOrigenId || !estadoDestinoId || estadoOrigenId === estadoDestinoId) return;
 		try {
 			await crearTransicionEstadoAdmin({
-				tipo: tipoEstadoActual,
 				estado_origen_id: Number(estadoOrigenId),
 				estado_destino_id: Number(estadoDestinoId)
 			});
 			toast.success('Transición creada');
-			cerrarModalTransicion();
+			modalTransicionAbierto = false;
 		} catch (error) {
-			toast.error(error instanceof Error ? error.message : 'No se pudo crear la transición');
+			toast.error(mensajeError(error, 'No se pudo crear la transición'));
 		}
 	}
 
 	async function eliminarTransicion(id: number) {
 		if (!confirm('¿Eliminar esta transición?')) return;
 		try {
-			await eliminarTransicionEstadoAdmin({ id, tipo: tipoEstadoActual });
+			await eliminarTransicionEstadoAdmin({ id, flujo });
 			toast.success('Transición eliminada');
 		} catch (error) {
-			toast.error(error instanceof Error ? error.message : 'No se pudo eliminar la transición');
+			toast.error(mensajeError(error, 'No se pudo eliminar la transición'));
 		}
 	}
 
@@ -210,24 +163,12 @@
 <PageLayout>
 	<div class="flex flex-col gap-6">
 		<div role="tablist" class="tabs-box tabs w-fit">
-			<button
-				class:tab-active={esCategorias}
-				class="tab"
-				onclick={() => (activeSection = 'categorias')}>Categorías de productos</button
-			>
-			<button
-				class:tab-active={esFabricacion}
-				class="tab"
-				onclick={() => (activeSection = 'fabricacion')}>Estados de fabricación</button
-			>
-			<button class:tab-active={esPedidos} class="tab" onclick={() => (activeSection = 'pedidos')}
-				>Estados de pedidos</button
-			>
-			<button
-				class:tab-active={esCotizaciones}
-				class="tab"
-				onclick={() => (activeSection = 'cotizaciones')}>Estados de cotización</button
-			>
+			{#each Object.entries(SECCIONES) as [seccion, etiqueta] (seccion)}
+				<button
+					class={['tab', { 'tab-active': activeSection === seccion }]}
+					onclick={() => (activeSection = seccion as Section)}>{etiqueta}</button
+				>
+			{/each}
 		</div>
 
 		{#if esCategorias}
@@ -269,16 +210,13 @@
 				</div>
 			</div>
 		{:else}
-			{@const estados = estadosSeleccionados}
 			<div role="tablist" class="tabs-box tabs w-fit">
 				<button
-					class:tab-active={esVistaEstados}
-					class="tab"
+					class={['tab', { 'tab-active': esVistaEstados }]}
 					onclick={() => (vistaEstado = 'estados')}>Estados</button
 				>
 				<button
-					class:tab-active={!esVistaEstados}
-					class="tab"
+					class={['tab', { 'tab-active': !esVistaEstados }]}
 					onclick={() => (vistaEstado = 'transiciones')}>Transiciones</button
 				>
 			</div>
@@ -286,13 +224,7 @@
 				<div class="card-body p-0">
 					<div class="flex items-center justify-between p-6">
 						<h2 class="card-title">
-							{!esVistaEstados
-								? 'Transiciones'
-								: esFabricacion
-									? 'Estados de fabricación'
-									: esPedidos
-										? 'Estados de pedidos'
-										: 'Estados de cotización'}
+							{esVistaEstados ? SECCIONES[activeSection] : 'Transiciones'}
 						</h2>
 						<Can modulo="configuracion" accion="edit">
 							{#if !esVistaEstados}
@@ -310,7 +242,7 @@
 						{#snippet stateHeader()}<th>Orden</th><th>Nombre</th><th>Slug</th><th>Grupo</th><th
 								>Color</th
 							><th>Final</th><th class="text-center">Acciones</th>{/snippet}
-						{#snippet stateRow(item: (typeof estados)[number])}
+						{#snippet stateRow(item: (typeof estadosSeleccionados)[number])}
 							<td>{item.orden}</td><td class="font-medium">{item.nombre}</td><td
 								class="font-mono text-sm">{item.slug}</td
 							><td>{item.grupo}</td><td
@@ -329,7 +261,7 @@
 							>
 						{/snippet}
 						<Table
-							data={estados}
+							data={estadosSeleccionados}
 							header={stateHeader}
 							row={stateRow}
 							emptyMessage="No hay estados creados"
@@ -412,7 +344,11 @@
 		>{/snippet}
 </Modal>
 
-<Modal open={modalTransicionAbierto} title="Nueva transición" onClose={cerrarModalTransicion}>
+<Modal
+	open={modalTransicionAbierto}
+	title="Nueva transición"
+	onClose={() => (modalTransicionAbierto = false)}
+>
 	<div class="grid gap-4 py-2">
 		<FormFieldWrapper label="Desde" id="estado-origen" required>
 			<select class="select w-full" bind:value={estadoOrigenId}>
@@ -432,7 +368,7 @@
 		</FormFieldWrapper>
 	</div>
 	{#snippet actions()}
-		<button class="btn" onclick={cerrarModalTransicion}>Cancelar</button>
+		<button class="btn" onclick={() => (modalTransicionAbierto = false)}>Cancelar</button>
 		<Can modulo="configuracion" accion="edit">
 			<button
 				class="btn btn-primary"

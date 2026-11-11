@@ -1,3 +1,4 @@
+import { error } from '@sveltejs/kit';
 import * as v from 'valibot';
 import { command, form, query, requested } from '$app/server';
 import { and, asc, count, desc, eq, ilike, inArray, or, sql } from 'drizzle-orm';
@@ -363,7 +364,7 @@ export const registrarMovimientoInsumo = command(
 		if (data.orden_fabricacion_id) await requirePermission('fabricacion', 'view');
 		await db.transaction(async (tx) => {
 			if (!(await verificarEmpleadoActivo(tx, data.empleado_id))) {
-				throw new Error('Seleccioná un empleado activo');
+				error(400, 'Seleccioná un empleado activo');
 			}
 			if (data.orden_fabricacion_id) {
 				const [orden] = await tx
@@ -371,7 +372,7 @@ export const registrarMovimientoInsumo = command(
 					.from(ordenes_fabricacion)
 					.where(eq(ordenes_fabricacion.id, data.orden_fabricacion_id))
 					.limit(1);
-				if (!orden) throw new Error('Orden de fabricación no encontrada');
+				if (!orden) error(404, 'Orden de fabricación no encontrada');
 			}
 			await registrarMovimientoInsumoTx(tx, { ...data, usuario_id: user.id });
 		});
@@ -394,7 +395,7 @@ export const consumirRecetaOrden = command(
 		await requirePermission('fabricacion', 'view');
 		const cantidadMovimientos = await db.transaction(async (tx) => {
 			if (!(await verificarEmpleadoActivo(tx, empleado_id))) {
-				throw new Error('Seleccioná un empleado activo');
+				error(400, 'Seleccioná un empleado activo');
 			}
 			const requeridos = await obtenerInsumosRequeridosOrdenTx(tx, orden_id);
 			const existentes = await tx
@@ -407,7 +408,7 @@ export const consumirRecetaOrden = command(
 					)
 				)
 				.limit(1);
-			if (existentes.length) throw new Error('La receta de esta orden ya fue consumida');
+			if (existentes.length) error(400, 'La receta de esta orden ya fue consumida');
 
 			for (const requerido of requeridos) {
 				await registrarMovimientoInsumoTx(tx, {
@@ -455,7 +456,7 @@ export const getInsumoById = query(v.number(), async (id) => {
 		.leftJoin(contactos, eq(proveedores.contacto_id, contactos.id))
 		.where(eq(insumos.id, id))
 		.limit(1);
-	if (!resultado) throw new Error('Insumo no encontrado');
+	if (!resultado) error(404, 'Insumo no encontrado');
 	return {
 		...resultado.insumo,
 		tipo: resultado.tipo,

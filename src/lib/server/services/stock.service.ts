@@ -1,5 +1,6 @@
+import { error } from '@sveltejs/kit';
 import { aliasedTable, and, desc, eq, sql } from 'drizzle-orm';
-import { db } from '$lib/server/db';
+import { db, type Tx } from '$lib/server/db';
 import {
 	contactos,
 	lineas_pedido,
@@ -16,15 +17,13 @@ import {
 } from '$lib/types/stock';
 import { ETIQUETAS_MOVIMIENTO_STOCK } from '$lib/types/stock';
 
-type Tx = Parameters<typeof db.transaction>[0] extends (tx: infer T) => unknown ? T : never;
-
 export async function obtenerUbicacionCentral(tx: Tx) {
 	const [ubicacion] = await tx
 		.select({ id: ubicaciones_stock.id })
 		.from(ubicaciones_stock)
 		.where(eq(ubicaciones_stock.tipo, 'deposito'))
 		.limit(1);
-	if (!ubicacion) throw new Error('No está configurado el depósito central');
+	if (!ubicacion) error(400, 'No está configurado el depósito central');
 	return ubicacion.id;
 }
 
@@ -34,7 +33,7 @@ export async function obtenerUbicacionDistribuidor(tx: Tx, contactoId: number) {
 		.from(contactos)
 		.where(and(eq(contactos.id, contactoId), eq(contactos.es_distribuidor, true)))
 		.limit(1);
-	if (!contacto) throw new Error('Seleccioná un distribuidor válido');
+	if (!contacto) error(400, 'Seleccioná un distribuidor válido');
 
 	const [existente] = await tx
 		.select({ id: ubicaciones_stock.id })
@@ -56,7 +55,7 @@ export async function obtenerUbicacionDistribuidor(tx: Tx, contactoId: number) {
 		.from(ubicaciones_stock)
 		.where(eq(ubicaciones_stock.contacto_distribuidor_id, contactoId))
 		.limit(1);
-	if (!ubicacion) throw new Error('No se pudo crear la ubicación del distribuidor');
+	if (!ubicacion) error(400, 'No se pudo crear la ubicación del distribuidor');
 	return ubicacion.id;
 }
 
@@ -66,7 +65,7 @@ export async function obtenerStockDisponibleTx(tx: Tx, productoId: number, ubica
 		.from(ubicaciones_stock)
 		.where(and(eq(ubicaciones_stock.id, ubicacionId), eq(ubicaciones_stock.activo, true)))
 		.for('update');
-	if (!ubicacion) throw new Error('Ubicación de stock no encontrada');
+	if (!ubicacion) error(404, 'Ubicación de stock no encontrada');
 
 	const [[saldo], [reservas]] = await Promise.all([
 		tx
@@ -110,7 +109,7 @@ export async function reservarStockParaLineaTx(
 ) {
 	const disponible = await obtenerStockDisponibleTx(tx, productoId, ubicacionId);
 	if (disponible < cantidad) {
-		throw new Error(`Stock insuficiente. Disponible: ${disponible} unidades.`);
+		error(400, `Stock insuficiente. Disponible: ${disponible} unidades.`);
 	}
 	await tx.insert(reservas_stock).values({
 		linea_pedido_id: lineaPedidoId,
@@ -345,12 +344,12 @@ export async function registrarMovimientoStockServicio({
 			.from(productos)
 			.where(eq(productos.id, productoId))
 			.limit(1);
-		if (!producto) throw new Error('Producto no encontrado');
+		if (!producto) error(404, 'Producto no encontrado');
 
 		const definicion = TIPOS_MOVIMIENTO_STOCK.find((item) => item.value === tipo);
-		if (!definicion) throw new Error('Tipo de movimiento no válido');
+		if (!definicion) error(400, 'Tipo de movimiento no válido');
 		if (definicion.requiereDistribuidor && !distribuidorId) {
-			throw new Error('Seleccioná un distribuidor');
+			error(400, 'Seleccioná un distribuidor');
 		}
 		const ubicacion = async (tipoUbicacion: TipoUbicacionStock) => {
 			if (tipoUbicacion === UBICACIONES_STOCK.DEPOSITO) return obtenerUbicacionCentral(tx);
@@ -364,7 +363,7 @@ export async function registrarMovimientoStockServicio({
 		if (origenId != null) {
 			const disponible = await obtenerStockDisponibleTx(tx, productoId, origenId);
 			if (disponible < cantidad) {
-				throw new Error(`Stock insuficiente. Disponible: ${disponible} unidades.`);
+				error(400, `Stock insuficiente. Disponible: ${disponible} unidades.`);
 			}
 		}
 

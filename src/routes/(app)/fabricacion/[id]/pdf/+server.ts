@@ -7,7 +7,7 @@ import { generarPDFFabricacion } from '$lib/server/pdf/fabricacion';
 import { getOrdenFabricacion } from '$lib/remote/fabricacion-consultas.remote';
 
 export async function GET({ params }) {
-	await requirePermission('taller', 'view');
+	await requirePermission('fabricacion', 'view');
 	const ordenId = Number(params.id);
 	if (!Number.isSafeInteger(ordenId) || ordenId < 1) error(404, 'Orden no encontrada');
 

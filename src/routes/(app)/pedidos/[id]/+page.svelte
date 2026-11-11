@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { mensajeError } from '$lib/utils/errores';
 	import { goto } from '$app/navigation';
 	import { resolve } from '$app/paths';
 	import { page } from '$app/state';
@@ -50,8 +51,7 @@
 			});
 			toast.success(`Pedido ${nombre.toLowerCase()}`);
 		} catch (e) {
-			console.log(e);
-			toast.error('No se pudo cambiar el estado');
+			toast.error(mensajeError(e, 'No se pudo cambiar el estado'));
 		}
 	}
 
@@ -72,8 +72,7 @@
 			toast.success('Pedido eliminado');
 			goto(resolve(Paths.PEDIDOS));
 		} catch (e) {
-			console.log(e);
-			toast.error('No se pudo eliminar');
+			toast.error(mensajeError(e, 'No se pudo eliminar'));
 		} finally {
 			cerrarModal();
 		}
@@ -240,9 +239,10 @@
 								{#if linea.reserva_stock}
 									<span class="text-sm text-base-content/50">Gestionado desde stock</span>
 								{:else if linea.produccion}
+									{@const ordenId = linea.produccion.orden_id}
 									<button
 										class="btn btn-ghost text-nowrap btn-sm"
-										onclick={() => irADetalleOrden(linea.produccion.orden_id)}
+										onclick={() => irADetalleOrden(ordenId)}
 									>
 										Ver orden
 									</button>

@@ -49,7 +49,7 @@ FROM (VALUES
 ('view','contactos'), ('create','contactos'), ('edit','contactos'), ('delete','contactos'),
 ('view','productos'), ('create','productos'), ('edit','productos'), ('delete','productos'),
 ('view','pedidos'), ('create','pedidos'), ('edit','pedidos'), ('delete','pedidos'),
-('view','taller'), ('edit','taller'), ('delete','taller'),
+('view','fabricacion'), ('create','fabricacion'), ('edit','fabricacion'), ('delete','fabricacion'),
 ('view','usuarios'), ('create','usuarios'), ('edit','usuarios'), ('delete','usuarios'),
 ('view','configuracion'), ('edit','configuracion'),
 ('view','envios'), ('create','envios'), ('edit','envios'), ('delete','envios'),
@@ -60,33 +60,41 @@ WHERE NOT EXISTS (
 );
 
 
+-- El módulo 'taller' se unificó en 'fabricacion': se migran sus asignaciones y se elimina.
+INSERT INTO roles_permisos (rol_id, permiso_id)
+SELECT rp.rol_id, fabricacion.id
+FROM roles_permisos rp
+JOIN permisos taller ON taller.id = rp.permiso_id AND taller.modulo = 'taller'
+JOIN permisos fabricacion ON fabricacion.modulo = 'fabricacion' AND fabricacion.accion = taller.accion
+ON CONFLICT DO NOTHING;
+DELETE FROM permisos WHERE modulo = 'taller';
+
 -- ============================================================
 -- ROLES_PERMISOS
 -- ============================================================
 
 INSERT INTO roles_permisos (rol_id, permiso_id)
 SELECT r.id, p.id FROM roles r CROSS JOIN permisos p
-WHERE r.nombre = 'operario' AND p.modulo = 'taller' AND p.accion = 'view'
+WHERE r.nombre = 'operario' AND p.modulo = 'fabricacion' AND p.accion IN ('view', 'edit')
 ON CONFLICT DO NOTHING;
 
 INSERT INTO roles_permisos (rol_id, permiso_id)
 SELECT r.id, p.id FROM roles r CROSS JOIN permisos p
 WHERE r.nombre = 'ventas'
 	AND ((p.modulo IN ('contactos','productos','pedidos','cotizaciones','envios') AND p.accion IN ('view','create','edit','delete'))
-    OR (p.modulo IN ('taller','stock') AND p.accion IN ('view','edit')))
+    OR (p.modulo IN ('fabricacion','stock') AND p.accion IN ('view','edit')))
 ON CONFLICT DO NOTHING;
 
 INSERT INTO roles_permisos (rol_id, permiso_id)
 SELECT r.id, p.id FROM roles r CROSS JOIN permisos p
 WHERE r.nombre = 'tecnico'
-	AND ((p.modulo IN ('contactos','productos','pedidos','taller','stock') AND p.accion IN ('view','create','edit','delete'))
-    OR p.modulo = 'fabricacion')
+	AND p.modulo IN ('contactos','productos','pedidos','fabricacion','stock') AND p.accion IN ('view','create','edit','delete')
 ON CONFLICT DO NOTHING;
 
 INSERT INTO roles_permisos (rol_id, permiso_id)
 SELECT r.id, p.id FROM roles r CROSS JOIN permisos p
 WHERE r.nombre = 'jefe_planta'
-	AND ((p.modulo IN ('productos','pedidos','taller','stock') AND p.accion IN ('view','create','edit','delete'))
+	AND ((p.modulo IN ('productos','pedidos','fabricacion','stock') AND p.accion IN ('view','create','edit','delete'))
     OR (p.modulo = 'contactos' AND p.accion = 'view'))
 ON CONFLICT DO NOTHING;
 
@@ -142,70 +150,6 @@ ON CONFLICT (id) DO NOTHING;
 INSERT INTO usuarios (id, username, password_hash, rol_id, empleado_id, activo, ultimo_acceso, created_at) VALUES
 (1, 'admin', '$2b$10$ZagFSe7xLEFVmWyZrmNeTe3WVwVeckKiwNyedjht0hmvOUryGf7M6', 4, 1, true, NULL, to_timestamp(1781022983))
 ON CONFLICT (id) DO NOTHING;
-
-
--- ============================================================
--- ESTADOS DE PEDIDO (del backup original)
--- ============================================================
-
-INSERT INTO estados_pedido (id, nombre, slug, grupo, orden, color, es_final, created_at) VALUES
-(1, 'Pendiente', 'pendiente', 'inicial', 0, 'warning', false, NULL),
-(2, 'En producción', 'en_produccion', 'proceso', 1, 'info', false, NULL),
-(3, 'Completado', 'completado', 'proceso', 2, 'success', false, NULL),
-(4, 'Entregado', 'entregado', 'final', 3, 'success', true, NULL),
-(5, 'Cancelado', 'cancelado', 'excepcion', 4, 'error', true, NULL),
-(6, 'Demorado', 'demorado', 'excepcion', 5, 'error', false, NULL)
-ON CONFLICT (id) DO NOTHING;
-
-
--- ============================================================
--- ESTADOS DE FABRICACIÓN (del backup original)
--- ============================================================
-
-INSERT INTO estados_fabricacion (id, nombre, slug, grupo, orden, color, es_final, created_at) VALUES
-(1, 'Preparando material', 'preparando_material', 'preparacion', 1, 'warning', false, NULL),
-(2, 'En producción', 'en_produccion', 'activo', 2, 'info', false, NULL),
-(3, 'Limpieza', 'limpieza', 'activo', 3, 'info', false, NULL),
-(4, 'Terminado', 'terminado', 'final', 4, 'success', true, NULL),
-(5, 'Pausado', 'pausado', 'pausado', 5, 'error', false, NULL)
-ON CONFLICT (id) DO NOTHING;
-
-
--- ============================================================
--- TRANSICIONES DE ESTADO — FABRICACIÓN
--- ============================================================
-
-INSERT INTO transiciones_estado (tipo, estado_origen_id, estado_destino_id, requiere_rol, created_at) VALUES
-('fabricacion', 1, 2, 'operario', NOW()),
-('fabricacion', 2, 3, 'operario', NOW()),
-('fabricacion', 3, 4, 'operario', NOW()),
-('fabricacion', 1, 5, 'operario', NOW()),
-('fabricacion', 2, 5, 'operario', NOW()),
-('fabricacion', 3, 5, 'operario', NOW()),
-('fabricacion', 5, 1, 'operario', NOW()),
-('fabricacion', 5, 2, 'operario', NOW()),
-('fabricacion', 5, 3, 'operario', NOW()),
-('fabricacion', 2, 1, 'jefe_planta', NOW()),
-('fabricacion', 3, 2, 'jefe_planta', NOW()),
-('fabricacion', 4, 3, 'jefe_planta', NOW())
-ON CONFLICT (tipo, estado_origen_id, estado_destino_id) DO NOTHING;
-
-
--- ============================================================
--- TRANSICIONES DE ESTADO — PEDIDO
--- ============================================================
-
-INSERT INTO transiciones_estado (tipo, estado_origen_id, estado_destino_id, requiere_rol, created_at) VALUES
-('pedido', 1, 2, 'ventas', NOW()),
-('pedido', 2, 3, 'ventas', NOW()),
-('pedido', 3, 4, 'ventas', NOW()),
-('pedido', 1, 5, 'ventas', NOW()),
-('pedido', 2, 6, 'ventas', NOW()),
-('pedido', 6, 2, 'ventas', NOW()),
-('pedido', 6, 5, 'ventas', NOW()),
-('pedido', 3, 2, 'admin', NOW()),
-('pedido', 4, 3, 'admin', NOW())
-ON CONFLICT (tipo, estado_origen_id, estado_destino_id) DO NOTHING;
 
 
 -- ============================================================

@@ -2,6 +2,4 @@
 	import { PageLayout } from '$lib/components/ui';
 </script>
 
-<PageLayout>
-	Tipos Materiales
-</PageLayout>
+<PageLayout>Tipos Materiales</PageLayout>

@@ -12,3 +12,6 @@ const pool = new Pool({
 });
 
 export const db = drizzle(pool, { schema });
+
+/** Transacción de Drizzle (el `tx` de `db.transaction`). */
+export type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0];

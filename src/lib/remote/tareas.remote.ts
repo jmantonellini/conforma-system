@@ -1,3 +1,4 @@
+import { error } from '@sveltejs/kit';
 import * as v from 'valibot';
 import { query, form, command } from '$app/server';
 import { db } from '$lib/server/db';
@@ -42,7 +43,7 @@ export const getTareas = query(async (includeArchivadas = false) => {
 export const crearTarea = form(TareaSchema, async (data) => {
 	const user = await getCurrentUser();
 
-	if (!user) throw new Error('No autorizado');
+	if (!user) error(401, 'No autorizado');
 
 	const [ultimoOrden] = await db
 		.select({ orden: tareas.orden })
@@ -85,7 +86,7 @@ export const actualizarTarea = command(
 	async (data) => {
 		const user = await getCurrentUser();
 
-		if (!user) throw new Error('No autorizado');
+		if (!user) error(401, 'No autorizado');
 
 		const updates = {
 			...(data.titulo !== undefined ? { titulo: data.titulo } : {}),
@@ -116,7 +117,7 @@ export const archivarTarea = command(
 	async (data) => {
 		const user = await getCurrentUser();
 
-		if (!user) throw new Error('No autorizado');
+		if (!user) error(401, 'No autorizado');
 
 		await db
 			.update(tareas)
@@ -137,7 +138,7 @@ export const actualizarEstadoTarea = command(
 	async (data) => {
 		const user = await getCurrentUser();
 
-		if (!user) throw new Error('No autorizado');
+		if (!user) error(401, 'No autorizado');
 
 		await db
 			.update(tareas)
@@ -158,7 +159,7 @@ export const eliminarTarea = command(
 	async (id) => {
 		const user = await getCurrentUser();
 
-		if (!user) throw new Error('No autorizado');
+		if (!user) error(401, 'No autorizado');
 
 		await db.delete(tareas).where(eq(tareas.id, id));
 

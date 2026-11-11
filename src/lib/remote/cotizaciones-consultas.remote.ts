@@ -3,22 +3,21 @@ import { error } from '@sveltejs/kit';
 import { query } from '$app/server';
 import { db } from '$lib/server/db';
 import {
-	adjuntos as adjuntosTable,
 	cotizaciones,
-	estados_cotizacion,
+	estados,
 	empleados,
 	insumos,
 	lineas_cotizacion,
 	lineas_pedido,
-	logs_cambios_estado,
 	notas_cotizacion,
 	ordenes_fabricacion,
-	transiciones_estado,
 	usuarios,
 	contactos
 } from '$lib/server/db/schema';
-import { and, aliasedTable, count, desc, eq, ilike, inArray, or, sql } from 'drizzle-orm';
-import { requirePermission, tienePermiso } from '$lib/server/auth/permissions';
+import { and, count, desc, eq, ilike, or, sql } from 'drizzle-orm';
+import { ocultar, puedeVerImportes, requirePermission } from '$lib/server/auth/permissions';
+import { historialEstados, listarEstados, transicionesDesde } from '$lib/server/estados';
+import { listarAdjuntosRelacionados } from '$lib/server/services/adjuntos.service';
 import type { MaterialSnapshot } from '$lib/types/cotizacion-editor';
 
 const crearCondicionBusquedaCotizacion = ({
@@ -75,15 +74,15 @@ export const getCotizaciones = query(
 				created_at: cotizaciones.created_at,
 				precio_total: cotizaciones.precio_total,
 				estado_id: cotizaciones.estado_id,
-				estado_nombre: estados_cotizacion.nombre,
-				estado_color: estados_cotizacion.color,
-				estado_slug: estados_cotizacion.slug,
+				estado_nombre: estados.nombre,
+				estado_color: estados.color,
+				estado_slug: estados.slug,
 				asignado_nombre: empleados.nombre,
 				asignado_apellido: empleados.apellido
 			})
 			.from(cotizaciones)
 			.leftJoin(contactos, eq(cotizaciones.contacto_id, contactos.id))
-			.leftJoin(estados_cotizacion, eq(cotizaciones.estado_id, estados_cotizacion.id))
+			.leftJoin(estados, eq(cotizaciones.estado_id, estados.id))
 			.leftJoin(empleados, eq(cotizaciones.asignada_a, empleados.id))
 			.where(where)
 			.orderBy(desc(cotizaciones.id))
@@ -96,9 +95,9 @@ export const getCotizaciones = query(
 			.leftJoin(contactos, eq(cotizaciones.contacto_id, contactos.id))
 			.where(where);
 
-		const veImportes = await tienePermiso(user, 'importes', 'view');
+		const veImportes = await puedeVerImportes(user);
 		return {
-			data: veImportes ? data : data.map((cotizacion) => ({ ...cotizacion, precio_total: null })),
+			data: veImportes ? data : data.map((cotizacion) => ocultar(cotizacion, ['precio_total'])),
 			total: totalResult?.count || 0,
 			totalPages: Math.ceil((totalResult?.count || 0) / limit),
 			currentPage: page
@@ -108,7 +107,7 @@ export const getCotizaciones = query(
 
 export const getCotizacionById = query(v.number(), async (id) => {
 	const user = await requirePermission('cotizaciones', 'view');
-	const veImportes = await tienePermiso(user, 'importes', 'view');
+	const veImportes = await puedeVerImportes(user);
 	const [cotizacion] = await db
 		.select({
 			id: cotizaciones.id,
@@ -134,9 +133,9 @@ export const getCotizacionById = query(v.number(), async (id) => {
 			},
 			estado: {
 				id: cotizaciones.estado_id,
-				nombre: estados_cotizacion.nombre,
-				color: estados_cotizacion.color,
-				slug: estados_cotizacion.slug
+				nombre: estados.nombre,
+				color: estados.color,
+				slug: estados.slug
 			},
 			asignado: {
 				id: empleados.id,
@@ -147,7 +146,7 @@ export const getCotizacionById = query(v.number(), async (id) => {
 		})
 		.from(cotizaciones)
 		.leftJoin(contactos, eq(cotizaciones.contacto_id, contactos.id))
-		.leftJoin(estados_cotizacion, eq(cotizaciones.estado_id, estados_cotizacion.id))
+		.leftJoin(estados, eq(cotizaciones.estado_id, estados.id))
 		.leftJoin(empleados, eq(cotizaciones.asignada_a, empleados.id))
 		.leftJoin(usuarios, eq(cotizaciones.creada_por, usuarios.id))
 		.where(eq(cotizaciones.id, id))
@@ -156,25 +155,7 @@ export const getCotizacionById = query(v.number(), async (id) => {
 	if (!cotizacion) error(404, 'Cotización no encontrada');
 
 	const [transiciones, lineasRaw, ordenes] = await Promise.all([
-		db
-			.select({
-				id: transiciones_estado.id,
-				estado_destino_id: transiciones_estado.estado_destino_id,
-				destino_nombre: estados_cotizacion.nombre,
-				destino_slug: estados_cotizacion.slug,
-				destino_color: estados_cotizacion.color
-			})
-			.from(transiciones_estado)
-			.innerJoin(
-				estados_cotizacion,
-				eq(transiciones_estado.estado_destino_id, estados_cotizacion.id)
-			)
-			.where(
-				and(
-					eq(transiciones_estado.tipo, 'cotizacion'),
-					eq(transiciones_estado.estado_origen_id, cotizacion.estado.id)
-				)
-			),
+		transicionesDesde(cotizacion.estado.id),
 		db
 			.select({
 				id: lineas_cotizacion.id,
@@ -202,56 +183,29 @@ export const getCotizacionById = query(v.number(), async (id) => {
 					.orderBy(ordenes_fabricacion.id)
 			: Promise.resolve([])
 	]);
-	const condicionesAdjuntos = [eq(adjuntosTable.cotizacion_id, id)];
-	if (cotizacion.pedido_id) {
-		condicionesAdjuntos.push(eq(adjuntosTable.pedido_id, cotizacion.pedido_id));
-	}
-	const ordenIds = ordenes.map((orden) => orden.id);
-	if (ordenIds.length) {
-		condicionesAdjuntos.push(inArray(adjuntosTable.orden_fabricacion_id, ordenIds));
-	}
-	const adjuntosRelacionados = await db
-		.select({
-			id: adjuntosTable.id,
-			nombre_original: adjuntosTable.nombre_original,
-			mime_type: adjuntosTable.mime_type,
-			es_plano: adjuntosTable.es_plano,
-			tamano_bytes: adjuntosTable.tamano_bytes,
-			created_at: adjuntosTable.created_at,
-			cotizacion_id: adjuntosTable.cotizacion_id,
-			pedido_id: adjuntosTable.pedido_id,
-			orden_fabricacion_id: adjuntosTable.orden_fabricacion_id
-		})
-		.from(adjuntosTable)
-		.where(or(...condicionesAdjuntos))
-		.orderBy(desc(adjuntosTable.id));
-	const adjuntos = adjuntosRelacionados.map((adjunto) => ({
-		id: adjunto.id,
-		nombre_original: adjunto.nombre_original,
-		mime_type: adjunto.mime_type,
-		es_plano: adjunto.es_plano,
-		tamano_bytes: adjunto.tamano_bytes,
-		created_at: adjunto.created_at,
-		propietario: adjunto.cotizacion_id
-			? { tipo: 'cotizacion' as const, id: adjunto.cotizacion_id }
-			: adjunto.pedido_id
-				? { tipo: 'pedido' as const, id: adjunto.pedido_id }
-				: { tipo: 'fabricacion' as const, id: adjunto.orden_fabricacion_id! }
-	}));
+	const adjuntos = await listarAdjuntosRelacionados({
+		cotizacionId: id,
+		pedidoId: cotizacion.pedido_id,
+		ordenIds: ordenes.map((orden) => orden.id)
+	});
 
-	const lineas = lineasRaw.map((linea) => ({
-		...linea,
-		precio_unitario: veImportes ? linea.precio_unitario : null,
-		precio_lista_unitario: veImportes ? linea.precio_lista_unitario : null,
-		costo_materiales: veImportes ? linea.costo_materiales : null,
-		insumos_snapshot: veImportes ? (linea.insumos_snapshot as MaterialSnapshot[] | null) : null
-	}));
+	const lineas = lineasRaw.map((fila) => {
+		const linea = { ...fila, insumos_snapshot: fila.insumos_snapshot as MaterialSnapshot[] | null };
+		return veImportes
+			? linea
+			: ocultar(linea, [
+					'precio_unitario',
+					'precio_lista_unitario',
+					'costo_materiales',
+					'insumos_snapshot'
+				]);
+	});
 
 	return {
 		cotizacion: {
-			...cotizacion,
-			precio_total: veImportes ? cotizacion.precio_total : null,
-			descuento_global_porcentaje: veImportes ? cotizacion.descuento_global_porcentaje : null,
+			...(veImportes
+				? cotizacion
+				: ocultar(cotizacion, ['precio_total', 'descuento_global_porcentaje'])),
 			transiciones,
 			navegacion: {
 				pedido_id: cotizacion.pedido_id,
@@ -265,41 +219,12 @@ export const getCotizacionById = query(v.number(), async (id) => {
 
 export const getEstadosCotizacion = query(async () => {
 	await requirePermission('cotizaciones', 'view');
-	return db.select().from(estados_cotizacion).orderBy(estados_cotizacion.orden);
+	return listarEstados('cotizacion');
 });
 
 export const getHistorialCotizacion = query(v.number(), async (cotizacionId) => {
 	await requirePermission('cotizaciones', 'view');
-	const estadoAnterior = aliasedTable(estados_cotizacion, 'estado_anterior');
-	const estadoNuevo = aliasedTable(estados_cotizacion, 'estado_nuevo');
-
-	return db
-		.select({
-			id: logs_cambios_estado.id,
-			estado_anterior: {
-				nombre: estadoAnterior.nombre,
-				color: estadoAnterior.color
-			},
-			estado_nuevo: {
-				nombre: estadoNuevo.nombre,
-				color: estadoNuevo.color
-			},
-			comentario: logs_cambios_estado.comentario,
-			fecha: logs_cambios_estado.created_at,
-			empleado: empleados.nombre
-		})
-		.from(logs_cambios_estado)
-		.leftJoin(usuarios, eq(logs_cambios_estado.usuario_id, usuarios.id))
-		.leftJoin(empleados, eq(usuarios.empleado_id, empleados.id))
-		.leftJoin(estadoAnterior, eq(logs_cambios_estado.estado_anterior_id, estadoAnterior.id))
-		.leftJoin(estadoNuevo, eq(logs_cambios_estado.estado_nuevo_id, estadoNuevo.id))
-		.where(
-			and(
-				eq(logs_cambios_estado.entidad_tipo, 'cotizacion'),
-				eq(logs_cambios_estado.entidad_id, cotizacionId)
-			)
-		)
-		.orderBy(desc(logs_cambios_estado.created_at));
+	return historialEstados('cotizacion', [cotizacionId]);
 });
 
 export const getNotasCotizacion = query(v.number(), async (cotizacionId) => {

@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { mensajeError } from '$lib/utils/errores';
 	import { page } from '$app/state';
 	import {
 		cambiarEstadoUnidad,
@@ -60,7 +61,7 @@
 			toast.success('Consumo de receta registrado');
 			await invalidateAll();
 		} catch (error) {
-			toast.error(error instanceof Error ? error.message : 'No se pudo consumir la receta');
+			toast.error(mensajeError(error, 'No se pudo consumir la receta'));
 		} finally {
 			isLoading = false;
 		}
@@ -77,7 +78,7 @@
 			});
 			toast.success('Estado cambiado');
 		} catch (error) {
-			toast.error(error instanceof Error ? error.message : 'Error');
+			toast.error(mensajeError(error, 'Error'));
 		} finally {
 			isLoading = false;
 		}
@@ -93,7 +94,7 @@
 			});
 			toast.success('Unidad reanudada');
 		} catch (error) {
-			toast.error(error instanceof Error ? error.message : 'Error');
+			toast.error(mensajeError(error, 'Error'));
 		} finally {
 			isLoading = false;
 		}

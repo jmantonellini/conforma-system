@@ -1,3 +1,4 @@
+import { error } from '@sveltejs/kit';
 import * as v from 'valibot';
 import { db } from '$lib/server/db';
 import {
@@ -57,7 +58,7 @@ export async function calcularCostoMaterialesProducto(
 	productosVisitados = new Set<number>()
 ): Promise<number> {
 	if (productosVisitados.has(productoId)) {
-		throw new Error('La receta contiene un ciclo de productos');
+		error(400, 'La receta contiene un ciclo de productos');
 	}
 	const siguientes = new Set(productosVisitados).add(productoId);
 	const [materiales, componentes] = await Promise.all([
@@ -97,7 +98,7 @@ export async function obtenerPrecioProducto(productoId: number) {
 		.from(productos)
 		.where(eq(productos.id, productoId))
 		.limit(1);
-	if (!producto) throw new Error('Producto no encontrado');
+	if (!producto) error(404, 'Producto no encontrado');
 	const costo_materiales = await calcularCostoMaterialesProducto(productoId);
 	const margen_porcentaje = Number(producto.margen_porcentaje ?? 0);
 	return {
@@ -234,7 +235,7 @@ export async function getProductosListado({
 
 export async function getProductoByIdService(id: number) {
 	const [producto] = await db.select().from(productos).where(eq(productos.id, id)).limit(1);
-	if (!producto) throw new Error('Producto no encontrado');
+	if (!producto) error(404, 'Producto no encontrado');
 	const [costo_materiales, archivos] = await Promise.all([
 		calcularCostoMaterialesProducto(id),
 		db
@@ -282,7 +283,7 @@ export async function getProductoInsumosService(productoId: number) {
 
 export async function getProductoConRecetaService(productoId: number) {
 	const [producto] = await db.select().from(productos).where(eq(productos.id, productoId)).limit(1);
-	if (!producto) throw new Error('Producto no encontrado');
+	if (!producto) error(404, 'Producto no encontrado');
 	const costo_materiales = await calcularCostoMaterialesProducto(productoId);
 
 	const [receta, componentes] = await Promise.all([
@@ -322,7 +323,7 @@ export async function getProductoConRecetaService(productoId: number) {
 		multiplicador: number,
 		visitados = new Set<number>()
 	): Promise<typeof receta> => {
-		if (visitados.has(id)) throw new Error('La receta contiene un ciclo de productos');
+		if (visitados.has(id)) error(400, 'La receta contiene un ciclo de productos');
 		const siguiente = new Set(visitados).add(id);
 		const [directos, hijos] = await Promise.all([
 			db

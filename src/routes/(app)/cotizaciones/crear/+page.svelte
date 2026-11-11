@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { mensajeError } from '$lib/utils/errores';
 	import { onDestroy } from 'svelte';
 	import { goto } from '$app/navigation';
 	import { resolve } from '$app/paths';
@@ -173,7 +174,7 @@
 				contacto.reutilizado ? 'Contacto existente seleccionado' : 'Contacto creado y seleccionado'
 			);
 		} catch (error) {
-			toast.error(error instanceof Error ? error.message : 'No se pudo guardar el contacto');
+			toast.error(mensajeError(error, 'No se pudo guardar el contacto'));
 		} finally {
 			guardandoContacto = false;
 		}
@@ -278,7 +279,7 @@
 						placeholder="Transcripción del audio o resumen del pedido del cliente. Ej: 'Necesita un caño de escape completo para un Gol 2015, pregunta si hacemos ese modelo y cuánto sale.'"
 						rows={4}
 						{...form.fields.descripcion.as('text')}
-						class="textarea textarea-sm w-full resize-none"
+						class="textarea w-full resize-none textarea-sm"
 					></textarea>
 				</FormFieldWrapper>
 
@@ -287,7 +288,7 @@
 						placeholder="Notas internas..."
 						rows={2}
 						{...form.fields.observaciones.as('text')}
-						class="textarea textarea-sm w-full resize-none"
+						class="textarea w-full resize-none textarea-sm"
 					></textarea>
 				</FormFieldWrapper>
 
@@ -296,7 +297,7 @@
 						type="file"
 						multiple
 						accept="image/jpeg,image/png,image/webp,audio/ogg,audio/mpeg,audio/mp4,audio/x-m4a,audio/wav,audio/x-wav,video/mp4,application/pdf"
-						class="file-input file-input-sm w-full"
+						class="file-input w-full file-input-sm"
 						disabled={subiendoArchivos}
 						onchange={seleccionarArchivos}
 					/>

@@ -13,7 +13,7 @@ import {
 import { requirePermission } from '$lib/server/auth/permissions';
 import { eliminarObjeto, guardarObjeto } from '$lib/server/services/object-storage.service';
 import { ACCION_ADJUNTO, ENTIDAD_ADJUNTO, type TipoEntidadAdjunto } from '$lib/types/dominio';
-import { Modulos } from '$lib/types';
+import { ENTIDADES_ADJUNTO } from '$lib/server/services/adjuntos.service';
 
 const MAX_FILE_SIZE = 25 * 1024 * 1024;
 const MAX_BATCH_SIZE = 25 * 1024 * 1024;
@@ -31,27 +31,16 @@ const TIPOS_ARCHIVO = {
 	'application/pdf': '.pdf'
 };
 
-const MODULOS_ENTIDAD_ADJUNTO = {
-	[ENTIDAD_ADJUNTO.COTIZACION]: Modulos.COTIZACIONES,
-	[ENTIDAD_ADJUNTO.PEDIDO]: Modulos.PEDIDOS,
-	[ENTIDAD_ADJUNTO.PRODUCTO]: Modulos.PRODUCTOS,
-	[ENTIDAD_ADJUNTO.FABRICACION]: Modulos.FABRICACION
-} as const;
-
-function permisoEntidad(tipo: TipoEntidadAdjunto) {
-	return MODULOS_ENTIDAD_ADJUNTO[tipo];
-}
-
 async function requirePermiso(
 	tipo: TipoEntidadAdjunto,
 	accion: (typeof ACCION_ADJUNTO)[keyof typeof ACCION_ADJUNTO]
 ) {
 	if (tipo === ENTIDAD_ADJUNTO.PRODUCTO) {
-		await requirePermission(Modulos.PRODUCTOS, accion);
+		await requirePermission(ENTIDADES_ADJUNTO.producto.modulo, accion);
 		return;
 	}
 	try {
-		await requirePermission(permisoEntidad(tipo), ACCION_ADJUNTO.EDITAR);
+		await requirePermission(ENTIDADES_ADJUNTO[tipo].modulo, ACCION_ADJUNTO.EDITAR);
 	} catch (error) {
 		const permiteCrear = tipo === ENTIDAD_ADJUNTO.COTIZACION || tipo === ENTIDAD_ADJUNTO.PEDIDO;
 		if (!permiteCrear || accion !== ACCION_ADJUNTO.CREAR) throw error;
@@ -133,21 +122,10 @@ export async function POST({ request }) {
 				: original;
 			await guardarObjeto(archivoKey, contenido, mimeType);
 
-			const propietario = {
-				cotizacion_id: null as number | null,
-				pedido_id: null as number | null,
-				orden_fabricacion_id: null as number | null,
-				producto_id: null as number | null
-			};
-			if (tipo === ENTIDAD_ADJUNTO.COTIZACION) propietario.cotizacion_id = entidadId;
-			else if (tipo === ENTIDAD_ADJUNTO.PEDIDO) propietario.pedido_id = entidadId;
-			else if (tipo === ENTIDAD_ADJUNTO.FABRICACION) propietario.orden_fabricacion_id = entidadId;
-			else propietario.producto_id = entidadId;
-
 			const [adjunto] = await db
 				.insert(adjuntos)
 				.values({
-					...propietario,
+					[ENTIDADES_ADJUNTO[tipo].columna.name]: entidadId,
 					nombre_original: archivo.name,
 					archivo_key: archivoKey,
 					mime_type: mimeType,

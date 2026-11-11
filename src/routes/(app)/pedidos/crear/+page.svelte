@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { mensajeError } from '$lib/utils/errores';
 	import { onDestroy } from 'svelte';
 	import { goto } from '$app/navigation';
 	import { resolve } from '$app/paths';
@@ -296,7 +297,7 @@
 				}
 			} catch (error) {
 				console.log(error);
-				toast.error(error instanceof Error ? error.message : 'Error al crear el pedido');
+				toast.error(mensajeError(error, 'Error al crear el pedido'));
 			}
 		})}
 		class="space-y-6"

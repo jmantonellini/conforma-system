@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { mensajeError } from '$lib/utils/errores';
 	import {
 		getEstadosFabricacion,
 		getOrdenesFabricacion
@@ -96,7 +97,7 @@
 				<td class="font-mono text-sm"><Highlight text={`OF-${orden.id}`} query={search} /></td>
 				<td>
 					<span
-						class={`badge badge-sm badge-soft whitespace-nowrap capitalize badge-${orden.estado?.color}`}
+						class={`badge badge-soft badge-sm whitespace-nowrap capitalize badge-${orden.estado?.color}`}
 					>
 						{orden.estado?.nombre}
 					</span>
@@ -124,7 +125,7 @@
 					{:else if orden.prioridad === 1}
 						<span class="badge badge-sm badge-warning">Urgente</span>
 					{:else}
-						<span class="badge badge-sm badge-ghost">Normal</span>
+						<span class="badge badge-ghost badge-sm">Normal</span>
 					{/if}
 				</td>
 				<td class="flex flex-nowrap items-center gap-1">
@@ -187,8 +188,7 @@
 					await invalidateAll();
 					toast.success('Orden eliminada');
 				} catch (error) {
-					console.log(error);
-					toast.error('Error al eliminar');
+					toast.error(mensajeError(error, 'Error al eliminar'));
 				}
 			}}>Eliminar</button
 		>
