@@ -78,7 +78,7 @@
 		<ColumnaOrden clave="nombre" porDefecto="nombre">Insumo</ColumnaOrden>
 		<th>Tipo</th>
 		<th>Categoría</th>
-		<th class="text-right">Existencia</th>
+		<th>Existencia</th>
 		<ColumnaOrden clave="costo_unitario" porDefecto="nombre" class="text-right">Costo</ColumnaOrden>
 		<th></th>
 	{/snippet}
@@ -109,7 +109,7 @@
 		<td class="text-base-content/70">
 			<Highlight text={insumo.categoria?.nombre ?? 'Sin categoría'} query={busqueda} />
 		</td>
-		<td class="numero">
+		<td class="numero text-left">
 			<span class={['font-medium', insumo.stock <= 0 && 'text-error']}>
 				{formatearCantidad(insumo.stock)}
 			</span>
