@@ -84,7 +84,17 @@
 	</div>
 </PageLayout>
 
-<Modal bind:open={showModal} title={editingUsuario ? 'Editar Usuario' : 'Nuevo Uusario'}>
+<Modal
+	bind:open={showModal}
+	titulo={editingUsuario ? 'Editar usuario' : 'Nuevo usuario'}
+	descripcion={editingUsuario ? 'Dejá la contraseña vacía para mantener la actual.' : undefined}
+	alCerrar={() => (editingUsuario = null)}
+	accion={{
+		etiqueta: editingUsuario ? 'Guardar cambios' : 'Crear usuario',
+		form: 'usuario-form',
+		pendiente: !!activeForm.pending
+	}}
+>
 	<form
 		{...activeForm.enhance(async (form) => {
 			try {
@@ -93,81 +103,60 @@
 					form.element.reset();
 					showModal = false;
 				} else {
-					toast.error('Error de validación');
+					toast.error('Revisá los datos del usuario');
 				}
-			} catch (error) {
-				console.log(error);
-				toast.error('Error del servidor');
+			} catch {
+				toast.error('No se pudo guardar el usuario');
 			}
 		})}
-		id="cliente-form"
+		id="usuario-form"
 	>
 		{#if editingUsuario}
 			<input type="hidden" name="id" value={editingUsuario?.id} />
 		{/if}
-		<fieldset class="fieldset rounded-lg border p-4">
-			<legend class="text-md fieldset-legend px-2 font-semibold">Datos</legend>
-			<div class="grid grid-cols-1 gap-4 md:grid-cols-2">
-				<FormFieldWrapper id="username" label="Nombre de usuario" required>
-					<input
-						class="input"
-						autocomplete="username"
-						{...activeForm.fields?.username?.as('text', editingUsuario?.username || '')}
-					/>
-				</FormFieldWrapper>
-				<FormFieldWrapper id="password_hash" label="Contraseña">
-					<input
-						class="input"
-						autocomplete="current-password"
-						{...activeForm.fields?.password_hash?.as('password')}
-					/>
-				</FormFieldWrapper>
-				<FormFieldWrapper id="rol" label="Rol" required>
-					<select
-						{...activeForm.fields?.rol_id?.as('select', String(editingUsuario?.rol?.id))}
-						class="select"
-					>
-						<option value={null}>Seleccionar...</option>
-						{#each roles as rol (rol.id)}
-							<option value={String(rol.id)}>{rol.nombre}</option>
-						{/each}
-					</select>
-				</FormFieldWrapper>
-				<FormFieldWrapper id="empleado_id" label="Empleado">
-					<select
-						{...activeForm.fields?.empleado_id?.as('select', String(editingUsuario?.empleado_id))}
-						class="select"
-					>
-						<option value={null}>Sin asignar</option>
-						{#if editingUsuario?.empleado}
-							<option value={String(editingUsuario.empleado?.id)}
-								>{editingUsuario?.empleado?.nombre} {editingUsuario.empleado?.apellido}</option
-							>
-						{/if}
-						{#each empleados as emp (emp.id)}
-							<option value={String(emp.id)}>{emp.nombre} {emp.apellido}</option>
-						{/each}
-					</select>
-				</FormFieldWrapper>
-			</div>
-		</fieldset>
+		<div class="grid gap-4 sm:grid-cols-2">
+			<FormFieldWrapper id="username" label="Nombre de usuario" required>
+				<input
+					class="input"
+					autocomplete="username"
+					{...activeForm.fields?.username?.as('text', editingUsuario?.username || '')}
+				/>
+			</FormFieldWrapper>
+			<FormFieldWrapper id="password_hash" label="Contraseña">
+				<input
+					class="input"
+					autocomplete="current-password"
+					{...activeForm.fields?.password_hash?.as('password')}
+				/>
+			</FormFieldWrapper>
+			<FormFieldWrapper id="rol" label="Rol" required>
+				<select
+					{...activeForm.fields?.rol_id?.as('select', String(editingUsuario?.rol?.id))}
+					class="select"
+				>
+					<option value="">Seleccionar...</option>
+					{#each roles as rol (rol.id)}
+						<option value={String(rol.id)}>{rol.nombre}</option>
+					{/each}
+				</select>
+			</FormFieldWrapper>
+			<FormFieldWrapper id="empleado_id" label="Empleado">
+				<select
+					{...activeForm.fields?.empleado_id?.as('select', String(editingUsuario?.empleado_id))}
+					class="select"
+				>
+					<option value="">Sin asignar</option>
+					{#if editingUsuario?.empleado}
+						<option value={String(editingUsuario.empleado?.id)}
+							>{editingUsuario?.empleado?.nombre} {editingUsuario.empleado?.apellido}</option
+						>
+					{/if}
+					{#each empleados as emp (emp.id)}
+						<option value={String(emp.id)}>{emp.nombre} {emp.apellido}</option>
+					{/each}
+				</select>
+			</FormFieldWrapper>
+		</div>
+		<FormErrors form={activeForm} />
 	</form>
-	<FormErrors form={activeForm} />
-	{#snippet actions()}
-		<button
-			class="btn"
-			onclick={() => {
-				editingUsuario = null;
-				showModal = false;
-			}}>Cancelar</button
-		>
-		<button
-			type="submit"
-			class="btn btn-primary"
-			form="cliente-form"
-			disabled={!!activeForm.pending}
-		>
-			{activeForm.pending ? 'Guardando...' : editingUsuario ? 'Actualizar' : 'Guardar'}
-		</button>
-	{/snippet}
 </Modal>

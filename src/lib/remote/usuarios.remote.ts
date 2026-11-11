@@ -46,8 +46,8 @@ export const crearUsuario = form(CrearUsuarioSchema, async (data) => {
 		.values({
 			username: data.username,
 			password_hash: bcrypt.hashSync(data.password_hash, 10),
-			empleado_id: data.empleado_id,
-			rol_id: data.rol_id
+			empleado_id: data.empleado_id || null,
+			rol_id: data.rol_id || null
 		})
 		.returning();
 
@@ -66,8 +66,8 @@ export const actualizarUsuario = form(ActualizarUsuarioSchema, async (data) => {
 
 	const values = {
 		username: updateData.username,
-		empleado_id: updateData.empleado_id ?? null,
-		rol_id: updateData.rol_id ?? null,
+		empleado_id: updateData.empleado_id || null,
+		rol_id: updateData.rol_id || null,
 		...(updateData.password_hash && { password_hash: updateData.password_hash })
 	};
 

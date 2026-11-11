@@ -1,6 +1,11 @@
+<script lang="ts" module>
+	export type Option = { value: string; label: string; detalle?: string };
+</script>
+
 <script lang="ts">
 	import { onDestroy } from 'svelte';
 	import { FormFieldWrapper } from '.';
+	import Icono from './Icono.svelte';
 
 	let {
 		options = [],
@@ -14,9 +19,10 @@
 		onSearch,
 		onCreate,
 		createLabel = 'Crear nuevo contacto',
+		compacto = false,
 		...restProps
 	}: {
-		options: { value: string; label: string }[];
+		options: Option[];
 		label: string;
 		field: any;
 		placeholder?: string;
@@ -27,10 +33,11 @@
 		onSearch?: (term: string) => Promise<void>;
 		onCreate?: (term: string) => void;
 		createLabel?: string;
+		/** Tamaño chico, para tablas y editores de renglones. */
+		compacto?: boolean;
 		[key: string]: any;
 	} = $props();
 
-	type Option = { value: string; label: string };
 	let searchTerm = $state('');
 	let isOpen = $state(false);
 	let activeIndex = $state(0);
@@ -163,7 +170,7 @@
 			<input
 				{id}
 				type="text"
-				class="input w-full pr-10 input-sm"
+				class={['input w-full pr-10', compacto && 'input-sm']}
 				{placeholder}
 				aria-label={label || placeholder}
 				role="combobox"
@@ -188,7 +195,7 @@
 					onmousedown={(event) => event.preventDefault()}
 					onclick={clearSelection}
 				>
-					✕
+					<Icono nombre="cerrar" class="size-3.5" />
 				</button>
 			{/if}
 		</div>
@@ -207,26 +214,17 @@
 	{/if}
 
 	{#if isOpen}
-		<div class="absolute z-50 mt-1 w-full rounded-md border border-base-300 bg-base-100 shadow-lg">
-			{#if onCreate}
-				<button
-					type="button"
-					class="btn m-2 w-[calc(100%-1rem)] btn-primary btn-sm"
-					onmousedown={(event) => event.preventDefault()}
-					onclick={() => onCreate?.(searchTerm.trim())}
-				>
-					+ {createLabel}
-				</button>
-			{/if}
-
+		<div
+			class="absolute z-50 mt-1 w-full overflow-hidden rounded-box border border-base-300 bg-base-100 shadow-lg"
+		>
 			{#if isSearching}
-				<div role="status" class="px-3 py-2 text-sm text-base-content/70">Buscando...</div>
+				<div role="status" class="px-3 py-2 text-sm text-base-content/60">Buscando...</div>
 			{:else if searchFailed}
 				<div role="status" class="px-3 py-2 text-sm text-error">
 					No se pudo completar la búsqueda
 				</div>
 			{:else if filteredOptions.length}
-				<div id={listboxId} role="listbox" class="max-h-60 overflow-auto">
+				<div id={listboxId} role="listbox" class="max-h-64 overflow-auto p-1">
 					{#each filteredOptions as opt, index (opt.value)}
 						<button
 							type="button"
@@ -235,18 +233,31 @@
 							aria-selected={opt.value === field?.value?.()}
 							tabindex="-1"
 							class={[
-								'w-full px-4 py-2 text-left hover:bg-base-200',
+								'w-full rounded-field px-3 py-1.5 text-left text-sm hover:bg-base-200',
 								{ 'bg-base-200': index === activeIndex }
 							]}
 							onmousedown={(event) => event.preventDefault()}
 							onclick={() => handleSelect(opt)}
 						>
 							{opt.label}
+							{#if opt.detalle}<span class="secundario block">{opt.detalle}</span>{/if}
 						</button>
 					{/each}
 				</div>
 			{:else}
-				<p class="px-3 py-2 text-sm text-base-content/70">No hay resultados</p>
+				<p class="px-3 py-2 text-sm text-base-content/60">No hay resultados</p>
+			{/if}
+
+			{#if onCreate}
+				<button
+					type="button"
+					class="flex w-full items-center gap-2 border-t border-base-300 px-4 py-2.5 text-left text-sm font-medium text-primary hover:bg-base-200"
+					onmousedown={(event) => event.preventDefault()}
+					onclick={() => onCreate?.(searchTerm.trim())}
+				>
+					<span aria-hidden="true">+</span>
+					{searchTerm.trim() && hasTyped ? `${createLabel}: “${searchTerm.trim()}”` : createLabel}
+				</button>
 			{/if}
 		</div>
 	{/if}

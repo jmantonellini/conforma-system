@@ -18,7 +18,7 @@ import {
 } from '$lib/server/db/schema';
 import { and, desc, eq, isNull, or } from 'drizzle-orm';
 import { calcularIva21, precioNetoCubreCosto, redondearPrecio } from '$lib/utils/precios';
-import { requirePermission, usuarioDeSesion } from '$lib/server/auth/permissions';
+import { requirePermission, tienePermiso, usuarioDeSesion } from '$lib/server/auth/permissions';
 import { clavesAdjuntos, eliminarArchivos } from '$lib/server/services/adjuntos.service';
 import { resolverLineaComercial } from '$lib/server/services/lineas-comerciales.service';
 import {
@@ -201,9 +201,17 @@ export const marcarNotificacionesLeidas = command(async () => {
 
 export const crearCotizacion = form(CotizacionSchema, async (data) => {
 	const user = await requirePermission('cotizaciones', 'create');
-	const estadoInicial = await estadoPorSlug('cotizacion', 'ingresada');
+	const asignadaA = data.asignada_a || null;
+	if (asignadaA && !(await tienePermiso(user, 'cotizaciones', 'asignar'))) {
+		error(403, 'No tenés permiso para asignar cotizaciones');
+	}
+	const [ingresada, asignada] = await Promise.all([
+		estadoPorSlug('cotizacion', 'ingresada'),
+		estadoPorSlug('cotizacion', 'asignada')
+	]);
 
 	const cotizacion = await db.transaction(async (tx) => {
+		const avanza = !!asignadaA && (await transicionPermitida(tx, ingresada.id, asignada.id));
 		const [creada] = await tx
 			.insert(cotizaciones)
 			.values({
@@ -213,13 +221,31 @@ export const crearCotizacion = form(CotizacionSchema, async (data) => {
 				canal: data.canal,
 				descripcion: data.descripcion,
 				observaciones: data.observaciones || null,
-				estado_id: estadoInicial.id,
+				asignada_a: asignadaA,
+				estado_id: avanza ? asignada.id : ingresada.id,
 				creada_por: user.id
 			})
-			.returning({ id: cotizaciones.id });
+			.returning({ id: cotizaciones.id, numero: cotizaciones.numero_cotizacion });
+		if (avanza) {
+			await registrarCambioEstado(tx, {
+				flujo: 'cotizacion',
+				entidadId: creada.id,
+				usuarioId: user.id,
+				anteriorId: ingresada.id,
+				nuevoId: asignada.id,
+				comentario: es.cotizaciones.historial.asignada
+			});
+		}
 		return creada;
 	});
 
+	if (asignadaA) {
+		await notificar(
+			cotizacion.id,
+			avisos.asignada.titulo,
+			avisos.asignada.mensaje(cotizacion.numero)
+		);
+	}
 	refrescarCotizacion();
 	return { cotizacionId: cotizacion.id };
 });

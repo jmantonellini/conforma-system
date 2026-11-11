@@ -8,52 +8,30 @@
 		actualizarEmpleado,
 		eliminarEmpleado
 	} from '$lib/remote/empleados.remote';
+	import { confirmarYEjecutar } from '$lib/stores/confirmacion.svelte';
 	import { toast } from '$lib/stores/toast.svelte';
 
+	type Empleado = Awaited<ReturnType<typeof getEmpleados>>[number];
+
 	let empleados = getEmpleados();
+	let abierto = $state(false);
+	let editando = $state<Empleado | null>(null);
+	let activeForm = $derived(editando ? actualizarEmpleado : crearEmpleado);
 
-	let modal = $state<{
-		open: boolean;
-		tipo: 'crear' | 'editar' | 'eliminar';
-		titulo: string;
-		empleado: any;
-	}>({ open: false, tipo: 'crear', titulo: '', empleado: null });
-
-	let activeForm = $derived(modal.empleado ? actualizarEmpleado : crearEmpleado);
-
-	function abrirCrear() {
-		modal = { open: true, tipo: 'crear', titulo: 'Nuevo Empleado', empleado: null };
-	}
-
-	function abrirEditar(empleado: any) {
-		modal = { open: true, tipo: 'editar', titulo: 'Editar Empleado', empleado };
-	}
-
-	function abrirEliminar(empleado: any) {
-		modal = { open: true, tipo: 'eliminar', titulo: 'Eliminar Empleado', empleado };
+	function abrir(empleado: Empleado | null) {
+		editando = empleado;
+		abierto = true;
 	}
 
 	function cerrarModal() {
-		modal.open = false;
-		modal.empleado = null;
-	}
-
-	async function confirmarEliminar() {
-		if (!modal.empleado) return;
-		try {
-			await eliminarEmpleado(modal.empleado.id);
-			toast.success('Empleado eliminado');
-			cerrarModal();
-		} catch (error) {
-			console.log(error);
-			toast.error('Error al eliminar empleado');
-		}
+		abierto = false;
+		editando = null;
 	}
 </script>
 
 <PageLayout>
 	<div class="flex justify-end">
-		<button class="btn btn-primary btn-sm" onclick={abrirCrear}> + Nuevo Empleado </button>
+		<button class="btn btn-primary btn-sm" onclick={() => abrir(null)}>+ Nuevo empleado</button>
 	</div>
 
 	<div>
@@ -73,14 +51,19 @@
 					<button
 						class="btn btn-circle btn-ghost btn-sm"
 						title="Editar"
-						onclick={() => abrirEditar(empleado)}
+						onclick={() => abrir(empleado)}
 					>
 						<Edit />
 					</button>
 					<button
 						class="btn btn-circle btn-ghost text-error btn-sm"
 						title="Eliminar"
-						onclick={() => abrirEliminar(empleado)}
+						onclick={() =>
+							confirmarYEjecutar({
+								mensaje: `¿Eliminar a ${empleado.nombre} ${empleado.apellido}?`,
+								ejecutar: () => eliminarEmpleado(String(empleado.id)),
+								exito: 'Empleado eliminado'
+							})}
 					>
 						<Delete />
 					</button>
@@ -92,99 +75,71 @@
 	</div>
 </PageLayout>
 
-<Modal bind:open={modal.open} title={modal.titulo} onClose={cerrarModal}>
-	{#if modal.tipo === 'eliminar'}
-		<p>
-			¿Eliminar a <strong>{modal.empleado?.nombre} {modal.empleado?.apellido}</strong>?
-		</p>
-	{:else}
-		<form
-			{...activeForm.enhance(async (form) => {
-				try {
-					if (await form.submit()) {
-						toast.success(modal.tipo === 'editar' ? 'Empleado actualizado' : 'Empleado creado');
-						form.element.reset();
-						cerrarModal();
-					} else {
-						toast.error('Error de validación');
-					}
-				} catch (error) {
-					console.log(error);
-					toast.error('Error del servidor');
+<Modal
+	bind:open={abierto}
+	ancho="lg"
+	titulo={editando ? 'Editar empleado' : 'Nuevo empleado'}
+	alCerrar={cerrarModal}
+	accion={{
+		etiqueta: editando ? 'Guardar cambios' : 'Crear empleado',
+		form: 'empleado-form',
+		pendiente: !!activeForm.pending
+	}}
+>
+	<form
+		{...activeForm.enhance(async (form) => {
+			try {
+				if (await form.submit()) {
+					toast.success(editando ? 'Empleado actualizado' : 'Empleado creado');
+					form.element.reset();
+					cerrarModal();
+				} else {
+					toast.error('Revisá los datos del empleado');
 				}
-			})}
-			id="empleado-form"
-		>
-			{#if modal.empleado}
-				<input type="hidden" name="id" value={modal.empleado.id} />
-			{/if}
-
-			<fieldset class="fieldset rounded-lg border p-4">
-				<legend class="text-md fieldset-legend px-2 font-semibold">Datos personales</legend>
-				<div class="grid grid-cols-1 gap-4 md:grid-cols-2">
-					<FormFieldWrapper id="nombre" label="Nombre" required>
-						<input
-							class="input"
-							{...activeForm.fields?.nombre?.as('text', modal.empleado?.nombre || '')}
-						/>
-					</FormFieldWrapper>
-					<FormFieldWrapper id="apellido" label="Apellido" required>
-						<input
-							class="input"
-							{...activeForm.fields?.apellido?.as('text', modal.empleado?.apellido || '')}
-						/>
-					</FormFieldWrapper>
-					<FormFieldWrapper id="email" label="Email">
-						<input
-							class="input"
-							{...activeForm.fields?.email?.as('email', modal.empleado?.email || '')}
-						/>
-					</FormFieldWrapper>
-					<FormFieldWrapper id="telefono" label="Teléfono">
-						<input
-							class="input"
-							{...activeForm.fields?.telefono?.as('text', modal.empleado?.telefono || '')}
-						/>
-					</FormFieldWrapper>
-					<FormFieldWrapper id="dni" label="DNI">
-						<input
-							class="input"
-							{...activeForm.fields?.dni?.as('text', modal.empleado?.dni || '')}
-						/>
-					</FormFieldWrapper>
-					<FormFieldWrapper id="fecha_ingreso" label="Fecha de ingreso">
-						<input
-							class="input"
-							{...activeForm.fields?.fecha_ingreso?.as(
-								'date',
-								modal.empleado?.fecha_ingreso
-									? new Date(modal.empleado?.fecha_ingreso)?.toISOString().split('T')[0]
-									: new Date().toISOString().split('T')[0]
-							)}
-						/>
-					</FormFieldWrapper>
-				</div>
-			</fieldset>
-
-			<FormDireccion form={activeForm} initialData={modal.empleado || undefined} />
-		</form>
-
-		<FormErrors form={activeForm} />
-	{/if}
-	{#snippet actions()}
-		{#if modal.tipo === 'eliminar'}
-			<button class="btn" onclick={cerrarModal}>Cancelar</button>
-			<button class="btn btn-error" onclick={confirmarEliminar}>Eliminar</button>
-		{:else}
-			<button class="btn" onclick={cerrarModal}>Cancelar</button>
-			<button
-				type="submit"
-				class="btn btn-primary"
-				form="empleado-form"
-				disabled={!!activeForm.pending}
-			>
-				{activeForm.pending ? 'Guardando...' : modal.tipo === 'editar' ? 'Actualizar' : 'Guardar'}
-			</button>
+			} catch {
+				toast.error('No se pudo guardar el empleado');
+			}
+		})}
+		id="empleado-form"
+	>
+		{#if editando}
+			<input type="hidden" name="id" value={editando.id} />
 		{/if}
-	{/snippet}
+		<div class="grid gap-4 sm:grid-cols-2">
+			<FormFieldWrapper id="nombre" label="Nombre" required>
+				<input class="input" {...activeForm.fields?.nombre?.as('text', editando?.nombre || '')} />
+			</FormFieldWrapper>
+			<FormFieldWrapper id="apellido" label="Apellido" required>
+				<input
+					class="input"
+					{...activeForm.fields?.apellido?.as('text', editando?.apellido || '')}
+				/>
+			</FormFieldWrapper>
+			<FormFieldWrapper id="email" label="Email">
+				<input class="input" {...activeForm.fields?.email?.as('email', editando?.email || '')} />
+			</FormFieldWrapper>
+			<FormFieldWrapper id="telefono" label="Teléfono">
+				<input
+					class="input"
+					{...activeForm.fields?.telefono?.as('text', editando?.telefono || '')}
+				/>
+			</FormFieldWrapper>
+			<FormFieldWrapper id="dni" label="DNI">
+				<input class="input" {...activeForm.fields?.dni?.as('text', editando?.dni || '')} />
+			</FormFieldWrapper>
+			<FormFieldWrapper id="fecha_ingreso" label="Fecha de ingreso">
+				<input
+					class="input"
+					{...activeForm.fields?.fecha_ingreso?.as(
+						'date',
+						editando?.fecha_ingreso
+							? new Date(editando?.fecha_ingreso)?.toISOString().split('T')[0]
+							: new Date().toISOString().split('T')[0]
+					)}
+				/>
+			</FormFieldWrapper>
+		</div>
+		<FormDireccion form={activeForm} initialData={editando ?? undefined} />
+		<FormErrors form={activeForm} />
+	</form>
 </Modal>

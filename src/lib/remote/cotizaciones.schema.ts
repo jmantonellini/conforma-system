@@ -41,5 +41,6 @@ export const CotizacionSchema = v.object({
 	contacto_distribuidor_id: v.optional(v.pipe(v.string(), v.transform(Number), v.number())),
 	canal: v.optional(v.string(), 'whatsapp'),
 	descripcion: v.pipe(v.string(), v.nonEmpty('Describí la consulta recibida')),
-	observaciones: v.optional(v.string())
+	observaciones: v.optional(v.string()),
+	asignada_a: v.optional(v.pipe(v.string(), v.transform(Number), v.number()))
 });

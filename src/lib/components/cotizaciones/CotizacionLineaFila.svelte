@@ -69,6 +69,7 @@
 	<td class="relative min-w-72 focus-within:z-50">
 		{#if linea.tipo === 'producto'}
 			<SearchSelect
+				compacto
 				label=""
 				id={`producto-${linea.idx}`}
 				placeholder="Buscar producto..."
@@ -90,6 +91,7 @@
 			</div>
 		{:else if linea.tipo === 'insumo'}
 			<SearchSelect
+				compacto
 				label=""
 				id={`insumo-${linea.idx}`}
 				placeholder="Buscar insumo interno..."
@@ -202,6 +204,7 @@
 					<div class="flex flex-wrap items-end gap-2">
 						<div class="min-w-56 flex-1">
 							<SearchSelect
+								compacto
 								label=""
 								id={`composicion-${linea.idx}`}
 								placeholder="Buscar insumo..."

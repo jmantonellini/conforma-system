@@ -5,28 +5,33 @@
 		label,
 		id,
 		error,
+		ayuda,
 		required,
-		class: className,
+		class: clase,
 		children
 	}: {
 		label?: string;
 		id: string;
 		error?: string;
+		/** Texto de ayuda bajo el control. */
+		ayuda?: string;
 		required?: boolean;
 		class?: string;
 		children: Snippet;
 	} = $props();
 </script>
 
-<div class={`flex w-auto flex-col gap-2 ${className || ''}`}>
+<div class={['campo', clase]}>
 	{#if label}
-		<label for={id} class="label">
+		<label for={id}>
 			{label}
 			{#if required}<span class="text-error">*</span>{/if}
 		</label>
 	{/if}
 	{@render children()}
 	{#if error}
-		<p class="text-sm text-error">{error}</p>
+		<p class="text-xs text-error">{error}</p>
+	{:else if ayuda}
+		<p class="text-xs text-base-content/60">{ayuda}</p>
 	{/if}
 </div>

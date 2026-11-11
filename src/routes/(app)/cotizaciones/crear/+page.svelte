@@ -337,17 +337,23 @@
 
 <Modal
 	bind:open={modalContactoAbierto}
-	title="Nuevo contacto"
-	onClose={() => {
+	titulo="Nuevo contacto"
+	descripcion="Con el CUIT completamos los datos desde ARCA."
+	alCerrar={() => {
 		nuevoContacto = { razon_social: '', telefono: '', email: '', cuit: '' };
 		cuitFormateado = '';
 		cuitConsultado = '';
 	}}
+	accion={{
+		etiqueta: 'Crear y seleccionar',
+		pendiente: guardandoContacto,
+		onclick: guardarContactoRapido
+	}}
 >
-	<div class="grid gap-3">
+	<div class="grid gap-4">
 		<FormFieldWrapper id="nuevo-cuit" label="CUIT (opcional)">
 			<input
-				class="input w-full input-sm"
+				class="input"
 				inputmode="numeric"
 				maxlength="13"
 				autocomplete="off"
@@ -357,26 +363,13 @@
 			/>
 		</FormFieldWrapper>
 		<FormFieldWrapper id="nuevo-razon-social" label="Nombre o razón social" required>
-			<input class="input w-full input-sm" bind:value={nuevoContacto.razon_social} />
+			<input class="input" bind:value={nuevoContacto.razon_social} />
 		</FormFieldWrapper>
 		<FormFieldWrapper id="nuevo-telefono" label="Teléfono">
-			<input class="input w-full input-sm" type="tel" bind:value={nuevoContacto.telefono} />
+			<input class="input" type="tel" bind:value={nuevoContacto.telefono} />
 		</FormFieldWrapper>
 		<FormFieldWrapper id="nuevo-email" label="Email">
-			<input class="input w-full input-sm" type="email" bind:value={nuevoContacto.email} />
+			<input class="input" type="email" bind:value={nuevoContacto.email} />
 		</FormFieldWrapper>
 	</div>
-	{#snippet actions()}
-		<button type="button" class="btn" onclick={() => (modalContactoAbierto = false)}
-			>Cancelar</button
-		>
-		<button
-			type="button"
-			class="btn btn-primary"
-			disabled={guardandoContacto}
-			onclick={guardarContactoRapido}
-		>
-			{guardandoContacto ? 'Guardando...' : 'Crear y seleccionar'}
-		</button>
-	{/snippet}
 </Modal>

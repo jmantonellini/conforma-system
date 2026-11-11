@@ -70,7 +70,12 @@
 	{/if}
 </Seccion>
 
-<Modal bind:open={showModal} title="Registrar Pago" onClose={cerrar}>
+<Modal
+	bind:open={showModal}
+	titulo="Registrar pago"
+	alCerrar={cerrar}
+	accion={{ etiqueta: 'Registrar pago', form: 'pago-form', pendiente: !!form.pending }}
+>
 	<form
 		{...form.enhance(async (f) => {
 			if (await f.submit()) {
@@ -81,24 +86,24 @@
 		id="pago-form"
 	>
 		<input type="hidden" name="pedido_id" value={pedidoId} />
-		<div class="grid gap-3">
-			<FormFieldWrapper label="Monto" id="monto" required>
-				<div class="join w-full">
-					<input
-						class="input join-item min-w-0 flex-1"
-						step="0.01"
-						{...form.fields.monto.as('number')}
-					/>
-					<button
-						type="button"
-						class="btn join-item btn-outline"
-						disabled={facturacion.saldo <= 0}
-						onclick={completarSaldoRestante}
-					>
-						Saldo restante
-					</button>
-				</div>
-			</FormFieldWrapper>
+		<FormFieldWrapper label="Monto" id="monto" required>
+			<div class="join w-full">
+				<input
+					class="input join-item min-w-0 flex-1"
+					step="0.01"
+					{...form.fields.monto.as('number')}
+				/>
+				<button
+					type="button"
+					class="btn join-item"
+					disabled={facturacion.saldo <= 0}
+					onclick={completarSaldoRestante}
+				>
+					Saldo restante
+				</button>
+			</div>
+		</FormFieldWrapper>
+		<div class="grid gap-4 sm:grid-cols-2">
 			<FormFieldWrapper label="Método" id="metodo_pago">
 				<select class="select" {...form.fields.metodo_pago.as('select', METODO_PAGO.EFECTIVO)}>
 					<option value={METODO_PAGO.EFECTIVO}>Efectivo</option>
@@ -108,7 +113,7 @@
 				</select>
 			</FormFieldWrapper>
 			{#if form.fields.metodo_pago.value() === METODO_PAGO.CUOTAS}
-				<FormFieldWrapper label="Cantidad de cuotas" id="cantidad_cuotas" required>
+				<FormFieldWrapper label="Cuotas" id="cantidad_cuotas" required>
 					<input
 						class="input"
 						min="1"
@@ -118,19 +123,10 @@
 					/>
 				</FormFieldWrapper>
 			{/if}
-			<FormFieldWrapper label="Observaciones" id="observaciones">
-				<textarea class="textarea" rows="2" {...form.fields.observaciones.as('text')}></textarea>
-			</FormFieldWrapper>
 		</div>
+		<FormFieldWrapper label="Observaciones" id="observaciones">
+			<textarea class="textarea" rows="2" {...form.fields.observaciones.as('text')}></textarea>
+		</FormFieldWrapper>
 		<FormErrors {form} />
 	</form>
-
-	{#snippet actions()}
-		<button class="btn" onclick={cerrar}>Cancelar</button>
-		<Can modulo="pedidos" accion="edit">
-			<button type="submit" form="pago-form" class="btn btn-primary" disabled={!!form.pending}>
-				{form.pending ? 'Registrando...' : 'Registrar'}
-			</button>
-		</Can>
-	{/snippet}
 </Modal>

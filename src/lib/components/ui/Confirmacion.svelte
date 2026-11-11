@@ -5,17 +5,14 @@
 
 <Modal
 	open={confirmacion.pedido !== null}
-	title={confirmacion.pedido?.titulo}
-	onClose={() => confirmacion.responder(false)}
+	ancho="sm"
+	titulo={confirmacion.pedido?.titulo ?? 'Confirmar'}
+	alCerrar={() => confirmacion.responder(false)}
+	accion={{
+		etiqueta: confirmacion.pedido?.accion ?? 'Confirmar',
+		peligro: confirmacion.pedido?.peligro,
+		onclick: () => confirmacion.responder(true)
+	}}
 >
-	<p class="text-base-content/80">{confirmacion.pedido?.mensaje}</p>
-	{#snippet actions()}
-		<button class="btn btn-sm" onclick={() => confirmacion.responder(false)}>Cancelar</button>
-		<button
-			class={['btn btn-sm', confirmacion.pedido?.peligro ? 'btn-error' : 'btn-primary']}
-			onclick={() => confirmacion.responder(true)}
-		>
-			{confirmacion.pedido?.accion ?? 'Confirmar'}
-		</button>
-	{/snippet}
+	<p class="text-sm text-base-content/80">{confirmacion.pedido?.mensaje}</p>
 </Modal>

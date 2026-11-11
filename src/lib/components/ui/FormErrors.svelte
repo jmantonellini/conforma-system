@@ -1,14 +1,15 @@
 <script lang="ts">
-	let { form } = $props<{ form: any }>();
-	const issues = $derived(form.fields?.allIssues?.() ?? []);
+	// eslint-disable-next-line @typescript-eslint/no-explicit-any
+	let { form }: { form: any } = $props();
+	const issues: { message: string }[] = $derived(form.fields?.allIssues?.() ?? []);
 </script>
 
 {#if issues.length}
-	<div role="alert" class="mt-4 alert alert-error">
-		<div>
+	<div role="alert" class="alert alert-soft text-sm alert-error">
+		<ul class="list-inside list-disc">
 			{#each issues as issue (issue.message)}
-				<p>{issue.message}</p>
+				<li>{issue.message}</li>
 			{/each}
-		</div>
+		</ul>
 	</div>
 {/if}

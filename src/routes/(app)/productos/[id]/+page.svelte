@@ -378,6 +378,7 @@
 						(linea.producto_id ? 'Producto' : '-')}
 					<div class="mb-1 grid grid-cols-[minmax(0,1fr)_4rem_5rem_2rem] gap-1 sm:items-center">
 						<SearchSelect
+							compacto
 							label=""
 							id={`receta-edit-${indice}`}
 							placeholder="Buscar componente..."

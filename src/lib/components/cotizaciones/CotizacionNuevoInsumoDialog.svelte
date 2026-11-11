@@ -63,21 +63,19 @@
 	}
 </script>
 
-<Modal bind:open title="Nuevo insumo" onClose={() => (nuevoInsumo = formularioVacio())}>
-	<div class="grid gap-3 sm:grid-cols-2">
-		<FormFieldWrapper label="Nombre" id="nuevo-insumo-nombre">
-			<input
-				id="nuevo-insumo-nombre"
-				class="input w-full input-sm"
-				bind:value={nuevoInsumo.nombre}
-			/>
+<Modal
+	bind:open
+	titulo="Nuevo insumo"
+	descripcion="Se incorpora al catálogo al guardar el {contexto}."
+	alCerrar={() => (nuevoInsumo = formularioVacio())}
+	accion={{ etiqueta: 'Agregar renglón', deshabilitada: !valido, onclick: confirmar }}
+>
+	<div class="grid gap-4 sm:grid-cols-2">
+		<FormFieldWrapper label="Nombre" id="nuevo-insumo-nombre" required class="sm:col-span-2">
+			<input id="nuevo-insumo-nombre" class="input" bind:value={nuevoInsumo.nombre} />
 		</FormFieldWrapper>
 		<FormFieldWrapper label="Tipo" id="nuevo-insumo-tipo">
-			<select
-				id="nuevo-insumo-tipo"
-				class="select w-full select-sm"
-				bind:value={nuevoInsumo.tipo_id}
-			>
+			<select id="nuevo-insumo-tipo" class="select" bind:value={nuevoInsumo.tipo_id}>
 				<option value="">Seleccionar tipo...</option>
 				{#each tipos as tipo (tipo.id)}
 					<option value={String(tipo.id)}>{tipo.nombre}</option>
@@ -85,11 +83,7 @@
 			</select>
 		</FormFieldWrapper>
 		<FormFieldWrapper label="Categoría (opcional)" id="nuevo-insumo-categoria">
-			<select
-				id="nuevo-insumo-categoria"
-				class="select w-full select-sm"
-				bind:value={nuevoInsumo.categoria_id}
-			>
+			<select id="nuevo-insumo-categoria" class="select" bind:value={nuevoInsumo.categoria_id}>
 				<option value="">Sin categoría</option>
 				{#each categorias as categoria (categoria.id)}
 					<option value={String(categoria.id)}>{categoria.nombre}</option>
@@ -97,11 +91,7 @@
 			</select>
 		</FormFieldWrapper>
 		<FormFieldWrapper label="Unidad" id="nuevo-insumo-unidad">
-			<select
-				id="nuevo-insumo-unidad"
-				class="select w-full select-sm"
-				bind:value={nuevoInsumo.unidad_id}
-			>
+			<select id="nuevo-insumo-unidad" class="select" bind:value={nuevoInsumo.unidad_id}>
 				<option value="">Seleccionar unidad...</option>
 				{#each unidades as unidad (unidad.id)}
 					<option value={String(unidad.id)}>{unidad.nombre}</option>
@@ -111,20 +101,11 @@
 		<FormFieldWrapper label="Costo por unidad" id="nuevo-insumo-costo">
 			<input
 				id="nuevo-insumo-costo"
-				class="input w-full input-sm"
+				class="input"
 				type="text"
 				inputmode="decimal"
 				bind:value={nuevoInsumo.costo_unitario}
 			/>
 		</FormFieldWrapper>
 	</div>
-	<p class="mt-3 text-sm text-base-content/60">
-		Se incorpora al catálogo al guardar el {contexto}.
-	</p>
-	{#snippet actions()}
-		<button type="button" class="btn btn-ghost" onclick={cerrar}>Cancelar</button>
-		<button type="button" class="btn btn-primary" disabled={!valido} onclick={confirmar}>
-			Agregar renglón
-		</button>
-	{/snippet}
 </Modal>

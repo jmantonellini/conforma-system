@@ -309,6 +309,7 @@
 			<div class="grid gap-4 md:grid-cols-4">
 				<!-- Cliente -->
 				<SearchSelect
+					compacto
 					id="contacto_id"
 					label="Cliente"
 					options={clientesOptions}
@@ -320,6 +321,7 @@
 
 				<!-- Distribuidor -->
 				<SearchSelect
+					compacto
 					id="contacto_distribuidor_id"
 					label="Distribuidor (opcional)"
 					options={distribuidoresOptions}

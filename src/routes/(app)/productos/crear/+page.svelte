@@ -368,6 +368,7 @@
 							class="mb-1 grid grid-cols-[minmax(0,1fr)_repeat(3,minmax(0,50px))] gap-2 sm:items-center"
 						>
 							<SearchSelect
+								compacto
 								label=""
 								id={`receta-create-${indice}`}
 								placeholder="Buscar componente..."

@@ -15,6 +15,18 @@ const COLORES = {
 
 type Color = keyof typeof COLORES;
 
+/** Opciones para elegir el color de un estado. */
+export const OPCIONES_COLOR: { valor: Color; nombre: string }[] = [
+	{ valor: 'neutral', nombre: 'Gris' },
+	{ valor: 'info', nombre: 'Celeste' },
+	{ valor: 'primary', nombre: 'Azul' },
+	{ valor: 'secondary', nombre: 'Violeta' },
+	{ valor: 'accent', nombre: 'Turquesa' },
+	{ valor: 'success', nombre: 'Verde' },
+	{ valor: 'warning', nombre: 'Amarillo' },
+	{ valor: 'error', nombre: 'Rojo' }
+];
+
 const resolver = (color: string | null | undefined) =>
 	COLORES[(color ?? '') as Color] as (typeof COLORES)[Color] | undefined;
 

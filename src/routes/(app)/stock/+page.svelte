@@ -290,17 +290,22 @@
 	</section>
 </PageLayout>
 
-<Modal bind:open={dialogoAbierto} title="Registrar movimiento" onClose={cerrarDialogo}>
-	<div class="grid gap-3">
+<Modal
+	bind:open={dialogoAbierto}
+	titulo="Registrar movimiento"
+	alCerrar={cerrarDialogo}
+	accion={{ etiqueta: 'Registrar', pendiente: guardando, onclick: guardarMovimiento }}
+>
+	<div class="grid gap-4">
 		<FormFieldWrapper id="tipo_movimiento" label="Movimiento" required>
-			<select class="select w-full" bind:value={tipoMovimiento}>
+			<select class="select" bind:value={tipoMovimiento}>
 				{#each TIPOS_MOVIMIENTO_STOCK as tipo (tipo.value)}
 					<option value={tipo.value}>{tipo.label}</option>
 				{/each}
 			</select>
 		</FormFieldWrapper>
 		<FormFieldWrapper id="producto_stock" label="Producto" required>
-			<select class="select w-full" bind:value={productoId} required>
+			<select class="select" bind:value={productoId} required>
 				<option value="">Seleccionar...</option>
 				{#each stock.productos as producto (producto.id)}
 					<option value={String(producto.id)}>{producto.codigo} — {producto.nombre}</option>
@@ -309,7 +314,7 @@
 		</FormFieldWrapper>
 		{#if movimientoTipo.requiereDistribuidor}
 			<FormFieldWrapper id="distribuidor_stock" label="Distribuidor" required>
-				<select class="select w-full" bind:value={distribuidorId} required>
+				<select class="select" bind:value={distribuidorId} required>
 					<option value="">Seleccionar...</option>
 					{#each stock.distribuidores as distribuidor (distribuidor.id)}
 						<option value={String(distribuidor.id)}>{distribuidor.nombre}</option>
@@ -318,16 +323,10 @@
 			</FormFieldWrapper>
 		{/if}
 		<FormFieldWrapper id="cantidad_stock" label="Cantidad" required>
-			<input class="input w-full" type="number" min="1" step="1" bind:value={cantidad} />
+			<input class="input" type="number" min="1" step="1" bind:value={cantidad} />
 		</FormFieldWrapper>
 		<FormFieldWrapper id="observaciones_stock" label="Observaciones">
-			<textarea class="textarea w-full resize-none" rows="2" bind:value={observaciones}></textarea>
+			<textarea class="textarea" rows="2" bind:value={observaciones}></textarea>
 		</FormFieldWrapper>
 	</div>
-	{#snippet actions()}
-		<button class="btn" onclick={cerrarDialogo}>Cancelar</button>
-		<button class="btn btn-primary" disabled={guardando} onclick={guardarMovimiento}>
-			{guardando ? 'Registrando...' : 'Registrar'}
-		</button>
-	{/snippet}
 </Modal>

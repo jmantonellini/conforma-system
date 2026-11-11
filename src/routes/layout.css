@@ -105,6 +105,31 @@ html {
 	.numero {
 		@apply text-right whitespace-nowrap tabular-nums;
 	}
+
+	/* ---------- Formularios ---------- */
+	/* Campo = etiqueta + control a todo el ancho + ayuda/error (ver FormFieldWrapper). */
+	.campo {
+		@apply flex min-w-0 flex-col gap-1.5;
+	}
+	.campo > label {
+		@apply text-sm font-medium text-base-content/80;
+	}
+	.campo :is(.input, .select, .textarea, .file-input) {
+		@apply w-full;
+	}
+
+	/* Cuerpo de Modal: bloques y formularios con el mismo espaciado. */
+	.modal-cuerpo {
+		@apply flex flex-col gap-4 overflow-y-auto px-5 pt-3 pb-5;
+	}
+	.modal-cuerpo > form {
+		@apply flex flex-col gap-4;
+	}
+}
+
+/* Dentro de un modal las secciones no llevan caja propia: el modal ya es la caja. */
+.modal-cuerpo .seccion {
+	@apply border-0 p-0;
 }
 
 /* Ítem activo de menús en un tono suave de marca (fuera de capas para ganarle al default de daisyUI). */

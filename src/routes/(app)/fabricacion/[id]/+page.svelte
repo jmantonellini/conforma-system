@@ -14,6 +14,7 @@
 	import {
 		EncabezadoDetalle,
 		EstadoBadge,
+		FormFieldWrapper,
 		Historial,
 		Icono,
 		Modal,
@@ -308,17 +309,18 @@
 
 <Modal
 	open={unidadAPausar !== null}
-	title="Motivo de la pausa"
-	onClose={() => (unidadAPausar = null)}
+	titulo="Pausar unidad"
+	descripcion="El motivo queda registrado en el historial de la orden."
+	alCerrar={() => (unidadAPausar = null)}
+	accion={{ etiqueta: 'Pausar', pendiente: ocupado, onclick: confirmarPausa }}
 >
-	<textarea
-		class="textarea w-full"
-		rows="3"
-		bind:value={motivoPausa}
-		placeholder="Describí el motivo de la pausa..."
-	></textarea>
-	{#snippet actions()}
-		<button class="btn" onclick={() => (unidadAPausar = null)}>Cancelar</button>
-		<button class="btn btn-primary" disabled={ocupado} onclick={confirmarPausa}>Pausar</button>
-	{/snippet}
+	<FormFieldWrapper id="motivo-pausa" label="Motivo">
+		<textarea
+			id="motivo-pausa"
+			class="textarea"
+			rows="3"
+			bind:value={motivoPausa}
+			placeholder="Ej.: falta de material"
+		></textarea>
+	</FormFieldWrapper>
 </Modal>

@@ -21,6 +21,7 @@
 		Table
 	} from '$lib/components/ui';
 	import { toast } from '$lib/stores/toast.svelte';
+	import { mensajeError } from '$lib/utils/errores';
 	import type { EstadosTarea } from '$lib/types';
 	import { resolve } from '$app/paths';
 	import { estaVencido, formatearFecha } from '$lib/utils/fechas';
@@ -219,14 +220,16 @@
 
 <Modal
 	bind:open={showModal}
-	title={esModoCreacion ? 'Nueva Tarea' : 'Editar Tarea'}
-	onClose={() => {
-		showModal = false;
+	titulo={esModoCreacion ? 'Nueva tarea' : 'Editar tarea'}
+	alCerrar={() => {
 		if (!esModoCreacion) {
 			resetTareaForm();
 			tareaEditandoId = null;
 		}
 	}}
+	accion={esModoCreacion
+		? { etiqueta: 'Crear tarea', form: 'tarea-form', pendiente: !!form.pending }
+		: { etiqueta: 'Guardar cambios', form: 'editar-tarea-form' }}
 >
 	{#if esModoCreacion}
 		<form
@@ -238,37 +241,30 @@
 						showModal = false;
 						formInstance.element.reset();
 					} else {
-						toast.error('Error de validación');
+						toast.error('Revisá los datos de la tarea');
 					}
 				} catch (error) {
-					console.log(error);
-
-					toast.error('Error del servidor');
+					toast.error(mensajeError(error, 'No se pudo crear la tarea'));
 				}
 			})}
 			id="tarea-form"
 		>
-			<div class="space-y-4">
+			<div class="flex flex-col gap-4">
 				<FormFieldWrapper id="titulo" label="Título" required>
-					<input class="input w-full" {...form.fields.titulo.as('text')} />
+					<input class="input" {...form.fields.titulo.as('text')} />
 				</FormFieldWrapper>
 
 				<FormFieldWrapper id="descripcion" label="Descripción">
-					<textarea
-						class="textarea w-full resize-none"
-						rows="3"
-						{...form.fields.descripcion.as('text')}
-					>
-					</textarea>
+					<textarea class="textarea" rows="3" {...form.fields.descripcion.as('text')}> </textarea>
 				</FormFieldWrapper>
 
-				<div class="grid grid-cols-2 gap-4">
+				<div class="grid gap-4 sm:grid-cols-2">
 					<FormFieldWrapper id="fecha_entrega" label="Fecha de entrega">
-						<input class="input w-full" {...form.fields.fecha_entrega.as('date')} />
+						<input class="input" {...form.fields.fecha_entrega.as('date')} />
 					</FormFieldWrapper>
 
 					<FormFieldWrapper id="asignado_a" label="Asignar a">
-						<select class="select w-full" {...form.fields.asignado_a.as('select')}>
+						<select class="select" {...form.fields.asignado_a.as('select')}>
 							<option value="">Sin asignar</option>
 							{#each empleados as emp (emp.id)}
 								<option value={String(emp.id)}>{emp.nombre} {emp.apellido}</option>
@@ -281,26 +277,22 @@
 		</form>
 	{:else}
 		<form id="editar-tarea-form" onsubmit={handleGuardarEdicion}>
-			<div class="space-y-4">
+			<div class="flex flex-col gap-4">
 				<FormFieldWrapper id="titulo-editar" label="Título" required>
-					<input
-						class="input w-full"
-						bind:value={tareaForm.titulo}
-						placeholder="Título de la tarea"
-					/>
+					<input class="input" bind:value={tareaForm.titulo} placeholder="Título de la tarea" />
 				</FormFieldWrapper>
 
 				<FormFieldWrapper id="descripcion-editar" label="Descripción">
-					<textarea class="textarea w-full" rows="3" bind:value={tareaForm.descripcion}></textarea>
+					<textarea class="textarea" rows="3" bind:value={tareaForm.descripcion}></textarea>
 				</FormFieldWrapper>
 
-				<div class="grid grid-cols-2 gap-4">
+				<div class="grid gap-4 sm:grid-cols-2">
 					<FormFieldWrapper id="fecha-entrega-editar" label="Fecha de entrega">
-						<input class="input w-full" type="date" bind:value={tareaForm.fecha_entrega} />
+						<input class="input" type="date" bind:value={tareaForm.fecha_entrega} />
 					</FormFieldWrapper>
 
 					<FormFieldWrapper id="asignado-editar" label="Asignar a">
-						<select class="select w-full" bind:value={tareaForm.asignado_a}>
+						<select class="select" bind:value={tareaForm.asignado_a}>
 							<option value="">Sin asignar</option>
 							{#each empleados as emp (emp.id)}
 								<option value={String(emp.id)}>{emp.nombre} {emp.apellido}</option>
@@ -311,15 +303,4 @@
 			</div>
 		</form>
 	{/if}
-
-	{#snippet actions()}
-		<button class="btn" onclick={() => (showModal = false)}>Cancelar</button>
-		{#if esModoCreacion}
-			<button type="submit" class="btn btn-primary" form="tarea-form" disabled={!!form.pending}>
-				{form.pending ? 'Creando...' : 'Crear'}
-			</button>
-		{:else}
-			<button type="submit" class="btn btn-primary" form="editar-tarea-form">Guardar</button>
-		{/if}
-	{/snippet}
 </Modal>

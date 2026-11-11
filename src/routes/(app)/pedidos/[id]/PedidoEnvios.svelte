@@ -70,7 +70,12 @@
 	{/if}
 </Seccion>
 
-<Modal bind:open={showModal} title="Registrar Envío" onClose={cerrar}>
+<Modal
+	bind:open={showModal}
+	titulo="Registrar envío"
+	alCerrar={cerrar}
+	accion={{ etiqueta: 'Registrar envío', form: 'envio-form', pendiente: !!form.pending }}
+>
 	<form
 		{...form.enhance(async (f) => {
 			if (await f.submit()) {
@@ -81,38 +86,25 @@
 		id="envio-form"
 	>
 		<input type="hidden" name="pedido_id" value={pedidoId} />
-
-		<div class="grid gap-3">
-			<FormFieldWrapper label="Transportista" id="transportista_id" required>
-				<select class="select" {...form.fields.transportista_id.as('select')}>
-					<option value="">Seleccionar...</option>
-					{#each transportistas as t (t.id)}
-						<option value={String(t.id)}>{t.nombre}</option>
-					{/each}
-				</select>
-			</FormFieldWrapper>
-
-			<FormFieldWrapper label="N° Guía" id="numero_guia">
+		<FormFieldWrapper label="Transportista" id="transportista_id" required>
+			<select class="select" {...form.fields.transportista_id.as('select')}>
+				<option value="">Seleccionar...</option>
+				{#each transportistas as t (t.id)}
+					<option value={String(t.id)}>{t.nombre}</option>
+				{/each}
+			</select>
+		</FormFieldWrapper>
+		<div class="grid gap-4 sm:grid-cols-2">
+			<FormFieldWrapper label="N° de guía" id="numero_guia">
 				<input class="input" {...form.fields.numero_guia.as('text')} />
 			</FormFieldWrapper>
-
 			<FormFieldWrapper label="Bultos" id="cantidad_bultos">
 				<input class="input" {...form.fields.cantidad_bultos.as('number')} />
 			</FormFieldWrapper>
-
-			<FormFieldWrapper label="Observaciones" id="observaciones">
-				<textarea class="textarea" rows="2" {...form.fields.observaciones.as('text')}></textarea>
-			</FormFieldWrapper>
 		</div>
+		<FormFieldWrapper label="Observaciones" id="observaciones">
+			<textarea class="textarea" rows="2" {...form.fields.observaciones.as('text')}></textarea>
+		</FormFieldWrapper>
 		<FormErrors {form} />
 	</form>
-
-	{#snippet actions()}
-		<button class="btn" onclick={cerrar}>Cancelar</button>
-		<Can modulo="pedidos" accion="edit">
-			<button type="submit" form="envio-form" class="btn btn-primary" disabled={!!form.pending}>
-				{form.pending ? 'Registrando...' : 'Registrar'}
-			</button>
-		</Can>
-	{/snippet}
 </Modal>

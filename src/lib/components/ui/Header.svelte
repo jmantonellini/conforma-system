@@ -46,7 +46,13 @@
 	</div>
 </header>
 
-<Modal bind:open={modalOpen} title="Sugerencias y errores" onClose={closeModal}>
+<Modal
+	bind:open={modalOpen}
+	titulo="Sugerencias y errores"
+	descripcion="Contanos qué mejorarías o qué falló. El mensaje es anónimo."
+	alCerrar={closeModal}
+	accion={{ etiqueta: 'Enviar', form: 'feedback-form', pendiente: !!form.pending }}
+>
 	<form
 		id="feedback-form"
 		{...form.enhance(async (form) => {
@@ -54,28 +60,18 @@
 				if (await form.submit()) {
 					closeModal();
 					form.element?.reset();
-					toast.success('Feedback enviado!');
+					toast.success('¡Gracias! Recibimos tu mensaje');
 				} else {
-					toast.error('Error al enviar el feedback');
+					toast.error('No se pudo enviar el mensaje');
 				}
-			} catch (error) {
-				console.log(error);
-				toast.error('Error al enviar el feedback');
+			} catch {
+				toast.error('No se pudo enviar el mensaje');
 			}
 		})}
 	>
-		<div class="py-4">
-			<p>Envía una sugerencia o reporta un error. <br />El mensaje es absolutamente anónimo.</p>
-		</div>
 		<FormFieldWrapper id="mensaje" label="Mensaje" required>
-			<textarea class="textarea w-full resize-none" rows="5" {...form.fields.mensaje.as('text')}>
-			</textarea>
+			<textarea id="mensaje" class="textarea" rows="5" {...form.fields.mensaje.as('text')}
+			></textarea>
 		</FormFieldWrapper>
 	</form>
-	{#snippet actions()}
-		<button class="btn" onclick={closeModal}>Cerrar</button>
-		<button type="submit" class="btn btn-primary" form="feedback-form">
-			{form.pending ? 'Enviando...' : 'Enviar'}
-		</button>
-	{/snippet}
 </Modal>

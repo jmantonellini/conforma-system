@@ -2,6 +2,7 @@
 	import { confirmarYEjecutar } from '$lib/stores/confirmacion.svelte';
 	import { Can, FormFieldWrapper, Modal, PageLayout, Table } from '$lib/components/ui';
 	import { Edit, Delete } from '$lib/components/ui/icons';
+	import { OPCIONES_COLOR, claseBadge } from '$lib/components/ui/colores';
 	import {
 		actualizarCategoriaProducto,
 		crearCategoriaProducto,
@@ -242,7 +243,10 @@
 							<td>{item.orden}</td><td class="font-medium">{item.nombre}</td><td
 								class="font-mono text-sm">{item.slug}</td
 							><td>{item.grupo}</td><td
-								><span class="badge badge-{item.color || 'ghost'}">{item.color || 'sin color'}</span
+								><span class={['badge badge-sm', claseBadge(item.color)]}
+									>{OPCIONES_COLOR.find((o) => o.valor === item.color)?.nombre ??
+										item.color ??
+										'Sin color'}</span
 								></td
 							><td>{item.es_final ? 'Sí' : 'No'}</td><td class="text-center"
 								><Can modulo="configuracion" accion="edit"
@@ -294,8 +298,9 @@
 
 <Modal
 	open={modalType !== null}
-	title={editingId ? 'Editar configuración' : 'Nueva configuración'}
-	onClose={cerrarModal}
+	titulo={editingId ? 'Editar configuración' : 'Nueva configuración'}
+	alCerrar={cerrarModal}
+	accion={{ etiqueta: 'Guardar', form: 'configuracion-form' }}
 >
 	<form
 		id="configuracion-form"
@@ -304,75 +309,69 @@
 			guardar();
 		}}
 	>
-		<div class="grid gap-4">
-			<FormFieldWrapper label="Nombre" id="nombre" required
-				><input class="input" bind:value={nombre} /></FormFieldWrapper
-			>
-			{#if esCategoriasModal}
-				<FormFieldWrapper label="Descripción" id="descripcion"
-					><textarea class="textarea" bind:value={descripcion}></textarea></FormFieldWrapper
+		<FormFieldWrapper label="Nombre" id="nombre" required>
+			<input id="nombre" class="input" bind:value={nombre} />
+		</FormFieldWrapper>
+		{#if esCategoriasModal}
+			<FormFieldWrapper label="Descripción" id="descripcion">
+				<textarea id="descripcion" class="textarea" rows="3" bind:value={descripcion}></textarea>
+			</FormFieldWrapper>
+		{:else}
+			<div class="grid gap-4 sm:grid-cols-2">
+				<FormFieldWrapper
+					label="Slug"
+					id="slug"
+					required
+					ayuda="Identificador interno, sin espacios."
 				>
-			{:else}
-				<FormFieldWrapper label="Slug" id="slug" required
-					><input class="input" bind:value={slug} /></FormFieldWrapper
-				>
-				<div class="grid gap-4 sm:grid-cols-2">
-					<FormFieldWrapper label="Grupo" id="grupo" required
-						><input class="input" bind:value={grupo} /></FormFieldWrapper
-					><FormFieldWrapper label="Orden" id="orden" required
-						><input class="input" type="number" min="0" bind:value={orden} /></FormFieldWrapper
-					>
-				</div>
-				<div class="grid gap-4 sm:grid-cols-2">
-					<FormFieldWrapper label="Color" id="color"
-						><input class="input" bind:value={color} /></FormFieldWrapper
-					><label class="label gap-2"
-						><input type="checkbox" class="checkbox" bind:checked={esFinal} /> Estado final</label
-					>
-				</div>
-			{/if}
-		</div>
+					<input id="slug" class="input font-mono" bind:value={slug} />
+				</FormFieldWrapper>
+				<FormFieldWrapper label="Grupo" id="grupo" required>
+					<input id="grupo" class="input" bind:value={grupo} />
+				</FormFieldWrapper>
+				<FormFieldWrapper label="Orden" id="orden" required>
+					<input id="orden" class="input" type="number" min="0" bind:value={orden} />
+				</FormFieldWrapper>
+				<FormFieldWrapper label="Color" id="color">
+					<select id="color" class="select" bind:value={color}>
+						{#each OPCIONES_COLOR as opcion (opcion.valor)}
+							<option value={opcion.valor}>{opcion.nombre}</option>
+						{/each}
+					</select>
+				</FormFieldWrapper>
+			</div>
+			<label class="label gap-2 text-sm text-base-content">
+				<input type="checkbox" class="checkbox checkbox-sm" bind:checked={esFinal} />
+				Estado final (cierra el flujo)
+			</label>
+		{/if}
 	</form>
-	{#snippet actions()}<button class="btn" onclick={cerrarModal}>Cancelar</button><Can
-			modulo="configuracion"
-			accion="edit"
-			><button class="btn btn-primary" type="submit" form="configuracion-form">Guardar</button></Can
-		>{/snippet}
 </Modal>
 
 <Modal
-	open={modalTransicionAbierto}
-	title="Nueva transición"
-	onClose={() => (modalTransicionAbierto = false)}
+	bind:open={modalTransicionAbierto}
+	ancho="sm"
+	titulo="Nueva transición"
+	accion={{
+		etiqueta: 'Guardar',
+		deshabilitada: !estadoOrigenId || !estadoDestinoId || estadoOrigenId === estadoDestinoId,
+		onclick: guardarTransicion
+	}}
 >
-	<div class="grid gap-4 py-2">
-		<FormFieldWrapper label="Desde" id="estado-origen" required>
-			<select class="select w-full" bind:value={estadoOrigenId}>
-				<option value="">Seleccionar estado</option>
-				{#each estadosSeleccionados as estado (estado.id)}
-					<option value={String(estado.id)}>{estado.nombre}</option>
-				{/each}
-			</select>
-		</FormFieldWrapper>
-		<FormFieldWrapper label="Hacia" id="estado-destino" required>
-			<select class="select w-full" bind:value={estadoDestinoId}>
-				<option value="">Seleccionar estado</option>
-				{#each estadosSeleccionados as estado (estado.id)}
-					<option value={String(estado.id)}>{estado.nombre}</option>
-				{/each}
-			</select>
-		</FormFieldWrapper>
-	</div>
-	{#snippet actions()}
-		<button class="btn" onclick={() => (modalTransicionAbierto = false)}>Cancelar</button>
-		<Can modulo="configuracion" accion="edit">
-			<button
-				class="btn btn-primary"
-				disabled={!estadoOrigenId || !estadoDestinoId || estadoOrigenId === estadoDestinoId}
-				onclick={guardarTransicion}
-			>
-				Guardar
-			</button>
-		</Can>
-	{/snippet}
+	<FormFieldWrapper label="Desde" id="estado-origen" required>
+		<select id="estado-origen" class="select" bind:value={estadoOrigenId}>
+			<option value="">Seleccionar estado</option>
+			{#each estadosSeleccionados as estado (estado.id)}
+				<option value={String(estado.id)}>{estado.nombre}</option>
+			{/each}
+		</select>
+	</FormFieldWrapper>
+	<FormFieldWrapper label="Hacia" id="estado-destino" required>
+		<select id="estado-destino" class="select" bind:value={estadoDestinoId}>
+			<option value="">Seleccionar estado</option>
+			{#each estadosSeleccionados as estado (estado.id)}
+				<option value={String(estado.id)}>{estado.nombre}</option>
+			{/each}
+		</select>
+	</FormFieldWrapper>
 </Modal>

@@ -6,6 +6,7 @@
 	import {
 		Can,
 		EncabezadoDetalle,
+		FormFieldWrapper,
 		Historial,
 		MenuDesplegable,
 		Modal,
@@ -276,22 +277,29 @@
 	</div>
 </PageLayout>
 
-<Modal open={rechazo !== null} title="Motivo del rechazo" onClose={() => (rechazo = null)}>
+<Modal
+	open={rechazo !== null}
+	titulo="Rechazar cotización"
+	descripcion="El motivo queda registrado en el historial."
+	alCerrar={() => (rechazo = null)}
+	accion={{
+		etiqueta: 'Rechazar cotización',
+		peligro: true,
+		pendiente: ocupado,
+		deshabilitada: !rechazo?.motivo.trim(),
+		onclick: confirmarRechazo
+	}}
+>
 	{#if rechazo}
-		<textarea
-			class="textarea w-full"
-			rows="3"
-			maxlength="5000"
-			bind:value={rechazo.motivo}
-			placeholder="Describí por qué se rechaza la cotización..."
-		></textarea>
+		<FormFieldWrapper id="motivo-rechazo" label="Motivo" required>
+			<textarea
+				id="motivo-rechazo"
+				class="textarea"
+				rows="3"
+				maxlength="5000"
+				bind:value={rechazo.motivo}
+				placeholder="Ej.: el cliente consiguió mejor precio"
+			></textarea>
+		</FormFieldWrapper>
 	{/if}
-	{#snippet actions()}
-		<button class="btn" onclick={() => (rechazo = null)}>Cancelar</button>
-		<button
-			class="btn btn-error"
-			disabled={ocupado || !rechazo?.motivo.trim()}
-			onclick={confirmarRechazo}>Rechazar cotización</button
-		>
-	{/snippet}
 </Modal>
