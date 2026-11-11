@@ -9,10 +9,10 @@
 	import { SvelteURLSearchParams } from 'svelte/reactivity';
 	import { formatearFecha } from '$lib/utils/fechas';
 	import { formatearDosDecimales } from '$lib/utils/precios';
-	import { puedeVerImportes } from '$lib/utils/permissions';
+	import { can } from '$lib/utils/permissions';
 	import { page } from '$app/state';
 
-	const puedeVerTotales = puedeVerImportes(page.data.user);
+	const puedeVerTotales = can(page.data.user, page.data.permisos, 'importes', 'view');
 
 	let { data }: PageProps = $props();
 

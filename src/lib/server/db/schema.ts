@@ -314,6 +314,7 @@ export const insumos = pgTable('insumos', {
 	unidad: text('unidad').notNull().default('unidad'),
 	costo_unitario: real('costo_unitario').notNull().default(0),
 	flete_porcentaje: real('flete_porcentaje').notNull().default(0),
+	imagen_key: text('imagen_key'),
 	activo: boolean('activo').default(true),
 	observaciones: text('observaciones'),
 	created_at: timestamp('created_at').defaultNow(),
@@ -739,6 +740,45 @@ export const movimientos_stock = pgTable(
 		index('idx_movimientos_stock_producto').on(table.producto_id),
 		index('idx_movimientos_stock_origen').on(table.ubicacion_origen_id),
 		index('idx_movimientos_stock_destino').on(table.ubicacion_destino_id)
+	]
+);
+
+export const movimientos_insumos = pgTable(
+	'movimientos_insumos',
+	{
+		id: serial('id').primaryKey(),
+		insumo_id: integer('insumo_id')
+			.references(() => insumos.id, { onDelete: 'restrict' })
+			.notNull(),
+		tipo: text('tipo', {
+			enum: ['ingreso', 'consumo', 'ajuste_entrada', 'ajuste_salida']
+		}).notNull(),
+		fuente: text('fuente', { enum: ['manual', 'receta'] })
+			.notNull()
+			.default('manual'),
+		cantidad: real('cantidad').notNull(),
+		orden_fabricacion_id: integer('orden_fabricacion_id').references(() => ordenes_fabricacion.id, {
+			onDelete: 'restrict'
+		}),
+		empleado_id: integer('empleado_id')
+			.references(() => empleados.id, { onDelete: 'restrict' })
+			.notNull(),
+		usuario_id: integer('usuario_id').references(() => usuarios.id, { onDelete: 'set null' }),
+		motivo: text('motivo').notNull(),
+		created_at: timestamp('created_at').defaultNow()
+	},
+	(table) => [
+		check('movimientos_insumos_cantidad_positiva', sql`${table.cantidad} > 0`),
+		check('movimientos_insumos_motivo_requerido', sql`length(trim(${table.motivo})) > 0`),
+		check(
+			'movimientos_insumos_fuente_receta_valida',
+			sql`${table.fuente} <> 'receta' OR (${table.tipo} = 'consumo' AND ${table.orden_fabricacion_id} IS NOT NULL)`
+		),
+		uniqueIndex('idx_movimientos_insumos_receta_unica')
+			.on(table.orden_fabricacion_id, table.insumo_id)
+			.where(sql`${table.fuente} = 'receta'`),
+		index('idx_movimientos_insumos_insumo_fecha').on(table.insumo_id, table.created_at),
+		index('idx_movimientos_insumos_orden').on(table.orden_fabricacion_id)
 	]
 );
 

@@ -155,12 +155,12 @@
 
 				{#snippet rowOrden(o: (typeof ordenesActivas)[number])}
 					<td>
-						<span class={`badge ${obtenerPrioridad(o.prioridad).clase}`}>
+						<span class={`badge badge-sm ${obtenerPrioridad(o.prioridad).clase}`}>
 							{obtenerPrioridad(o.prioridad).nombre}
 						</span>
 					</td>
 					<td>
-						<span class={`badge badge-${o.estado.color}`}>
+						<span class={`badge whitespace-nowrap badge-sm badge-${o.estado.color}`}>
 							{o.estado.nombre}
 						</span>
 					</td>

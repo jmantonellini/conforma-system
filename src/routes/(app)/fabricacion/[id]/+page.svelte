@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { page } from '$app/state';
 	import {
 		cambiarEstadoUnidad,
 		reanudarUnidad,
@@ -16,6 +17,10 @@
 	import { formatearFecha } from '$lib/utils/fechas.js';
 	import type { MaterialSnapshot } from '$lib/types/linea-comercial';
 	import { ESTADO_FABRICACION, PRIORIDAD_FABRICACION } from '$lib/types/dominio';
+	import { getEmpleados } from '$lib/remote/empleados.remote';
+	import { consumirRecetaOrden, getMovimientosInsumos } from '$lib/remote/insumos.remote';
+	import { can } from '$lib/utils/permissions';
+	import InsumosMovimientosTabla from '$lib/components/insumos/InsumosMovimientosTabla.svelte';
 
 	let { params } = $props();
 	const orden = $derived(await getOrdenFabricacion(Number(params.id)));
@@ -24,6 +29,17 @@
 	let isLoading = $state(false);
 	const insumosRequeridos = $derived((orden.insumos_requeridos ?? []) as MaterialSnapshot[]);
 	const insumosAdicionales = $derived((orden.insumos_adicionales ?? []) as MaterialSnapshot[]);
+	const puedeVerMovimientos = can(page.data.user, page.data.permisos, 'insumos', 'view');
+	const puedeEditarInsumos = can(page.data.user, page.data.permisos, 'insumos', 'edit');
+	const empleadosConsumo = $derived(puedeEditarInsumos ? await getEmpleados() : []);
+	const movimientosInsumos = $derived(
+		puedeVerMovimientos
+			? await getMovimientosInsumos({ orden_id: Number(params.id), limit: 100 })
+			: []
+	);
+	const recetaYaConsumida = $derived(
+		movimientosInsumos.some((movimiento) => movimiento.fuente === 'receta')
+	);
 
 	let modal = $state({
 		open: false,
@@ -34,6 +50,21 @@
 	});
 
 	let comentario = $state('');
+	let empleadoReceta = $state('');
+
+	async function consumirReceta() {
+		if (isLoading || !empleadoReceta) return;
+		isLoading = true;
+		try {
+			await consumirRecetaOrden({ orden_id: orden.id, empleado_id: Number(empleadoReceta) });
+			toast.success('Consumo de receta registrado');
+			await invalidateAll();
+		} catch (error) {
+			toast.error(error instanceof Error ? error.message : 'No se pudo consumir la receta');
+		} finally {
+			isLoading = false;
+		}
+	}
 
 	async function cambiarEstado(unidadId: number, estadoDestinoId: number, comentarioText?: string) {
 		if (isLoading) return;
@@ -288,6 +319,41 @@
 								{/each}
 							</ul>
 						{/if}
+						{#if puedeEditarInsumos}
+							<div
+								class="mt-5 flex flex-wrap items-end justify-between gap-3 border-t border-base-300 pt-4"
+							>
+								<div class="flex flex-wrap items-end gap-3">
+									<label class="form-control w-64">
+										<span class="label-text mb-2">Empleado responsable</span>
+										<select class="select select-sm" bind:value={empleadoReceta}>
+											<option value="">Seleccionar...</option>
+											{#each empleadosConsumo as empleado (empleado.id)}
+												<option value={String(empleado.id)}
+													>{empleado.nombre} {empleado.apellido}</option
+												>
+											{/each}
+										</select>
+									</label>
+									<button
+										class="btn btn-outline btn-sm"
+										onclick={consumirReceta}
+										disabled={isLoading ||
+											!empleadoReceta ||
+											recetaYaConsumida ||
+											!insumosRequeridos.length}
+									>
+										{recetaYaConsumida ? 'Receta consumida' : 'Consumir receta prevista'}
+									</button>
+									<a
+										class="btn btn-primary btn-sm"
+										href={resolve(`/insumos/movimientos?orden=${orden.id}`)}
+									>
+										Registrar consumo real
+									</a>
+								</div>
+							</div>
+						{/if}
 					</div>
 				</div>
 
@@ -382,6 +448,18 @@
 				/>
 			</div>
 		</div>
+
+		{#if puedeVerMovimientos}
+			<div class="card bg-base-100 shadow">
+				<div class="card-body">
+					<h3 class="card-title">Historial de consumo</h3>
+					<InsumosMovimientosTabla
+						movimientos={movimientosInsumos}
+						emptyMessage="Sin consumos registrados para esta orden"
+					/>
+				</div>
+			</div>
+		{/if}
 	</div>
 </PageLayout>
 

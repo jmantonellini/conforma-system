@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { onDestroy } from 'svelte';
 	import { goto } from '$app/navigation';
 	import { resolve } from '$app/paths';
 	import { Can, FormActions, FormErrors, FormFieldWrapper, PageLayout } from '$lib/components/ui';
@@ -12,6 +13,32 @@
 	import { toast } from '$lib/stores/toast.svelte';
 
 	const form = crearInsumo;
+	let imagen = $state<File | null>(null);
+	let imagenPreview = $state('');
+
+	function seleccionarImagen(event: Event) {
+		if (imagenPreview) URL.revokeObjectURL(imagenPreview);
+		imagen = (event.currentTarget as HTMLInputElement).files?.[0] ?? null;
+		imagenPreview = imagen ? URL.createObjectURL(imagen) : '';
+	}
+
+	async function subirImagen(insumoId: number) {
+		if (!imagen) return;
+		const datos = new FormData();
+		datos.set('imagen', imagen);
+		const response = await fetch(resolve(`/insumos/${insumoId}/imagen`), {
+			method: 'POST',
+			body: datos
+		});
+		if (!response.ok) {
+			const resultado: { error?: string } = await response.json();
+			throw new Error(resultado.error || 'No se pudo guardar la imagen');
+		}
+	}
+
+	onDestroy(() => {
+		if (imagenPreview) URL.revokeObjectURL(imagenPreview);
+	});
 </script>
 
 <PageLayout>
@@ -21,7 +48,20 @@
 			{...form.enhance(async (instance) => {
 				try {
 					if (await instance.submit()) {
-						toast.success('Insumo creado');
+						const insumoId = form.result?.insumo?.id;
+						if (imagen && insumoId) {
+							try {
+								await subirImagen(insumoId);
+								toast.success('Insumo creado');
+							} catch (error) {
+								toast.warning(
+									error instanceof Error
+										? `Insumo creado, pero no se pudo guardar la imagen: ${error.message}`
+										: 'Insumo creado, pero no se pudo guardar la imagen'
+								);
+							}
+						}
+						if (!imagen || !insumoId) toast.success('Insumo creado');
 						goto(resolve('/insumos'));
 					}
 				} catch {
@@ -38,6 +78,21 @@
 					</FormFieldWrapper>
 					<FormFieldWrapper label="Descripción" id="nombre" required>
 						<input class="input" {...form.fields.nombre.as('text')} />
+					</FormFieldWrapper>
+					<FormFieldWrapper label="Imagen (opcional)" id="imagen">
+						<input
+							class="file-input w-full"
+							type="file"
+							accept="image/jpeg,image/png,image/webp"
+							onchange={seleccionarImagen}
+						/>
+						{#if imagenPreview}
+							<img
+								class="mt-2 h-24 w-24 rounded border border-base-300 object-cover"
+								src={imagenPreview}
+								alt="Vista previa del insumo"
+							/>
+						{/if}
 					</FormFieldWrapper>
 					<FormFieldWrapper label="Tipo" id="tipo" required>
 						<select class="select" {...form.fields.tipo.as('select')}>

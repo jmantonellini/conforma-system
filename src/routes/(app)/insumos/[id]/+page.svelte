@@ -1,5 +1,6 @@
 <script lang="ts">
-	import { goto } from '$app/navigation';
+	import { onDestroy } from 'svelte';
+	import { goto, invalidateAll } from '$app/navigation';
 	import { resolve } from '$app/paths';
 	import { Can, FormActions, FormErrors, FormFieldWrapper, PageLayout } from '$lib/components/ui';
 	import {
@@ -14,6 +15,32 @@
 
 	let { data }: PageProps = $props();
 	let form = actualizarInsumo;
+	let imagen = $state<File | null>(null);
+	let imagenPreview = $state('');
+
+	function seleccionarImagen(event: Event) {
+		if (imagenPreview) URL.revokeObjectURL(imagenPreview);
+		imagen = (event.currentTarget as HTMLInputElement).files?.[0] ?? null;
+		imagenPreview = imagen ? URL.createObjectURL(imagen) : '';
+	}
+
+	async function subirImagen() {
+		if (!imagen) return;
+		const datos = new FormData();
+		datos.set('imagen', imagen);
+		const response = await fetch(resolve(`/insumos/${data.insumo.id}/imagen`), {
+			method: 'POST',
+			body: datos
+		});
+		if (!response.ok) {
+			const resultado: { error?: string } = await response.json();
+			throw new Error(resultado.error || 'No se pudo guardar la imagen');
+		}
+	}
+
+	onDestroy(() => {
+		if (imagenPreview) URL.revokeObjectURL(imagenPreview);
+	});
 </script>
 
 <PageLayout>
@@ -23,7 +50,16 @@
 			{...form.enhance(async (formInstance) => {
 				try {
 					if (await formInstance.submit()) {
-						toast.success('Insumo actualizado');
+						try {
+							await subirImagen();
+							toast.success('Insumo actualizado');
+						} catch (error) {
+							toast.warning(
+								error instanceof Error
+									? `Insumo actualizado, pero no se pudo guardar la imagen: ${error.message}`
+									: 'Insumo actualizado, pero no se pudo guardar la imagen'
+							);
+						}
 						goto(resolve('/insumos'));
 					}
 				} catch {
@@ -48,6 +84,40 @@
 							{...form.fields.nombre.as('text', data.insumo.nombre)}
 						/></FormFieldWrapper
 					>
+					<FormFieldWrapper label="Imagen" id="imagen">
+						<input
+							class="file-input w-full"
+							type="file"
+							accept="image/jpeg,image/png,image/webp"
+							onchange={seleccionarImagen}
+						/>
+						{#if imagenPreview || data.insumo.imagen_key}
+							<img
+								class="mt-2 h-24 w-24 rounded border border-base-300 object-cover"
+								src={imagenPreview || resolve(`/insumos/${data.insumo.id}/imagen`)}
+								alt="Imagen de {data.insumo.nombre}"
+							/>
+						{/if}
+						{#if data.insumo.imagen_key}
+							<button
+								class="btn self-start btn-ghost btn-xs"
+								type="button"
+								onclick={async () => {
+									const response = await fetch(resolve(`/insumos/${data.insumo.id}/imagen`), {
+										method: 'DELETE'
+									});
+									if (!response.ok) {
+										toast.error('No se pudo quitar la imagen');
+										return;
+									}
+									await invalidateAll();
+									toast.success('Imagen quitada');
+								}}
+							>
+								Quitar imagen
+							</button>
+						{/if}
+					</FormFieldWrapper>
 					<FormFieldWrapper label="Tipo" id="tipo"
 						><select
 							class="select"

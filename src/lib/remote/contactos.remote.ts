@@ -3,7 +3,7 @@ import { command, form, query } from '$app/server';
 import { and, asc, count, desc, eq, exists, ilike, or, sql, type SQL } from 'drizzle-orm';
 import { db } from '$lib/server/db';
 import { contactos, proveedores, pedidos, estados_pedido } from '$lib/server/db/schema';
-import { requirePermission } from '$lib/server/auth/permissions';
+import { requirePermission, tienePermiso } from '$lib/server/auth/permissions';
 import { consultarCuitARCA } from '$lib/server/services/arca-padron.service';
 import { listarContactosCliente } from '$lib/server/services/contactos.service';
 import { esCuitValido } from '$lib/utils/cuit';
@@ -534,6 +534,7 @@ export const actualizarProveedor = form(ProveedorUpdateSchema, async ({ id, ...d
 });
 
 export const obtenerContactoPorId = query(v.number(), async (id) => {
+	const user = await requirePermission('contactos', 'view');
 	const [contacto] = await db.select().from(contactos).where(eq(contactos.id, id)).limit(1);
 	if (!contacto) throw new Error('Contacto no encontrado');
 	const [proveedor] = await db
@@ -541,11 +542,18 @@ export const obtenerContactoPorId = query(v.number(), async (id) => {
 		.from(proveedores)
 		.where(eq(proveedores.contacto_id, id))
 		.limit(1);
-	return { ...contacto, proveedor: proveedor ?? null };
+	return {
+		...contacto,
+		saldo_disponible: (await tienePermiso(user, 'importes', 'view'))
+			? contacto.saldo_disponible
+			: null,
+		proveedor: proveedor ?? null
+	};
 });
 
-export const obtenerPedidosContacto = query(v.number(), async (contactoId) =>
-	db
+export const obtenerPedidosContacto = query(v.number(), async (contactoId) => {
+	const user = await requirePermission('contactos', 'view');
+	const pedidosContacto = await db
 		.select({
 			id: pedidos.id,
 			numero_pedido: pedidos.numero_pedido,
@@ -557,8 +565,10 @@ export const obtenerPedidosContacto = query(v.number(), async (contactoId) =>
 		.from(pedidos)
 		.leftJoin(estados_pedido, eq(pedidos.estado_id, estados_pedido.id))
 		.where(eq(pedidos.contacto_id, contactoId))
-		.orderBy(sql`${pedidos.fecha_pedido} DESC`)
-);
+		.orderBy(sql`${pedidos.fecha_pedido} DESC`);
+	if (await tienePermiso(user, 'importes', 'view')) return pedidosContacto;
+	return pedidosContacto.map((pedido) => ({ ...pedido, precio_total: null }));
+});
 
 export const obtenerProveedorPorId = query(v.number(), async (id) => {
 	const [proveedor] = await db.select().from(proveedores).where(eq(proveedores.id, id)).limit(1);

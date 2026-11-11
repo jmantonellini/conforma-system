@@ -13,10 +13,10 @@
 	import { CANALES_COTIZACION } from '$lib/utils/canales-cotizacion';
 	import { eliminarCotizacion } from '$lib/remote/cotizaciones.remote';
 	import { toast } from '$lib/stores/toast.svelte';
-	import { puedeVerImportes } from '$lib/utils/permissions';
+	import { can } from '$lib/utils/permissions';
 	import { page } from '$app/state';
 
-	const puedeVerTotales = puedeVerImportes(page.data.user);
+	const puedeVerTotales = can(page.data.user, page.data.permisos, 'importes', 'view');
 
 	let { data }: PageProps = $props();
 
@@ -103,7 +103,7 @@
 						{cot.precio_total != null ? '$' + formatearDosDecimales(cot.precio_total) : '-'}
 					</td>{/if}
 				<td>
-					<span class="badge badge-dash capitalize badge-{cot.estado_color}">
+					<span class="badge badge-sm badge-dash capitalize badge-{cot.estado_color}">
 						{cot.estado_nombre}
 					</span>
 				</td>

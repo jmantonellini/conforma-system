@@ -382,6 +382,7 @@ export const cotizarCotizacion = command(
 		lineas
 	}) => {
 		await requirePermission('cotizaciones', 'cotizar');
+		await requirePermission('importes', 'view');
 		const user = await getCurrentUser();
 		if (!user) throw new Error('No autorizado');
 		const [cotizacionExistente] = await db

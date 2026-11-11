@@ -18,9 +18,8 @@ import {
 	contactos
 } from '$lib/server/db/schema';
 import { and, aliasedTable, count, desc, eq, ilike, inArray, or, sql } from 'drizzle-orm';
-import { requirePermission } from '$lib/server/auth/permissions';
+import { requirePermission, tienePermiso } from '$lib/server/auth/permissions';
 import type { MaterialSnapshot } from '$lib/types/cotizacion-editor';
-import { puedeVerImportes } from '$lib/utils/permissions';
 
 const crearCondicionBusquedaCotizacion = ({
 	search,
@@ -97,10 +96,9 @@ export const getCotizaciones = query(
 			.leftJoin(contactos, eq(cotizaciones.contacto_id, contactos.id))
 			.where(where);
 
+		const veImportes = await tienePermiso(user, 'importes', 'view');
 		return {
-			data: puedeVerImportes(user)
-				? data
-				: data.map((cotizacion) => ({ ...cotizacion, precio_total: null })),
+			data: veImportes ? data : data.map((cotizacion) => ({ ...cotizacion, precio_total: null })),
 			total: totalResult?.count || 0,
 			totalPages: Math.ceil((totalResult?.count || 0) / limit),
 			currentPage: page
@@ -109,7 +107,8 @@ export const getCotizaciones = query(
 );
 
 export const getCotizacionById = query(v.number(), async (id) => {
-	await requirePermission('cotizaciones', 'view');
+	const user = await requirePermission('cotizaciones', 'view');
+	const veImportes = await tienePermiso(user, 'importes', 'view');
 	const [cotizacion] = await db
 		.select({
 			id: cotizaciones.id,
@@ -242,12 +241,17 @@ export const getCotizacionById = query(v.number(), async (id) => {
 
 	const lineas = lineasRaw.map((linea) => ({
 		...linea,
-		insumos_snapshot: linea.insumos_snapshot as MaterialSnapshot[] | null
+		precio_unitario: veImportes ? linea.precio_unitario : null,
+		precio_lista_unitario: veImportes ? linea.precio_lista_unitario : null,
+		costo_materiales: veImportes ? linea.costo_materiales : null,
+		insumos_snapshot: veImportes ? (linea.insumos_snapshot as MaterialSnapshot[] | null) : null
 	}));
 
 	return {
 		cotizacion: {
 			...cotizacion,
+			precio_total: veImportes ? cotizacion.precio_total : null,
+			descuento_global_porcentaje: veImportes ? cotizacion.descuento_global_porcentaje : null,
 			transiciones,
 			navegacion: {
 				pedido_id: cotizacion.pedido_id,

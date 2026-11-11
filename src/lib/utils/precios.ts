@@ -13,6 +13,22 @@ export function parsearNumeroDecimal(valor: string): number | null {
 	return Number.isFinite(numero) ? numero : null;
 }
 
+export function normalizarPrecioPendiente(
+	valor: string | number | null | undefined,
+	minimo = 0
+): number {
+	if (valor === null || valor === undefined || valor === '') {
+		return redondearPrecio(Math.max(minimo, 0));
+	}
+
+	const numero = typeof valor === 'number' ? valor : parsearNumeroDecimal(String(valor));
+	if (numero === null || !Number.isFinite(numero)) {
+		return redondearPrecio(Math.max(minimo, 0));
+	}
+
+	return redondearPrecio(Math.max(numero, Math.max(minimo, 0)));
+}
+
 const formatoDosDecimales = new Intl.NumberFormat('es-AR', {
 	minimumFractionDigits: 2,
 	maximumFractionDigits: 2

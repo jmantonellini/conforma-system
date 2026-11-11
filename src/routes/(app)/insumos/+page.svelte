@@ -58,6 +58,9 @@
 		currentPage = 1;
 		handleSearchChange();
 	}
+
+	const formatearCantidad = (cantidad: number) =>
+		new Intl.NumberFormat('es-AR', { maximumFractionDigits: 3 }).format(cantidad);
 </script>
 
 <PageLayout>
@@ -102,6 +105,9 @@
 			</select>
 		</div>
 		<div class="flex gap-3">
+			<Can modulo="insumos" accion="edit">
+				<a class="btn btn-outline btn-sm" href={resolve('/insumos/movimientos')}>Movimientos</a>
+			</Can>
 			<ExcelMenu
 				importHref={resolve('/insumos/importar')}
 				exportHref={resolve('/insumos/exportar')}
@@ -119,7 +125,9 @@
 			{#snippet header(onSort: ((key: string) => void) | undefined)}
 				<th><button class="link" onclick={() => onSort?.('codigo')}>Código</button></th><th
 					><button class="link" onclick={() => onSort?.('nombre')}>Descripción</button></th
-				><th>Tipo</th><th>Categoría</th><th>Unidad</th><th class="text-right"
+				><th>Imagen</th><th>Tipo</th><th>Categoría</th><th>Unidad</th><th class="text-right"
+					>Existencia</th
+				><th class="text-right"
 					><button class="link" onclick={() => onSort?.('costo_unitario')}>Costo vigente</button
 					></th
 				><th>Acciones</th>
@@ -127,8 +135,20 @@
 			{#snippet row(insumo: (typeof data.insumos.data)[number])}
 				<td class="font-mono text-sm"><Highlight text={insumo.codigo} query={search} /></td>
 				<td class="font-medium"><Highlight text={insumo.nombre} query={search} /></td>
+				<td>
+					{#if insumo.imagen_key}
+						<img
+							class="h-10 w-10 rounded border border-base-300 object-cover"
+							src={resolve(`/insumos/${insumo.id}/imagen`)}
+							alt="Imagen de {insumo.nombre}"
+							loading="lazy"
+						/>
+					{:else}
+						<span class="text-base-content/40">-</span>
+					{/if}
+				</td>
 				<td
-					><span class="badge badge-ghost"
+					><span class="badge badge-sm whitespace-nowrap badge-ghost"
 						><Highlight
 							text={typeof insumo.tipo === 'object' ? insumo.tipo?.nombre : insumo.tipo}
 							query={search}
@@ -137,6 +157,7 @@
 				>
 				<td><Highlight text={insumo.categoria?.nombre ?? 'Sin categoría'} query={search} /></td>
 				<td>{insumo.unidad}</td>
+				<td class="text-right font-semibold">{formatearCantidad(insumo.stock)}</td>
 				<td class="text-right">${formatearDosDecimales(insumo.costo_unitario)}</td>
 				<td>
 					<div class="flex justify-center gap-2">

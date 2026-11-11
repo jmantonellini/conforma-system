@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { goto, invalidateAll } from '$app/navigation';
 	import { resolve } from '$app/paths';
+	import { page } from '$app/state';
 	import {
 		Can,
 		FormFieldWrapper,
@@ -22,10 +23,12 @@
 	} from '$lib/remote/cotizaciones.remote';
 	import { formatearFecha, formatearFechaHora } from '$lib/utils/fechas';
 	import { Paths } from '$lib/types';
+	import { can } from '$lib/utils/permissions';
 	import type { PageProps } from './$types';
 
 	let { data }: PageProps = $props();
 	let cotizacion = $derived(data.cotizacion);
+	const veImportes = can(page.data.user, page.data.permisos, 'importes', 'view');
 	let empleadoSeleccionado = $derived(
 		cotizacion.asignado?.id ? String(cotizacion.asignado.id) : ''
 	);
@@ -180,39 +183,41 @@
 						</button>
 					</Can>
 				{/if}
-				<button
-					type="button"
-					class="btn btn-outline btn-sm"
-					popovertarget="cotizacion-pdf-menu"
-					style="anchor-name: --cotizacion-pdf-menu"
-				>
-					<Document /> Descargar PDF
-				</button>
-				<ul
-					id="cotizacion-pdf-menu"
-					popover="auto"
-					style="position-anchor: --cotizacion-pdf-menu"
-					class="menu dropdown z-10 mt-2 w-64 rounded-box border border-base-300 bg-base-100 p-2 shadow"
-				>
-					<li>
-						<a
-							href={resolve(`/cotizaciones/${cotizacion.id}/pdf?moneda=USD`)}
-							target="_blank"
-							rel="noreferrer"
-						>
-							Dólares (USD)
-						</a>
-					</li>
-					<li>
-						<a
-							href={resolve(`/cotizaciones/${cotizacion.id}/pdf?moneda=ARS`)}
-							target="_blank"
-							rel="noreferrer"
-						>
-							Pesos (ARS)
-						</a>
-					</li>
-				</ul>
+				{#if veImportes}
+					<button
+						type="button"
+						class="btn btn-outline btn-sm"
+						popovertarget="cotizacion-pdf-menu"
+						style="anchor-name: --cotizacion-pdf-menu"
+					>
+						<Document /> Descargar PDF
+					</button>
+					<ul
+						id="cotizacion-pdf-menu"
+						popover="auto"
+						style="position-anchor: --cotizacion-pdf-menu"
+						class="menu dropdown z-10 mt-2 w-64 rounded-box border border-base-300 bg-base-100 p-2 shadow"
+					>
+						<li>
+							<a
+								href={resolve(`/cotizaciones/${cotizacion.id}/pdf?moneda=USD`)}
+								target="_blank"
+								rel="noreferrer"
+							>
+								Dólares (USD)
+							</a>
+						</li>
+						<li>
+							<a
+								href={resolve(`/cotizaciones/${cotizacion.id}/pdf?moneda=ARS`)}
+								target="_blank"
+								rel="noreferrer"
+							>
+								Pesos (ARS)
+							</a>
+						</li>
+					</ul>
+				{/if}
 				<Can modulo="cotizaciones" accion="delete">
 					<button class="btn btn-outline btn-error btn-sm" onclick={() => (showEliminar = true)}>
 						Eliminar
@@ -303,23 +308,30 @@
 			</div>
 		</fieldset>
 
-		<Can modulo="cotizaciones" accion="cotizar">
-			<CotizacionLineasEditor
-				cotizacionId={cotizacion.id}
-				bloqueada={!!cotizacion.pedido_id}
-				validezInicial={cotizacion.validez_dias ?? 15}
-				precioTotalInicial={cotizacion.precio_total}
-				descuentoGlobalInicial={cotizacion.descuento_global_porcentaje}
-				incluirIvaInicial={cotizacion.incluir_iva}
-				condicionesPagoInicial={cotizacion.condiciones_pago}
-				lineasIniciales={data.lineas}
-				productos={data.productos}
-				insumos={data.insumos}
-				tiposInsumo={data.tiposInsumo}
-				categoriasInsumo={data.categoriasInsumo}
-				unidadesInsumo={data.unidadesInsumo}
-			/>
-		</Can>
+		{#if veImportes}
+			<Can modulo="cotizaciones" accion="cotizar">
+				<CotizacionLineasEditor
+					cotizacionId={cotizacion.id}
+					bloqueada={!!cotizacion.pedido_id}
+					validezInicial={cotizacion.validez_dias ?? 15}
+					precioTotalInicial={cotizacion.precio_total}
+					descuentoGlobalInicial={cotizacion.descuento_global_porcentaje ?? 0}
+					incluirIvaInicial={cotizacion.incluir_iva}
+					condicionesPagoInicial={cotizacion.condiciones_pago}
+					lineasIniciales={data.lineas.map((linea) => ({
+						...linea,
+						precio_unitario: linea.precio_unitario ?? 0,
+						precio_lista_unitario: linea.precio_lista_unitario ?? 0,
+						costo_materiales: linea.costo_materiales ?? 0
+					}))}
+					productos={data.productos}
+					insumos={data.insumos}
+					tiposInsumo={data.tiposInsumo}
+					categoriasInsumo={data.categoriasInsumo}
+					unidadesInsumo={data.unidadesInsumo}
+				/>
+			</Can>
+		{/if}
 
 		<ArchivosAdjuntos tipo="cotizacion" entidadId={cotizacion.id} adjuntos={data.adjuntos} />
 

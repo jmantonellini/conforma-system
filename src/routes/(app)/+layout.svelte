@@ -33,7 +33,7 @@
 		...(can(data.user, data.permisos, Modulos.FABRICACION)
 			? [{ href: Paths.FABRICACION, label: 'Fabricación', icon: Fabricacion }]
 			: []),
-		...(can(data.user, data.permisos, 'clientes')
+		...(can(data.user, data.permisos, 'contactos')
 			? [{ href: Paths.CONTACTOS, label: 'Contactos', icon: Users }]
 			: []),
 		...(can(data.user, data.permisos, Modulos.PRODUCTOS)

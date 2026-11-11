@@ -12,9 +12,13 @@ import {
 	getUnidadesInsumo
 } from '$lib/remote/insumos.remote';
 import { getEmpleados } from '$lib/remote/empleados.remote';
+import { can } from '$lib/utils/permissions';
 import type { PageServerLoad } from './$types';
 
-export const load: PageServerLoad = async ({ params }) => {
+export const load: PageServerLoad = async ({ params, parent }) => {
+	const { user, permisos } = await parent();
+	const puedeEditarCotizacion =
+		can(user, permisos, 'cotizaciones', 'cotizar') && can(user, permisos, 'importes', 'view');
 	const id = Number(params.id);
 	if (!Number.isSafeInteger(id) || id < 1) error(404, 'Cotización no encontrada');
 	const { cotizacion, lineas, adjuntos } = await getCotizacionById(id);
@@ -23,13 +27,15 @@ export const load: PageServerLoad = async ({ params }) => {
 		getNotasCotizacion(id),
 		getEmpleados()
 	]);
-	const [productos, insumos, tiposInsumo, categoriasInsumo, unidadesInsumo] = await Promise.all([
-		getProductos({ limit: 100 }),
-		getInsumos({ limit: 100 }),
-		getTiposInsumo(),
-		getCategoriasInsumo(),
-		getUnidadesInsumo()
-	]);
+	const catalogos = puedeEditarCotizacion
+		? await Promise.all([
+				getProductos({ limit: 100 }),
+				getInsumos({ limit: 100 }),
+				getTiposInsumo(),
+				getCategoriasInsumo(),
+				getUnidadesInsumo()
+			])
+		: null;
 	return {
 		cotizacion,
 		lineas,
@@ -37,10 +43,10 @@ export const load: PageServerLoad = async ({ params }) => {
 		historial,
 		notas,
 		empleados,
-		productos: productos.data,
-		insumos: insumos.data,
-		tiposInsumo,
-		categoriasInsumo,
-		unidadesInsumo
+		productos: catalogos?.[0].data ?? [],
+		insumos: catalogos?.[1].data ?? [],
+		tiposInsumo: catalogos?.[2] ?? [],
+		categoriasInsumo: catalogos?.[3] ?? [],
+		unidadesInsumo: catalogos?.[4] ?? []
 	};
 };

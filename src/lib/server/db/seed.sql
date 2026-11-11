@@ -37,17 +37,23 @@ WHERE NOT EXISTS (
 -- PERMISOS
 -- ============================================================
 
+DELETE FROM roles_permisos rp
+USING permisos p
+WHERE rp.permiso_id = p.id AND p.modulo = 'clientes';
+
+DELETE FROM permisos WHERE modulo = 'clientes';
+
 INSERT INTO permisos (accion, modulo)
 SELECT accion, modulo
 FROM (VALUES
-('view','clientes'), ('create','clientes'), ('edit','clientes'), ('delete','clientes'),
 ('view','contactos'), ('create','contactos'), ('edit','contactos'), ('delete','contactos'),
 ('view','productos'), ('create','productos'), ('edit','productos'), ('delete','productos'),
 ('view','pedidos'), ('create','pedidos'), ('edit','pedidos'), ('delete','pedidos'),
 ('view','taller'), ('edit','taller'), ('delete','taller'),
 ('view','usuarios'), ('create','usuarios'), ('edit','usuarios'), ('delete','usuarios'),
 ('view','configuracion'), ('edit','configuracion'),
-('view','envios'), ('create','envios'), ('edit','envios'), ('delete','envios')
+('view','envios'), ('create','envios'), ('edit','envios'), ('delete','envios'),
+('view','importes')
 ) AS datos(accion, modulo)
 WHERE NOT EXISTS (
  SELECT 1 FROM permisos p WHERE p.modulo = datos.modulo AND p.accion = datos.accion
@@ -66,21 +72,21 @@ ON CONFLICT DO NOTHING;
 INSERT INTO roles_permisos (rol_id, permiso_id)
 SELECT r.id, p.id FROM roles r CROSS JOIN permisos p
 WHERE r.nombre = 'ventas'
-  AND ((p.modulo IN ('clientes','contactos','productos','pedidos','cotizaciones','envios') AND p.accion IN ('view','create','edit','delete'))
+	AND ((p.modulo IN ('contactos','productos','pedidos','cotizaciones','envios') AND p.accion IN ('view','create','edit','delete'))
     OR (p.modulo IN ('taller','stock') AND p.accion IN ('view','edit')))
 ON CONFLICT DO NOTHING;
 
 INSERT INTO roles_permisos (rol_id, permiso_id)
 SELECT r.id, p.id FROM roles r CROSS JOIN permisos p
 WHERE r.nombre = 'tecnico'
-  AND ((p.modulo IN ('clientes','contactos','productos','pedidos','taller','stock') AND p.accion IN ('view','create','edit','delete'))
+	AND ((p.modulo IN ('contactos','productos','pedidos','taller','stock') AND p.accion IN ('view','create','edit','delete'))
     OR p.modulo = 'fabricacion')
 ON CONFLICT DO NOTHING;
 
 INSERT INTO roles_permisos (rol_id, permiso_id)
 SELECT r.id, p.id FROM roles r CROSS JOIN permisos p
 WHERE r.nombre = 'jefe_planta'
-  AND ((p.modulo IN ('clientes','productos','pedidos','taller','stock') AND p.accion IN ('view','create','edit','delete'))
+	AND ((p.modulo IN ('productos','pedidos','taller','stock') AND p.accion IN ('view','create','edit','delete'))
     OR (p.modulo = 'contactos' AND p.accion = 'view'))
 ON CONFLICT DO NOTHING;
 
@@ -89,7 +95,7 @@ SELECT oficina.id, permiso.id
 FROM roles oficina
 CROSS JOIN permisos permiso
 WHERE oficina.nombre = 'oficina_admin'
-  AND permiso.modulo <> 'configuracion'
+	AND permiso.modulo NOT IN ('configuracion', 'clientes', 'importes')
 ON CONFLICT DO NOTHING;
 
 INSERT INTO roles_permisos (rol_id, permiso_id)

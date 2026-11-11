@@ -96,7 +96,7 @@
 				<td class="font-mono text-sm"><Highlight text={`OF-${orden.id}`} query={search} /></td>
 				<td>
 					<span
-						class={`badge badge-soft whitespace-nowrap capitalize badge-${orden.estado?.color}`}
+						class={`badge badge-sm badge-soft whitespace-nowrap capitalize badge-${orden.estado?.color}`}
 					>
 						{orden.estado?.nombre}
 					</span>
@@ -120,11 +120,11 @@
 				</td>
 				<td>
 					{#if orden.prioridad === 2}
-						<span class="badge badge-error">Crítica</span>
+						<span class="badge badge-sm badge-error">Crítica</span>
 					{:else if orden.prioridad === 1}
-						<span class="badge badge-warning">Urgente</span>
+						<span class="badge badge-sm badge-warning">Urgente</span>
 					{:else}
-						<span class="badge badge-ghost">Normal</span>
+						<span class="badge badge-sm badge-ghost">Normal</span>
 					{/if}
 				</td>
 				<td class="flex flex-nowrap items-center gap-1">

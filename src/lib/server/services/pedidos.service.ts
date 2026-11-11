@@ -178,8 +178,8 @@ export async function obtenerPedidoDetalle(id: number) {
 			monto_comision_distribuidor: pedidos.monto_comision_distribuidor,
 			cliente: {
 				id: contactos.id,
-				nombre: contactos.razon_social,
-				apellido: sql<string | null>`NULL`,
+				nombre: contactos.nombre,
+				apellido: contactos.apellido,
 				razon_social: contactos.razon_social
 			},
 			fecha: pedidos.fecha_pedido,

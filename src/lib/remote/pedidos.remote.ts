@@ -3,9 +3,9 @@ import { command, form, query, requested } from '$app/server';
 import { db } from '$lib/server/db';
 import { adjuntos, pedidos, lineas_pedido, estados_pedido } from '$lib/server/db/schema';
 import { eq } from 'drizzle-orm';
-import { requirePermission } from '$lib/server/auth/permissions';
+import { requirePermission, tienePermiso } from '$lib/server/auth/permissions';
 import { eliminarObjeto } from '$lib/server/services/object-storage.service';
-import { puedeVerImportes } from '$lib/utils/permissions';
+import { normalizarPrecioPendiente } from '$lib/utils/precios';
 import { getInsumos } from '$lib/remote/insumos.remote';
 import {
 	PedidoSchema,
@@ -46,8 +46,10 @@ const normalizarPedidoPayload = <T extends Record<string, unknown>>(data: T) => 
 					Number((linea as { stock_ubicacion_id?: string | number }).stock_ubicacion_id) ||
 					undefined,
 				cantidad: Number((linea as { cantidad?: number }).cantidad ?? 0),
-				precio: Number((linea as { precio?: number }).precio ?? 0),
-				precio_lista: Number((linea as { precio_lista?: number }).precio_lista ?? 0),
+				precio: normalizarPrecioPendiente((linea as { precio?: string | number | null }).precio),
+				precio_lista: normalizarPrecioPendiente(
+					(linea as { precio_lista?: string | number | null }).precio_lista
+				),
 				costo_materiales: Number((linea as { costo_materiales?: number }).costo_materiales ?? 0),
 				nuevo_insumo: (linea as { nuevo_insumo?: unknown }).nuevo_insumo,
 				insumos_asociados: (linea as { insumos_asociados?: unknown }).insumos_asociados ?? [],
@@ -72,7 +74,7 @@ export const getPedidos = query(
 	async ({ search, estadoId, page = 1, limit = 50 }) => {
 		const user = await requirePermission('pedidos', 'view');
 		const resultado = await getPedidosListado({ search, estadoId, page, limit });
-		return puedeVerImportes(user)
+		return (await tienePermiso(user, 'importes', 'view'))
 			? resultado
 			: {
 					...resultado,
@@ -82,7 +84,35 @@ export const getPedidos = query(
 );
 
 export const getPedidoById = query(v.number(), async (id) => {
-	return obtenerPedidoDetalle(id);
+	const user = await requirePermission('pedidos', 'view');
+	const detalle = await obtenerPedidoDetalle(id);
+	if (await tienePermiso(user, 'importes', 'view')) return detalle;
+
+	return {
+		...detalle,
+		pedido: {
+			...detalle.pedido,
+			anticipo: null,
+			total: null,
+			monto_credito_distribuidor: null,
+			porcentaje_comision_distribuidor: null,
+			monto_comision_distribuidor: null
+		},
+		lineas: detalle.lineas.map((linea) => ({
+			...linea,
+			precio_unitario: null,
+			precio_lista_unitario: null,
+			margen_porcentaje: null,
+			costo_materiales: null,
+			subtotal: null
+		})),
+		insumosAdicionales: detalle.insumosAdicionales.map((insumo) => ({
+			...insumo,
+			costo_unitario: null,
+			precio_lista_unitario: null,
+			precio_unitario: null
+		}))
+	};
 });
 
 export const getEstadosPedido = query(async () => {
@@ -100,7 +130,12 @@ export const getLineasPedidoSinOrden = query(
 );
 
 export const getHistorialPedido = query(v.number(), async (pedidoId) => {
-	return getHistorialPedidoServicio(pedidoId);
+	const user = await requirePermission('pedidos', 'view');
+	const historial = await getHistorialPedidoServicio(pedidoId);
+	if (await tienePermiso(user, 'importes', 'view')) return historial;
+	return historial.map((evento) =>
+		evento.tipo === 'pago' ? { ...evento, detalle: null } : evento
+	);
 });
 
 export const getPedidosActivos = query(
@@ -108,7 +143,10 @@ export const getPedidosActivos = query(
 		semana: v.optional(v.boolean())
 	}),
 	async ({ semana }) => {
-		return getPedidosActivosServicio({ semana });
+		const user = await requirePermission('pedidos', 'view');
+		const pedidos = await getPedidosActivosServicio({ semana });
+		if (await tienePermiso(user, 'importes', 'view')) return pedidos;
+		return pedidos.map((pedido) => ({ ...pedido, total: null, saldo_pendiente: null }));
 	}
 );
 

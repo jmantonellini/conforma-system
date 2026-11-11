@@ -4,6 +4,30 @@ import { permisos, roles, roles_permisos, sesiones, usuarios } from '$lib/server
 import { and, eq } from 'drizzle-orm';
 import { ROLES } from '$lib/utils/permissions';
 
+export async function tienePermiso(
+	user: { rol?: { id?: number | null; nombre?: string | null } | null },
+	modulo: string,
+	accion = 'view'
+) {
+	if (user.rol?.nombre === ROLES.ADMIN) return true;
+	if (!user.rol?.id) return false;
+
+	const [permiso] = await db
+		.select({ id: permisos.id })
+		.from(roles_permisos)
+		.innerJoin(permisos, eq(roles_permisos.permiso_id, permisos.id))
+		.where(
+			and(
+				eq(roles_permisos.rol_id, user.rol.id),
+				eq(permisos.modulo, modulo),
+				eq(permisos.accion, accion)
+			)
+		)
+		.limit(1);
+
+	return Boolean(permiso);
+}
+
 export async function requirePermission(modulo: string, accion = 'view') {
 	const event = getRequestEvent();
 	const sessionId = event.cookies.get('session');
@@ -28,21 +52,8 @@ export async function requirePermission(modulo: string, accion = 'view') {
 		.limit(1);
 
 	if (!user) throw new Error('No autorizado');
-	if (user.rol?.nombre === ROLES.ADMIN) return user;
-
-	const [permiso] = await db
-		.select({ id: permisos.id })
-		.from(roles_permisos)
-		.innerJoin(permisos, eq(roles_permisos.permiso_id, permisos.id))
-		.where(
-			and(
-				eq(roles_permisos.rol_id, user.rol?.id ?? 0),
-				eq(permisos.modulo, modulo),
-				eq(permisos.accion, accion)
-			)
-		)
-		.limit(1);
-
-	if (!permiso) throw new Error('No tenés permiso para realizar esta acción');
+	if (!(await tienePermiso(user, modulo, accion))) {
+		throw new Error('No tenés permiso para realizar esta acción');
+	}
 	return user;
 }

@@ -21,6 +21,7 @@
 	import { ESTADO_RESERVA, TIPO_LOG_PEDIDO } from '$lib/types/dominio';
 	import { formatearFecha } from '$lib/utils/fechas';
 	import { formatearDosDecimales } from '$lib/utils/precios';
+	import { can } from '$lib/utils/permissions';
 	import PedidoEnvios from './PedidoEnvios.svelte';
 	import PedidoPagos from './PedidoPagos.svelte';
 	import ArchivosAdjuntos from '$lib/components/ArchivosAdjuntos.svelte';
@@ -28,6 +29,7 @@
 	let { pedido, lineas, insumosAdicionales, adjuntos } = $derived(
 		await getPedidoById(parseInt(page.params.id ?? ''))
 	);
+	const veImportes = can(page.data.user, page.data.permisos, 'importes', 'view');
 
 	function irAFabricacion(lineaId: number) {
 		goto(resolve(`/fabricacion/crear?linea=${lineaId}`));
@@ -121,12 +123,12 @@
 				<div class="card-body">
 					<div class="grid grid-cols-4 gap-4">
 						<FormFieldWrapper label="Cliente" id="cliente">
-							<p class="font-semibold">
-								{pedido.cliente?.nombre + ' ' + (pedido.cliente?.apellido || '') || '-'}
-								{#if pedido.cliente?.razon_social}
-									({pedido.cliente?.razon_social})
-								{/if}
-							</p>
+							<p>{pedido.cliente?.razon_social}</p>
+							{#if pedido.cliente?.apellido}
+								<p class="font-semibold">
+									{pedido.cliente?.nombre + ' ' + (pedido.cliente?.apellido || '') || '-'}
+								</p>
+							{/if}
 						</FormFieldWrapper>
 						<FormFieldWrapper label="Fecha" id="fecha">
 							<p>{formatearFecha(new Date(pedido.fecha))}</p>
@@ -183,10 +185,12 @@
 							<th>Código</th>
 							<th>Producto</th>
 							<th>Cantidad</th>
-							<th>Costo</th>
-							<th>Precio lista</th>
-							<th>Precio neto</th>
-							<th>Subtotal</th>
+							{#if veImportes}
+								<th>Costo</th>
+								<th>Precio lista</th>
+								<th>Precio neto</th>
+								<th>Subtotal</th>
+							{/if}
 							<th>Fabricación</th>
 							<th class="text-center">Acciones</th>
 						{/snippet}
@@ -205,10 +209,12 @@
 								{linea.producto_nombre || linea.descripcion_personalizada || '-'}
 							</td>
 							<td class="text-center">{linea.cantidad}</td>
-							<td class="text-right">${formatearDosDecimales(linea.costo_materiales)}</td>
-							<td class="text-right">${formatearDosDecimales(linea.precio_lista_unitario)}</td>
-							<td class="text-right">${formatearDosDecimales(linea.precio_unitario)}</td>
-							<td class="text-right font-semibold">${formatearDosDecimales(linea.subtotal)}</td>
+							{#if veImportes}
+								<td class="text-right">${formatearDosDecimales(linea.costo_materiales)}</td>
+								<td class="text-right">${formatearDosDecimales(linea.precio_lista_unitario)}</td>
+								<td class="text-right">${formatearDosDecimales(linea.precio_unitario)}</td>
+								<td class="text-right font-semibold">${formatearDosDecimales(linea.subtotal)}</td>
+							{/if}
 							<td>
 								{#if linea.reserva_stock}
 									<span class="badge badge-sm badge-info">
@@ -253,10 +259,12 @@
 							</td>
 						{/snippet}
 						{#snippet footer()}
-							<td colspan="9" class="text-right font-bold">Total:</td>
-							<td class="text-right text-lg font-bold text-primary">
-								${formatearDosDecimales(pedido.total)}
-							</td>
+							{#if veImportes}
+								<td colspan="9" class="text-right font-bold">Total:</td>
+								<td class="text-right text-lg font-bold text-primary">
+									${formatearDosDecimales(pedido.total)}
+								</td>
+							{/if}
 						{/snippet}
 						<Table data={await lineas} {header} {row} {footer} />
 					</div>
@@ -275,8 +283,10 @@
 									<tr>
 										<th>Código</th><th>Insumo</th><th>Unidad</th><th class="text-right">Cantidad</th
 										>
-										<th class="text-right">Costo</th><th class="text-right">Precio lista</th>
-										<th class="text-right">Precio neto</th>
+										{#if veImportes}
+											<th class="text-right">Costo</th><th class="text-right">Precio lista</th>
+											<th class="text-right">Precio neto</th>
+										{/if}
 									</tr>
 								</thead>
 								<tbody>
@@ -286,11 +296,13 @@
 											<td>{insumo.nombre}</td>
 											<td>{insumo.unidad}</td>
 											<td class="text-right">{insumo.cantidad}</td>
-											<td class="text-right">${formatearDosDecimales(insumo.costo_unitario)}</td>
-											<td class="text-right"
-												>${formatearDosDecimales(insumo.precio_lista_unitario)}</td
-											>
-											<td class="text-right">${formatearDosDecimales(insumo.precio_unitario)}</td>
+											{#if veImportes}
+												<td class="text-right">${formatearDosDecimales(insumo.costo_unitario)}</td>
+												<td class="text-right"
+													>${formatearDosDecimales(insumo.precio_lista_unitario)}</td
+												>
+												<td class="text-right">${formatearDosDecimales(insumo.precio_unitario)}</td>
+											{/if}
 										</tr>
 									{/each}
 								</tbody>
@@ -301,7 +313,9 @@
 			{/if}
 
 			<div class="grid grid-cols-2 gap-4">
-				<PedidoPagos pedidoId={pedido.id} />
+				{#if veImportes}
+					<PedidoPagos pedidoId={pedido.id} />
+				{/if}
 				<PedidoEnvios pedidoId={pedido.id} />
 			</div>
 

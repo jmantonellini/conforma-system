@@ -1,8 +1,14 @@
 import { generarPDFCotizacion } from '$lib/server/pdf/cotizacion';
 import { CotizacionBNAError } from '$lib/server/services/tipo-cambio-bna.service';
+import { requirePermission, tienePermiso } from '$lib/server/auth/permissions';
 import { error } from '@sveltejs/kit';
 
 export async function GET({ params, url }) {
+	const user = await requirePermission('cotizaciones', 'view');
+	if (!(await tienePermiso(user, 'importes', 'view'))) {
+		throw error(403, 'No tenés permiso para ver importes');
+	}
+
 	const monedaParam = url.searchParams.get('moneda');
 	if (monedaParam && monedaParam !== 'USD' && monedaParam !== 'ARS') {
 		throw error(400, 'La moneda debe ser USD o ARS');

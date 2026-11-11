@@ -24,6 +24,9 @@ const RegistrarPagoSchema = v.object({
 });
 
 export const getPagosByPedido = query(v.number(), async (pedidoId) => {
+	await requirePermission('pedidos', 'view');
+	await requirePermission('importes', 'view');
+
 	const [pagosRows, pedidoRow] = await Promise.all([
 		db.select().from(pagos).where(eq(pagos.pedido_id, pedidoId)).orderBy(desc(pagos.created_at)),
 		db
@@ -53,6 +56,7 @@ export const getPagosByPedido = query(v.number(), async (pedidoId) => {
 
 export const registrarPago = form(RegistrarPagoSchema, async (data) => {
 	await requirePermission('pedidos', 'edit');
+	await requirePermission('importes', 'view');
 	const user = await getCurrentUser();
 	if (!user) throw new Error('No autorizado');
 

@@ -17,6 +17,7 @@
 	import {
 		ajustarPrecioPorCambioDeCosto,
 		calcularCostoComposicion,
+		normalizarPrecioPendiente,
 		parsearNumeroDecimal,
 		redondearPrecio
 	} from '$lib/utils/precios';
@@ -215,9 +216,13 @@
 	function actualizarPrecioLinea(lineaId: number, valor: string) {
 		const ingresado = parsearNumeroDecimal(valor);
 		const linea = lineas.find((item) => item.idx === lineaId);
-		if (ingresado === null || !linea) return;
+		if (!linea) return;
+		const precioBase = normalizarPrecioPendiente(
+			ingresado ?? valor,
+			linea.tipo === 'concepto' ? 0 : linea.precio_minimo_unitario
+		);
 		const precio = redondearPrecio(
-			Math.max(ingresado, linea.tipo === 'concepto' ? 0 : linea.precio_minimo_unitario)
+			Math.max(precioBase, linea.tipo === 'concepto' ? 0 : linea.precio_minimo_unitario)
 		);
 		actualizarLinea(lineaId, { precio_lista_unitario: precio, precio_unitario: precio });
 	}

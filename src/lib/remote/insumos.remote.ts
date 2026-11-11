@@ -1,17 +1,25 @@
 import * as v from 'valibot';
-import { command, form, query } from '$app/server';
-import { and, asc, count, desc, eq, ilike, or } from 'drizzle-orm';
+import { command, form, query, requested } from '$app/server';
+import { and, asc, count, desc, eq, ilike, inArray, or, sql } from 'drizzle-orm';
 import { db } from '$lib/server/db';
 import {
 	categorias_insumos,
 	contactos,
+	empleados,
 	insumos,
+	movimientos_insumos,
+	ordenes_fabricacion,
 	proveedores,
 	tipos_insumo,
 	unidades_medida
 } from '$lib/server/db/schema';
 import { ImportarInsumosSchema, InsumoSchema, InsumoSchemaUpdate } from './insumos.schema';
-import { requirePermission } from '$lib/server/auth/permissions';
+import { requirePermission, tienePermiso } from '$lib/server/auth/permissions';
+import {
+	obtenerInsumosRequeridosOrdenTx,
+	registrarMovimientoInsumoTx,
+	verificarEmpleadoActivo
+} from '$lib/server/services/insumos-inventario.service';
 
 function normalizarCodigoCatalogo(valor: string, prefijo: string) {
 	const base = valor
@@ -276,17 +284,150 @@ export const getInsumos = query(
 			.limit(limit)
 			.offset((page - 1) * limit);
 		const [total] = await db.select({ count: count() }).from(insumos).where(where);
+		const insumoIds = data.map((item) => item.insumo.id);
+		const saldos = insumoIds.length
+			? await db
+					.select({
+						insumo_id: movimientos_insumos.insumo_id,
+						saldo: sql<number>`COALESCE(SUM(CASE WHEN ${movimientos_insumos.tipo} = 'ingreso' THEN ${movimientos_insumos.cantidad} ELSE -${movimientos_insumos.cantidad} END), 0)`
+					})
+					.from(movimientos_insumos)
+					.where(inArray(movimientos_insumos.insumo_id, insumoIds))
+					.groupBy(movimientos_insumos.insumo_id)
+			: [];
+		const saldosPorInsumo = new Map(saldos.map((item) => [item.insumo_id, Number(item.saldo)]));
 		return {
 			data: data.map(({ insumo, tipo, categoria, proveedor }) => ({
 				...insumo,
 				tipo,
 				categoria,
-				proveedor
+				proveedor,
+				stock: saldosPorInsumo.get(insumo.id) ?? 0
 			})),
 			total: total?.count ?? 0,
 			totalPages: Math.ceil((total?.count ?? 0) / limit),
 			currentPage: page
 		};
+	}
+);
+
+export const getMovimientosInsumos = query(
+	v.object({
+		orden_id: v.optional(v.number()),
+		limit: v.optional(v.pipe(v.number(), v.minValue(1), v.maxValue(100)), 50)
+	}),
+	async ({ orden_id, limit = 50 }) => {
+		await requirePermission('insumos', 'view');
+		return db
+			.select({
+				id: movimientos_insumos.id,
+				tipo: movimientos_insumos.tipo,
+				fuente: movimientos_insumos.fuente,
+				cantidad: movimientos_insumos.cantidad,
+				motivo: movimientos_insumos.motivo,
+				created_at: movimientos_insumos.created_at,
+				insumo: {
+					id: insumos.id,
+					codigo: insumos.codigo,
+					nombre: insumos.nombre,
+					unidad: insumos.unidad
+				},
+				empleado: { id: empleados.id, nombre: empleados.nombre, apellido: empleados.apellido },
+				orden_fabricacion_id: movimientos_insumos.orden_fabricacion_id
+			})
+			.from(movimientos_insumos)
+			.innerJoin(insumos, eq(movimientos_insumos.insumo_id, insumos.id))
+			.innerJoin(empleados, eq(movimientos_insumos.empleado_id, empleados.id))
+			.where(orden_id ? eq(movimientos_insumos.orden_fabricacion_id, orden_id) : undefined)
+			.orderBy(desc(movimientos_insumos.created_at), desc(movimientos_insumos.id))
+			.limit(limit);
+	}
+);
+
+export const registrarMovimientoInsumo = command(
+	v.object({
+		insumo_id: v.pipe(v.number(), v.integer(), v.minValue(1)),
+		tipo: v.picklist(['ingreso', 'consumo']),
+		cantidad: v.pipe(v.number(), v.minValue(0.000001)),
+		empleado_id: v.pipe(v.number(), v.integer(), v.minValue(1)),
+		orden_fabricacion_id: v.optional(v.pipe(v.number(), v.integer(), v.minValue(1))),
+		motivo: v.pipe(
+			v.string(),
+			v.trim(),
+			v.nonEmpty('Indicá para qué se usó el insumo'),
+			v.maxLength(500)
+		)
+	}),
+	async (data) => {
+		const user = await requirePermission('insumos', 'edit');
+		if (data.orden_fabricacion_id) await requirePermission('fabricacion', 'view');
+		await db.transaction(async (tx) => {
+			if (!(await verificarEmpleadoActivo(tx, data.empleado_id))) {
+				throw new Error('Seleccioná un empleado activo');
+			}
+			if (data.orden_fabricacion_id) {
+				const [orden] = await tx
+					.select({ id: ordenes_fabricacion.id })
+					.from(ordenes_fabricacion)
+					.where(eq(ordenes_fabricacion.id, data.orden_fabricacion_id))
+					.limit(1);
+				if (!orden) throw new Error('Orden de fabricación no encontrada');
+			}
+			await registrarMovimientoInsumoTx(tx, { ...data, usuario_id: user.id });
+		});
+		requested(getInsumos, 1).refreshAll();
+		if (await tienePermiso(user, 'insumos', 'view')) {
+			getMovimientosInsumos({ limit: 50 }).refresh();
+		}
+		return { success: true };
+	}
+);
+
+export const consumirRecetaOrden = command(
+	v.object({
+		orden_id: v.pipe(v.number(), v.integer(), v.minValue(1)),
+		empleado_id: v.pipe(v.number(), v.integer(), v.minValue(1)),
+		motivo: v.optional(v.pipe(v.string(), v.trim(), v.maxLength(500)))
+	}),
+	async ({ orden_id, empleado_id, motivo }) => {
+		const user = await requirePermission('insumos', 'edit');
+		await requirePermission('fabricacion', 'view');
+		const cantidadMovimientos = await db.transaction(async (tx) => {
+			if (!(await verificarEmpleadoActivo(tx, empleado_id))) {
+				throw new Error('Seleccioná un empleado activo');
+			}
+			const requeridos = await obtenerInsumosRequeridosOrdenTx(tx, orden_id);
+			const existentes = await tx
+				.select({ id: movimientos_insumos.id })
+				.from(movimientos_insumos)
+				.where(
+					and(
+						eq(movimientos_insumos.orden_fabricacion_id, orden_id),
+						eq(movimientos_insumos.fuente, 'receta')
+					)
+				)
+				.limit(1);
+			if (existentes.length) throw new Error('La receta de esta orden ya fue consumida');
+
+			for (const requerido of requeridos) {
+				await registrarMovimientoInsumoTx(tx, {
+					insumo_id: requerido.insumo_id,
+					tipo: 'consumo',
+					fuente: 'receta',
+					cantidad: requerido.cantidad,
+					orden_fabricacion_id: orden_id,
+					empleado_id,
+					usuario_id: user.id,
+					motivo: motivo || `Consumo de receta de OF-${orden_id}`
+				});
+			}
+			return requeridos.length;
+		});
+		requested(getInsumos, 1).refreshAll();
+		if (await tienePermiso(user, 'insumos', 'view')) {
+			getMovimientosInsumos({ orden_id, limit: 100 }).refresh();
+		}
+		return { success: true, cantidad: cantidadMovimientos };
 	}
 );
 
@@ -369,7 +510,9 @@ export const eliminarInsumo = command(v.number(), async (id) => {
 export const importarInsumos = command(ImportarInsumosSchema, async (filas) => {
 	await requirePermission('insumos', 'import');
 	for (const fila of filas) {
-		const { categoria: _categoria, proveedor: _proveedor, ...datosFila } = fila;
+		const datosFila = { ...fila };
+		delete datosFila.categoria;
+		delete datosFila.proveedor;
 		const catalogo = await resolverImportacion(fila);
 		const costoConFlete = fila.costo_unitario * (1 + (fila.flete_porcentaje ?? 0) / 100);
 		await db
