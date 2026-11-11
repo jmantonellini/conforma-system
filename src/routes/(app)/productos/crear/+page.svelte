@@ -12,7 +12,7 @@
 	import { page } from '$app/state';
 	import { afterNavigate, goto, invalidateAll } from '$app/navigation';
 	import { resolve } from '$app/paths';
-	import { calcularPrecioVenta, formatearDosDecimales, redondearPrecio } from '$lib/utils/precios';
+	import { calcularPrecioVenta, formatearMoneda, redondearPrecio } from '$lib/utils/precios';
 	import { CATEGORIAS_PRODUCTO, TIPOS_USO_PRODUCTO } from '$lib/types/catalogos';
 
 	let categorias: { id: number; nombre: string; slug: string }[] = page.data.categorias;
@@ -148,7 +148,7 @@
 		>
 			<input type="hidden" name="receta" value={JSON.stringify(receta)} />
 			<!-- Datos básicos -->
-			<fieldset class="fieldset rounded-box border border-base-300 bg-base-200 p-4">
+			<fieldset class="fieldset seccion">
 				<legend class="fieldset-legend">Datos básicos</legend>
 
 				<div class="grid grid-cols-1 gap-4 md:grid-cols-7">
@@ -183,13 +183,13 @@
 					<div class="stat rounded-box border border-base-300 bg-base-100 p-3">
 						<div class="stat-title">Costo de receta</div>
 						<div class="stat-value text-xl">
-							${formatearDosDecimales(costoReceta)}
+							{formatearMoneda(costoReceta)}
 						</div>
 					</div>
 					<div class="stat rounded-box border border-primary/30 bg-primary/5 p-3">
 						<div class="stat-title">Precio de lista</div>
 						<div class="stat-value text-xl text-primary">
-							${formatearDosDecimales(precioVenta)}
+							{formatearMoneda(precioVenta)}
 						</div>
 					</div>
 				</div>
@@ -279,71 +279,65 @@
 					</fieldset>
 
 					<!-- Medidas -->
-					<fieldset class="fieldset rounded-box border border-base-300 bg-base-200 p-4">
+					<fieldset class="fieldset seccion">
 						<legend class="fieldset-legend">Medidas</legend>
 
 						<div class="grid grid-cols-1 gap-4 md:grid-cols-7">
-							<fieldset
-								class="col-span-2 fieldset rounded-box border border-base-300 bg-base-200 p-4"
-							>
+							<fieldset class="col-span-2 fieldset seccion">
 								<legend class="fieldset-legend">Primario</legend>
 
 								<div class="grid grid-cols-2 gap-4">
 									<FormFieldWrapper label="Ø" id="medidas_primario_diametro">
 										<input
-											class="remove-arrow input input-sm"
+											class="input input-sm"
 											{...crearProducto.fields.medidas_primario_diametro.as('number')}
 										/>
 									</FormFieldWrapper>
 									<FormFieldWrapper label="Largo" id="medidas_primario_largo">
 										<input
-											class="remove-arrow input input-sm"
+											class="input input-sm"
 											{...crearProducto.fields.medidas_primario_largo.as('number')}
 										/>
 									</FormFieldWrapper>
 								</div>
 							</fieldset>
 
-							<fieldset
-								class="col-span-2 fieldset rounded-box border border-base-300 bg-base-200 p-4"
-							>
+							<fieldset class="col-span-2 fieldset seccion">
 								<legend class="fieldset-legend">Secundario</legend>
 								<div class="grid grid-cols-2 gap-4">
 									<FormFieldWrapper label="Ø" id="medidas_secundario_diametro">
 										<input
-											class="remove-arrow input input-sm"
+											class="input input-sm"
 											{...crearProducto.fields.medidas_secundario_diametro.as('number')}
 										/>
 									</FormFieldWrapper>
 									<FormFieldWrapper label="Largo" id="medidas_secundario_largo">
 										<input
-											class="remove-arrow input input-sm"
+											class="input input-sm"
 											{...crearProducto.fields.medidas_secundario_largo.as('number')}
 										/>
 									</FormFieldWrapper>
 								</div>
 							</fieldset>
 
-							<fieldset
-								class="col-span-3 fieldset rounded-box border border-base-300 bg-base-200 p-4"
-							>
+							<fieldset class="col-span-3 fieldset seccion">
 								<legend class="fieldset-legend">Trombon</legend>
 								<div class="grid grid-cols-3 gap-4">
 									<FormFieldWrapper label="Ø Inicial" id="trombon_diametro_inicial">
 										<input
-											class="remove-arrow input input-sm"
+											class="input input-sm"
 											{...crearProducto.fields.trombon_diametro_inicial.as('number')}
 										/>
 									</FormFieldWrapper>
 									<FormFieldWrapper label="Largo" id="trombon_largo">
 										<input
-											class="remove-arrow input input-sm"
+											class="input input-sm"
 											{...crearProducto.fields.trombon_largo.as('number')}
 										/>
 									</FormFieldWrapper>
 									<FormFieldWrapper label="Ø Final" id="trombon_diametro_final">
 										<input
-											class="remove-arrow input input-sm"
+											class="input input-sm"
 											{...crearProducto.fields.trombon_diametro_final.as('number')}
 										/>
 									</FormFieldWrapper>
@@ -351,7 +345,7 @@
 							</fieldset>
 						</div>
 
-						<fieldset class="fieldset rounded-box border border-base-300 bg-base-200 p-4">
+						<fieldset class="fieldset seccion">
 							<legend class="fieldset-legend">Observaciones</legend>
 							<FormFieldWrapper id="trombon_observaciones">
 								<textarea
@@ -366,7 +360,7 @@
 				</div>
 			{/if}
 
-			<fieldset class="fieldset rounded-box border border-base-300 bg-base-200 p-4">
+			<fieldset class="fieldset seccion">
 				<legend class="fieldset-legend">Receta del producto</legend>
 				<div class="flex flex-col gap-2">
 					{#each receta as linea, indice (indice)}
@@ -410,7 +404,7 @@
 								}}
 							/>
 							<input
-								class="remove-arrow input w-full min-w-0 text-right input-sm"
+								class="input w-full min-w-0 text-right input-sm"
 								type="number"
 								min="0"
 								step="0.01"
@@ -434,7 +428,7 @@
 					>
 				</div>
 			</fieldset>
-			<fieldset class="fieldset rounded-box border border-base-300 bg-base-200 p-4">
+			<fieldset class="fieldset seccion">
 				<legend class="fieldset-legend">Planos, fotos y referencias</legend>
 				<div class="grid gap-4 md:grid-cols-2">
 					<FormFieldWrapper id="planos_producto" label="Planos de fabricación">

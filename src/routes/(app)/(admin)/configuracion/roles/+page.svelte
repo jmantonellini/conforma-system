@@ -56,7 +56,7 @@
 		<div class="flex flex-col gap-6 lg:flex-row">
 			<!-- Lista de roles -->
 			<div class="w-full lg:w-64">
-				<div class="card bg-base-100 shadow">
+				<div class="card">
 					<div class="card-body">
 						<h3 class="card-title text-sm">Roles</h3>
 						<div class="space-y-2">
@@ -79,7 +79,7 @@
 
 			<!-- Permisos -->
 			<div class="flex-1">
-				<div class="card bg-base-100 shadow">
+				<div class="card">
 					<div class="card-body">
 						<div class="flex items-center justify-between">
 							<h2 class="text-xl font-bold">{rolSeleccionado.nombre}</h2>

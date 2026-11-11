@@ -1,181 +1,110 @@
-<!-- src/routes/(app)/cotizaciones/+page.svelte -->
 <script lang="ts">
-	import { goto, invalidateAll } from '$app/navigation';
 	import { resolve } from '$app/paths';
-	import { Highlight, Table, SearchBar, Pagination, Can, Modal } from '$lib/components/ui';
-	import PageLayout from '$lib/components/ui/PageLayout.svelte';
-	import { Delete, Eye } from '$lib/components/ui/icons';
-	import type { PageProps } from './$types';
-	import { debounce } from '$lib/utils/debounce';
-	import { SvelteURLSearchParams } from 'svelte/reactivity';
-	import { formatearFecha } from '$lib/utils/fechas';
-	import { formatearDosDecimales } from '$lib/utils/precios';
-	import { CANALES_COTIZACION } from '$lib/utils/canales-cotizacion';
-	import { eliminarCotizacion } from '$lib/remote/cotizaciones.remote';
-	import { toast } from '$lib/stores/toast.svelte';
-	import { can } from '$lib/utils/permissions';
 	import { page } from '$app/state';
-
-	const puedeVerTotales = can(page.data.user, page.data.permisos, 'importes', 'view');
+	import {
+		Can,
+		EstadoBadge,
+		Highlight,
+		Icono,
+		Listado,
+		Persona,
+		filtrar,
+		parametro
+	} from '$lib/components/ui';
+	import { eliminarCotizacion } from '$lib/remote/cotizaciones.remote';
+	import { confirmarYEjecutar } from '$lib/stores/confirmacion.svelte';
+	import { CANALES_COTIZACION } from '$lib/utils/canales-cotizacion';
+	import { formatearFecha } from '$lib/utils/fechas';
+	import { formatearMoneda } from '$lib/utils/precios';
+	import { can } from '$lib/utils/permissions';
+	import type { PageProps } from './$types';
 
 	let { data }: PageProps = $props();
-
-	let search = $state('');
-	let estadoFilter = $state('');
-	let currentPage = $state(1);
-	let showModal = $state(false);
-
-	$effect(() => {
-		search = data.search ?? '';
-		estadoFilter = data.estadoFilter ?? '';
-		currentPage = data.currentPage ?? 1;
-	});
-	let deleteCotizacionId = $state(0);
-
-	function handleSearchChange() {
-		const params = new SvelteURLSearchParams();
-		if (search) params.set('search', search);
-		if (estadoFilter) params.set('estado', estadoFilter);
-		if (currentPage > 1) params.set('page', currentPage.toString());
-		goto(resolve(`/cotizaciones?${params.toString()}`));
-	}
-
-	function closeModal() {
-		showModal = false;
-	}
+	const veImportes = can(page.data.user, page.data.permisos, 'importes', 'view');
+	const busqueda = $derived(parametro('search'));
 </script>
 
-<PageLayout>
-	<div class="mb-6 flex items-center justify-between gap-4">
-		<div class="flex flex-1 flex-wrap gap-4">
-			<div class="w-full sm:w-80">
-				<SearchBar
-					autofocus
-					bind:search
-					oninput={() => {
-						currentPage = 1;
-						debounce(handleSearchChange);
-					}}
-				/>
-			</div>
-			<select
-				bind:value={estadoFilter}
-				class="select w-48 select-sm"
-				onchange={() => {
-					currentPage = 1;
-					handleSearchChange();
-				}}
-			>
-				<option value="">Todos los estados</option>
-				{#each data.estados as est (est.id)}
-					<option value={String(est.id)}>{est.nombre}</option>
-				{/each}
-			</select>
-		</div>
+<Listado
+	titulo="Cotizaciones"
+	datos={data.cotizaciones}
+	total={data.total}
+	pagina={data.currentPage}
+	paginas={data.totalPages}
+	buscar="Número, cliente, teléfono, CUIT..."
+	vacio="No hay cotizaciones para estos filtros"
+>
+	{#snippet acciones()}
 		<Can modulo="cotizaciones" accion="create">
-			<a class="btn btn-primary btn-sm" href={resolve('/cotizaciones/crear')}>+ Nueva Cotización</a>
+			<a class="btn btn-primary btn-sm" href={resolve('/cotizaciones/crear')}>
+				<Icono nombre="mas_simple" /> Nueva cotización
+			</a>
 		</Can>
-	</div>
-
-	<div class="card bg-base-100 shadow">
-		<div class="card-body p-0">
-			{#snippet header()}
-				<th>N° Cotización</th>
-				<th>Cliente / Contacto</th>
-				<th>Canal</th>
-				<th>Fecha</th>
-				{#if puedeVerTotales}<th class="text-right">Total</th>{/if}
-				<th>Estado</th>
-				<th>Asignada a</th>
-				<th class="text-center">Acciones</th>
-			{/snippet}
-
-			{#snippet row(cot: (typeof data.cotizaciones)[number])}
-				<td class="font-mono text-sm"><Highlight text={cot.numero_cotizacion} query={search} /></td>
-				<td class="font-medium"><Highlight text={cot.cliente_nombre || '-'} query={search} /></td>
-				<td>
-					<span class="badge badge-ghost badge-sm">
-						{CANALES_COTIZACION[cot.canal] || cot.canal}
-					</span>
-				</td>
-				<td>{cot.created_at ? formatearFecha(new Date(cot.created_at)) : '-'}</td>
-				{#if puedeVerTotales}<td class="text-right font-medium">
-						{cot.precio_total != null ? '$' + formatearDosDecimales(cot.precio_total) : '-'}
-					</td>{/if}
-				<td>
-					<span class="badge badge-dash badge-sm capitalize badge-{cot.estado_color}">
-						{cot.estado_nombre}
-					</span>
-				</td>
-				<td class="text-sm">
-					{cot.asignado_nombre
-						? `${cot.asignado_nombre} ${cot.asignado_apellido ?? ''}`.trim()
-						: '-'}
-				</td>
-				<td class="text-center">
-					<div class="flex justify-center gap-1">
-						<a class="btn btn-circle btn-ghost btn-sm" href={resolve(`/cotizaciones/${cot.id}`)}>
-							<Eye />
-						</a>
-						<Can modulo="cotizaciones" accion="delete">
-							<button
-								class="btn btn-circle btn-ghost text-error btn-sm"
-								title="Eliminar"
-								onclick={() => {
-									deleteCotizacionId = cot.id;
-									showModal = true;
-								}}
-							>
-								<Delete />
-							</button>
-						</Can>
-					</div>
-				</td>
-			{/snippet}
-
-			<Table
-				data={data.cotizaciones}
-				loading={false}
-				emptyMessage="No hay cotizaciones registradas"
-				{header}
-				{row}
-			/>
-
-			{#if data.totalPages > 1}
-				<div class="mt-6 flex justify-center">
-					<Pagination
-						currentPage={data.currentPage}
-						totalPages={data.totalPages}
-						onPageChange={(page) => {
-							currentPage = page;
-							handleSearchChange();
-						}}
-					/>
-				</div>
-			{/if}
-		</div>
-	</div>
-</PageLayout>
-
-<Modal bind:open={showModal} title="Eliminar cotización" onClose={closeModal}>
-	<div class="py-4">
-		<p>¿Seguro que quieres eliminar esta cotización?</p>
-	</div>
-	{#snippet actions()}
-		<button class="btn" onclick={closeModal}>Cancelar</button>
-		<button
-			class="btn btn-error"
-			onclick={async () => {
-				try {
-					await eliminarCotizacion(deleteCotizacionId);
-					closeModal();
-					await invalidateAll();
-					toast.success('Cotización eliminada');
-				} catch (error) {
-					console.log(error);
-					toast.error('Error al eliminar');
-				}
-			}}>Eliminar</button
-		>
 	{/snippet}
-</Modal>
+	{#snippet filtros()}
+		<select
+			class="select w-48 select-sm"
+			value={parametro('estado')}
+			onchange={(e) => filtrar({ estado: e.currentTarget.value })}
+		>
+			<option value="">Todos los estados</option>
+			{#each data.estados as estado (estado.id)}
+				<option value={String(estado.id)}>{estado.nombre}</option>
+			{/each}
+		</select>
+	{/snippet}
+	{#snippet header()}
+		<th>Número</th>
+		<th>Cliente</th>
+		<th>Fecha</th>
+		{#if veImportes}<th class="text-right">Total</th>{/if}
+		<th>Estado</th>
+		<th>Asignada a</th>
+		<th></th>
+	{/snippet}
+	{#snippet row(cot: (typeof data.cotizaciones)[number])}
+		<td>
+			<a class="enlace-fila font-mono" href={resolve(`/cotizaciones/${cot.id}`)}>
+				<Highlight text={cot.numero_cotizacion} query={busqueda} />
+			</a>
+		</td>
+		<td>
+			<p class="font-medium"><Highlight text={cot.cliente_nombre || '-'} query={busqueda} /></p>
+			<p class="secundario">{CANALES_COTIZACION[cot.canal] ?? cot.canal}</p>
+		</td>
+		<td class="text-base-content/70">{formatearFecha(cot.created_at)}</td>
+		{#if veImportes}
+			<td class="numero font-medium">
+				{cot.precio_total != null ? formatearMoneda(cot.precio_total) : '-'}
+			</td>
+		{/if}
+		<td>
+			<EstadoBadge
+				class="badge-sm"
+				estado={{ nombre: cot.estado_nombre, color: cot.estado_color }}
+			/>
+		</td>
+		<td
+			><Persona
+				nombre={cot.asignado_nombre}
+				apellido={cot.asignado_apellido}
+				vacio="Sin asignar"
+			/></td
+		>
+		<td class="w-0">
+			<Can modulo="cotizaciones" accion="delete">
+				<button
+					class="btn btn-square btn-ghost text-base-content/50 btn-sm hover:text-error"
+					title="Eliminar"
+					onclick={() =>
+						confirmarYEjecutar({
+							mensaje: `¿Eliminar la cotización ${cot.numero_cotizacion}?`,
+							ejecutar: () => eliminarCotizacion(cot.id),
+							exito: 'Cotización eliminada'
+						})}
+				>
+					<Icono nombre="papelera" />
+				</button>
+			</Can>
+		</td>
+	{/snippet}
+</Listado>

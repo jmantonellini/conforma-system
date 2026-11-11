@@ -2,10 +2,10 @@
 	import { mensajeError } from '$lib/utils/errores';
 	import { goto } from '$app/navigation';
 	import { resolve } from '$app/paths';
-	import { Can, PageLayout } from '$lib/components/ui';
+	import { Can, EncabezadoDetalle, PageLayout } from '$lib/components/ui';
 	import { importarInsumos } from '$lib/remote/insumos.remote';
 	import { toast } from '$lib/stores/toast.svelte';
-	import { formatearDosDecimales } from '$lib/utils/precios';
+	import { formatearDosDecimales, formatearMoneda } from '$lib/utils/precios';
 
 	type ImportacionFila = {
 		codigo: string;
@@ -65,11 +65,10 @@
 </script>
 
 <PageLayout>
-	<a href={resolve('/insumos')} class="btn btn-ghost btn-sm">← Volver</a>
+	<EncabezadoDetalle titulo="Importar insumos" volver={{ href: '/insumos', etiqueta: 'Insumos' }} />
 	<Can modulo="insumos" accion="import">
-		<div class="card mt-4 bg-base-100 shadow">
+		<div class="card">
 			<div class="card-body gap-4">
-				<h1 class="card-title">Importar insumos desde Excel</h1>
 				<p class="text-sm text-base-content/70">
 					Columnas requeridas: código, descripción, tipo, unidad y costo unitario. Categoría,
 					proveedor y flete (%) son opcionales. Usá códigos o nombres; no necesitás conocer IDs.
@@ -106,10 +105,10 @@
 									<tr
 										><td>{fila.codigo}</td><td>{fila.nombre}</td><td>{fila.tipo}</td><td
 											>{fila.unidad}</td
-										><td>${formatearDosDecimales(fila.costo_unitario)}</td><td
+										><td>{formatearMoneda(fila.costo_unitario)}</td><td
 											>{formatearDosDecimales(fila.flete_porcentaje)}%</td
 										><td
-											>${formatearDosDecimales(
+											>{formatearMoneda(
 												fila.costo_unitario * (1 + fila.flete_porcentaje / 100)
 											)}</td
 										><td>{fila.categoria || '-'}</td><td>{fila.proveedor || '-'}</td></tr

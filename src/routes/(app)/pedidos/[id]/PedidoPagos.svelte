@@ -1,9 +1,16 @@
 <script lang="ts">
-	import { Can, FormErrors, Modal, FormFieldWrapper } from '$lib/components/ui';
+	import {
+		Can,
+		EstadoBadge,
+		FormErrors,
+		Modal,
+		FormFieldWrapper,
+		Seccion
+	} from '$lib/components/ui';
 	import { getPagosByPedido, registrarPago } from '$lib/remote/facturacion.remote';
 	import { toast } from '$lib/stores/toast.svelte';
 	import { formatearFecha } from '$lib/utils/fechas';
-	import { formatearDosDecimales, redondearPrecio } from '$lib/utils/precios';
+	import { formatearMoneda, redondearPrecio } from '$lib/utils/precios';
 	import { ESTADO_PAGO, METODO_PAGO } from '$lib/types/dominio';
 
 	let { pedidoId }: { pedidoId: number } = $props();
@@ -22,76 +29,46 @@
 	}
 
 	const items = $derived(facturacion.pagos ?? []);
+	const ESTADOS = {
+		[ESTADO_PAGO.SIN_PAGAR]: { nombre: 'Sin pagar', color: 'neutral' },
+		[ESTADO_PAGO.ANTICIPO]: { nombre: 'Solo anticipo', color: 'warning' },
+		[ESTADO_PAGO.PARCIAL]: { nombre: 'Parcial', color: 'warning' },
+		[ESTADO_PAGO.PAGADO]: { nombre: 'Pagado', color: 'success' }
+	};
 </script>
 
-<div class="card w-full bg-base-100 shadow">
-	<div class="card-body">
-		<div class="flex items-center justify-between">
-			<h3 class="card-title">Pagos</h3>
-			<Can modulo="pedidos" accion="edit">
-				<button class="btn btn-primary btn-sm" onclick={() => (showModal = true)}>
-					+ Registrar pago
-				</button>
-			</Can>
-		</div>
-
-		{#if facturacion}
-			<div class="mt-2 flex items-center justify-between gap-2">
-				<span
-					class="badge badge-{facturacion.estado === ESTADO_PAGO.PAGADO
-						? 'success'
-						: facturacion.estado === ESTADO_PAGO.SIN_PAGAR
-							? 'ghost'
-							: 'warning'}"
-				>
-					{facturacion.estado === ESTADO_PAGO.SIN_PAGAR
-						? 'Sin pagar'
-						: facturacion.estado === ESTADO_PAGO.ANTICIPO
-							? 'Solo anticipo'
-							: facturacion.estado === ESTADO_PAGO.PARCIAL
-								? 'Parcial'
-								: 'Pagado'}
-				</span>
-				{#if facturacion.saldo > 0}
-					<span class="text-sm text-base-content/70"
-						>Saldo: ${formatearDosDecimales(facturacion.saldo)}</span
-					>
-				{/if}
-			</div>
+<Seccion titulo="Pagos">
+	{#snippet acciones()}
+		<Can modulo="pedidos" accion="edit">
+			<button class="btn btn-sm" onclick={() => (showModal = true)}>+ Registrar</button>
+		</Can>
+	{/snippet}
+	<div class="flex items-center justify-between gap-2">
+		<EstadoBadge estado={ESTADOS[facturacion.estado]} />
+		{#if facturacion.saldo > 0}
+			<span class="text-sm text-base-content/70">Saldo {formatearMoneda(facturacion.saldo)}</span>
 		{/if}
-		<div class="flex flex-col gap-2">
-			{#if items.length === 0}
-				<p class="text-sm text-base-content/50">Sin pagos registrados</p>
-			{:else}
-				{#each items as pago (pago.id)}
-					<div class="flex items-center justify-between rounded bg-base-200 p-3">
-						<div>
-							<p class="font-semibold">${formatearDosDecimales(pago.monto)}</p>
-							<p class="text-sm text-base-content/70 capitalize">
-								<span>
-									{pago.metodo_pago === METODO_PAGO.CUOTAS
-										? 'Tarjeta de crédito'
-										: pago.metodo_pago || 'Sin método'}
-								</span>
-								{#if pago.cantidad_cuotas}
-									<span>· {pago.cantidad_cuotas} cuotas</span>
-								{/if}
-								{#if pago.fecha_pago}
-									<span class="text-xs text-base-content/50">
-										- {formatearFecha(new Date(pago.fecha_pago))}
-									</span>
-								{/if}
-								{#if pago.observaciones}
-									- <span class="italic">{pago.observaciones}</span>
-								{/if}
-							</p>
-						</div>
-					</div>
-				{/each}
-			{/if}
-		</div>
 	</div>
-</div>
+	{#if items.length}
+		<ul class="list -mx-4 sm:-mx-5">
+			{#each items as pago (pago.id)}
+				<li class="list-row">
+					<div class="numero font-medium">{formatearMoneda(pago.monto)}</div>
+					<div class="text-sm text-base-content/70">
+						<p class="capitalize">
+							{pago.metodo_pago === METODO_PAGO.CUOTAS
+								? `Tarjeta · ${pago.cantidad_cuotas} cuotas`
+								: pago.metodo_pago || 'Sin método'}
+						</p>
+						<p class="text-xs">{formatearFecha(pago.fecha_pago)} {pago.observaciones ?? ''}</p>
+					</div>
+				</li>
+			{/each}
+		</ul>
+	{:else}
+		<p class="text-sm text-base-content/60">Sin pagos registrados</p>
+	{/if}
+</Seccion>
 
 <Modal bind:open={showModal} title="Registrar Pago" onClose={cerrar}>
 	<form
@@ -108,7 +85,7 @@
 			<FormFieldWrapper label="Monto" id="monto" required>
 				<div class="join w-full">
 					<input
-						class="remove-arrow input join-item min-w-0 flex-1"
+						class="input join-item min-w-0 flex-1"
 						step="0.01"
 						{...form.fields.monto.as('number')}
 					/>
@@ -133,7 +110,7 @@
 			{#if form.fields.metodo_pago.value() === METODO_PAGO.CUOTAS}
 				<FormFieldWrapper label="Cantidad de cuotas" id="cantidad_cuotas" required>
 					<input
-						class="remove-arrow input"
+						class="input"
 						min="1"
 						step="1"
 						required

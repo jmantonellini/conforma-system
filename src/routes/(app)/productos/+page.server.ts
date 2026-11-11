@@ -28,11 +28,8 @@ export const load: PageServerLoad = async ({ url, setHeaders }) => {
 	return {
 		productos: productosData.data,
 		categorias,
+		total: productosData.total,
 		totalPages: productosData.totalPages,
-		currentPage: productosData.currentPage,
-		search,
-		categoriaFilter: categoria,
-		sort,
-		direction
+		currentPage: productosData.currentPage
 	};
 };

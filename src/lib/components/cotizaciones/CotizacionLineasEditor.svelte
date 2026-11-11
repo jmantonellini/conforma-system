@@ -193,30 +193,32 @@
 	{incluirIva}
 	{importeIva}
 	onChange={() => (precioTotalIngresado = null)}
-/>
-
-<CotizacionTotales
-	{bloqueada}
-	{guardando}
-	{validezDias}
-	{totalFinal}
-	{precioTotalIngresado}
-	{totalValido}
-	{incluirIva}
-	{descuentoGlobal}
-	{cubreCostos}
-	{condicionesPago}
-	onCambiarValidez={(dias) => (validezDias = dias)}
-	onCambiarIva={(incluir) => {
-		precioTotalIngresado = null;
-		incluirIva = incluir;
-	}}
-	onCambiarDescuento={(porcentaje) => {
-		precioTotalIngresado = null;
-		descuentoGlobal = porcentaje;
-	}}
-	onActualizarTotal={(valor) => (precioTotalIngresado = valor)}
-	onFinalizarEdicionTotal={finalizarEdicionTotal}
-	onCambiarCondiciones={(condiciones) => (condicionesPago = condiciones)}
-	onGuardar={guardarCotizacion}
-/>
+>
+	{#snippet pie()}
+		<CotizacionTotales
+			{bloqueada}
+			{guardando}
+			{validezDias}
+			{totalFinal}
+			{precioTotalIngresado}
+			{totalValido}
+			{incluirIva}
+			{descuentoGlobal}
+			{cubreCostos}
+			{condicionesPago}
+			onCambiarValidez={(dias) => (validezDias = dias)}
+			onCambiarIva={(incluir) => {
+				precioTotalIngresado = null;
+				incluirIva = incluir;
+			}}
+			onCambiarDescuento={(porcentaje) => {
+				precioTotalIngresado = null;
+				descuentoGlobal = porcentaje;
+			}}
+			onActualizarTotal={(valor) => (precioTotalIngresado = valor)}
+			onFinalizarEdicionTotal={finalizarEdicionTotal}
+			onCambiarCondiciones={(condiciones) => (condicionesPago = condiciones)}
+			onGuardar={guardarCotizacion}
+		/>
+	{/snippet}
+</LineasConceptosEditor>

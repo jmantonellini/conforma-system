@@ -38,7 +38,7 @@
 		})}
 		class="space-y-6"
 	>
-		<div class="card bg-base-100 shadow">
+		<div class="card">
 			<div class="card-body">
 				<h3 class="card-title">Datos de la orden</h3>
 				<div class="grid gap-4 lg:grid-cols-3">
@@ -109,7 +109,7 @@
 					<!-- Cantidad: bloqueada si hay línea preseleccionada -->
 					<FormFieldWrapper id="cantidad_total" label="Cantidad total" required>
 						<input
-							class="remove-arrow input {bloqueado ? 'bg-base-300' : ''}"
+							class="input {bloqueado ? 'bg-base-300' : ''}"
 							{...form.fields.cantidad_total.as('number')}
 							value={bloqueado ? lineaSeleccionada?.cantidad : ''}
 							readonly={bloqueado}

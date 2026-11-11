@@ -5,369 +5,230 @@
 	import { page } from '$app/state';
 	import {
 		Can,
-		FormFieldWrapper,
-		Modal,
+		EncabezadoDetalle,
+		Historial,
 		PageLayout,
-		NavegacionProceso,
+		Seccion,
 		Table
 	} from '$lib/components/ui';
+	import type { Transicion } from '$lib/components/ui/EncabezadoDetalle.svelte';
 	import {
 		cambiarEstadoPedido,
 		eliminarPedido,
+		getEstadosPedido,
 		getHistorialPedido,
 		getPedidoById
 	} from '$lib/remote/pedidos.remote';
+	import { confirmar as confirmarCambio } from '$lib/stores/confirmacion.svelte';
 	import { toast } from '$lib/stores/toast.svelte';
-	import { Paths, PEDIDO_SLUG } from '$lib/types';
-	import { ESTADO_RESERVA, TIPO_LOG_PEDIDO } from '$lib/types/dominio';
+	import { PEDIDO_SLUG } from '$lib/types';
+	import { ESTADO_RESERVA } from '$lib/types/dominio';
 	import { formatearFecha } from '$lib/utils/fechas';
-	import { formatearDosDecimales } from '$lib/utils/precios';
+	import { formatearMoneda } from '$lib/utils/precios';
 	import { can } from '$lib/utils/permissions';
 	import PedidoEnvios from './PedidoEnvios.svelte';
 	import PedidoPagos from './PedidoPagos.svelte';
 	import ArchivosAdjuntos from '$lib/components/ArchivosAdjuntos.svelte';
 
-	let { pedido, lineas, insumosAdicionales, adjuntos } = $derived(
-		await getPedidoById(parseInt(page.params.id ?? ''))
-	);
+	const id = $derived(Number(page.params.id));
+	const { pedido, lineas, insumosAdicionales, adjuntos } = $derived(await getPedidoById(id));
+	const historial = $derived(await getHistorialPedido(id));
+	const estados = $derived(await getEstadosPedido());
 	const veImportes = can(page.data.user, page.data.permisos, 'importes', 'view');
+	const contacto = $derived(
+		[pedido.cliente?.nombre, pedido.cliente?.apellido].filter(Boolean).join(' ')
+	);
 
-	function irAFabricacion(lineaId: number) {
-		goto(resolve(`/fabricacion/crear?linea=${lineaId}`));
-	}
+	const ETIQUETA_RESERVA = {
+		[ESTADO_RESERVA.CONSUMIDA]: 'Despachado desde stock',
+		[ESTADO_RESERVA.LIBERADA]: 'Reserva liberada'
+	} as Record<string, string>;
 
-	function irADetalleOrden(ordenId: number | null) {
-		if (ordenId) goto(resolve(`/fabricacion/${ordenId}`));
-	}
-
-	async function moverPedido(destinoId: number, nombre: string, slug: string) {
-		const confirmar = slug === PEDIDO_SLUG.CANCELADO || slug === PEDIDO_SLUG.DEMORADO;
-		if (confirmar && !confirm(`¿Cambiar a "${nombre}"?`)) return;
-
+	async function moverPedido({ estado_destino_id, destino_nombre, destino_slug }: Transicion) {
+		const confirmar =
+			destino_slug === PEDIDO_SLUG.CANCELADO || destino_slug === PEDIDO_SLUG.DEMORADO;
+		if (
+			confirmar &&
+			!(await confirmarCambio({
+				titulo: `Pasar a ${destino_nombre}`,
+				mensaje: `¿Confirmás el cambio del pedido ${pedido.numero_pedido} a "${destino_nombre}"?`,
+				accion: destino_nombre,
+				peligro: destino_slug === PEDIDO_SLUG.CANCELADO
+			}))
+		)
+			return;
 		try {
 			await cambiarEstadoPedido({
 				pedido_id: String(pedido.id),
-				estado_destino_id: String(destinoId)
+				estado_destino_id: String(estado_destino_id)
 			});
-			toast.success(`Pedido ${nombre.toLowerCase()}`);
-		} catch (e) {
-			toast.error(mensajeError(e, 'No se pudo cambiar el estado'));
+			toast.success(`Pedido ${destino_nombre.toLowerCase()}`);
+		} catch (error) {
+			toast.error(mensajeError(error, 'No se pudo cambiar el estado'));
 		}
 	}
 
-	let showEliminar = $state(false);
-
-	function abrirEliminar() {
-		showEliminar = true;
-	}
-
-	function cerrarModal() {
-		showEliminar = false;
-	}
-
-	async function confirmarEliminar() {
-		if (!pedido) return;
-		try {
-			await eliminarPedido(pedido.id);
-			toast.success('Pedido eliminado');
-			goto(resolve(Paths.PEDIDOS));
-		} catch (e) {
-			toast.error(mensajeError(e, 'No se pudo eliminar'));
-		} finally {
-			cerrarModal();
-		}
+	async function eliminar() {
+		await eliminarPedido(pedido.id);
+		toast.success('Pedido eliminado');
+		goto(resolve('/pedidos'));
 	}
 </script>
 
 <PageLayout>
-	{#if pedido}
-		<div class="flex flex-col gap-4">
-			<div class="grid grid-cols-[auto_1fr_auto] items-center gap-3">
-				<button onclick={() => history.back()} class="btn btn-ghost btn-sm">← Volver</button>
-				<div class="flex justify-center">
-					<NavegacionProceso
-						currentKey="pedido"
-						steps={[
-							...(pedido.navegacion.cotizacion_id
-								? [
-										{
-											key: 'cotizacion',
-											label: 'Cotización',
-											href: `/cotizaciones/${pedido.navegacion.cotizacion_id}`
-										}
-									]
-								: []),
-							{ key: 'pedido', label: 'Pedido', status: pedido.estado.nombre },
-							...(pedido.navegacion.orden_fabricacion_id
-								? [
-										{
-											key: 'fabricacion',
-											label: 'Fabricación',
-											href: `/fabricacion/${pedido.navegacion.orden_fabricacion_id}`
-										}
-									]
-								: [])
-						]}
-					/>
-				</div>
-				<Can modulo="pedidos" accion="delete">
-					<button class="btn btn-outline btn-error btn-sm" onclick={abrirEliminar}>
-						Eliminar
-					</button>
-				</Can>
+	<EncabezadoDetalle
+		titulo="Pedido {pedido.numero_pedido}"
+		subtitulo={pedido.cliente?.razon_social}
+		volver={{ href: '/pedidos', etiqueta: 'Pedidos' }}
+		estado={pedido.estado}
+		transiciones={pedido.transiciones}
+		onTransicion={moverPedido}
+		puedeTransicionar={() => can(page.data.user, page.data.permisos, 'pedidos', 'edit')}
+		{estados}
+		actual="pedido"
+		proceso={{
+			cotizacion: pedido.navegacion.cotizacion_id,
+			fabricacion: pedido.navegacion.orden_fabricacion_id
+		}}
+		eliminar={{
+			modulo: 'pedidos',
+			mensaje: `¿Eliminar el pedido ${pedido.numero_pedido}? Esta acción no se puede deshacer.`,
+			onConfirmar: eliminar
+		}}
+	/>
+
+	<Seccion>
+		<dl class="datos">
+			<div>
+				<dt>Cliente</dt>
+				<dd>{pedido.cliente?.razon_social ?? '-'}</dd>
 			</div>
-
-			<!-- Datos del pedido -->
-			<div class="card bg-base-100 shadow">
-				<div class="card-body">
-					<div class="grid grid-cols-4 gap-4">
-						<FormFieldWrapper label="Cliente" id="cliente">
-							<p>{pedido.cliente?.razon_social}</p>
-							{#if pedido.cliente?.apellido}
-								<p class="font-semibold">
-									{pedido.cliente?.nombre + ' ' + (pedido.cliente?.apellido || '') || '-'}
-								</p>
-							{/if}
-						</FormFieldWrapper>
-						<FormFieldWrapper label="Fecha" id="fecha">
-							<p>{formatearFecha(new Date(pedido.fecha))}</p>
-						</FormFieldWrapper>
-						<FormFieldWrapper label="Estado" id="estado">
-							<div class="flex flex-wrap items-center gap-2">
-								<span class="badge badge-{pedido.estado.color}">{pedido.estado.nombre}</span>
-								{#if pedido.transiciones?.length > 0}
-									<button
-										class="btn btn-outline btn-xs"
-										tabindex="0"
-										style="anchor-name:--anchor-1"
-										popovertarget="popover-1">Acciones ↓</button
-									>
-									<ul
-										popover
-										id="popover-1"
-										style="position-anchor:--anchor-1"
-										class="menu dropdown w-52 rounded-box bg-base-100 p-2 shadow"
-									>
-										{#each pedido.transiciones as t (t.estado_destino_id)}
-											<li>
-												<Can modulo="pedidos" accion="edit">
-													<button
-														onclick={() =>
-															moverPedido(t.estado_destino_id, t.destino_nombre, t.destino_slug)}
-													>
-														<span class="badge badge-{t.destino_color} badge-xs"></span>
-														{t.destino_nombre}
-													</button>
-												</Can>
-											</li>
-										{/each}
-									</ul>
-								{/if}
-							</div>
-						</FormFieldWrapper>
-						{#if pedido.observaciones}
-							<FormFieldWrapper label="Observaciones" id="observaciones">
-								<p class="whitespace-pre-wrap">{pedido.observaciones}</p>
-							</FormFieldWrapper>
-						{/if}
-					</div>
-				</div>
+			{#if contacto}<div>
+					<dt>Contacto</dt>
+					<dd>{contacto}</dd>
+				</div>{/if}
+			<div>
+				<dt>Fecha</dt>
+				<dd>{formatearFecha(pedido.fecha)}</dd>
 			</div>
-
-			<!-- Líneas del pedido -->
-			<div class="card bg-base-100 shadow">
-				<div class="card-body">
-					<h2 class="card-title">Productos</h2>
-
-					<div>
-						{#snippet header()}
-							<th>Código</th>
-							<th>Producto</th>
-							<th>Cantidad</th>
-							{#if veImportes}
-								<th>Costo</th>
-								<th>Precio lista</th>
-								<th>Precio neto</th>
-								<th>Subtotal</th>
-							{/if}
-							<th>Fabricación</th>
-							<th class="text-center">Acciones</th>
-						{/snippet}
-
-						{#snippet row(linea: (typeof lineas)[number])}
-							{#if linea.es_personalizado}
-								<td>
-									<span class="ml-2 badge badge-outline badge-sm">Personalizado</span>
-								</td>
-							{:else}
-								<td class="font-mono text-sm">
-									{linea.producto_codigo || '-'}
-								</td>
-							{/if}
-							<td>
-								{linea.producto_nombre || linea.descripcion_personalizada || '-'}
-							</td>
-							<td class="text-center">{linea.cantidad}</td>
-							{#if veImportes}
-								<td class="text-right">${formatearDosDecimales(linea.costo_materiales)}</td>
-								<td class="text-right">${formatearDosDecimales(linea.precio_lista_unitario)}</td>
-								<td class="text-right">${formatearDosDecimales(linea.precio_unitario)}</td>
-								<td class="text-right font-semibold">${formatearDosDecimales(linea.subtotal)}</td>
-							{/if}
-							<td>
-								{#if linea.reserva_stock}
-									<span class="badge badge-sm badge-info">
-										{linea.reserva_stock.estado === ESTADO_RESERVA.RESERVADA
-											? `Reservado · ${linea.reserva_stock.ubicacion_nombre}`
-											: linea.reserva_stock.estado === ESTADO_RESERVA.CONSUMIDA
-												? 'Despachado desde stock'
-												: 'Reserva liberada'}
-									</span>
-								{:else if linea.produccion}
-									{@const p = linea.produccion}
-									<button
-										class={`badge-${p.es_final ? 'success' : p.total > 0 ? 'warning' : 'ghost'} badge cursor-pointer text-nowrap hover:opacity-80`}
-										onclick={() => irADetalleOrden(p.orden_id)}
-									>
-										({p.terminadas}/{p.total})
-									</button>
-								{:else}
-									<span class="text-sm text-base-content/50">Sin Orden</span>
-								{/if}
-							</td>
-							<td class="text-center">
-								{#if linea.reserva_stock}
-									<span class="text-sm text-base-content/50">Gestionado desde stock</span>
-								{:else if linea.produccion}
-									{@const ordenId = linea.produccion.orden_id}
-									<button
-										class="btn btn-ghost text-nowrap btn-sm"
-										onclick={() => irADetalleOrden(ordenId)}
-									>
-										Ver orden
-									</button>
-								{:else}
-									<Can modulo="fabricacion" accion="create">
-										<button
-											class="btn text-nowrap btn-primary btn-sm"
-											onclick={() => irAFabricacion(linea.id)}
-										>
-											Pasar a fabricación
-										</button>
-									</Can>
-								{/if}
-							</td>
-						{/snippet}
-						{#snippet footer()}
-							{#if veImportes}
-								<td colspan="9" class="text-right font-bold">Total:</td>
-								<td class="text-right text-lg font-bold text-primary">
-									${formatearDosDecimales(pedido.total)}
-								</td>
-							{/if}
-						{/snippet}
-						<Table data={await lineas} {header} {row} {footer} />
-					</div>
+			{#if veImportes}
+				<div>
+					<dt>Total</dt>
+					<dd class="font-semibold">{formatearMoneda(pedido.total)}</dd>
 				</div>
-			</div>
-
-			<ArchivosAdjuntos tipo="pedido" entidadId={pedido.id} {adjuntos} />
-
-			{#if insumosAdicionales.length}
-				<div class="card bg-base-100 shadow">
-					<div class="card-body">
-						<h2 class="card-title">Insumos adicionales</h2>
-						<div class="overflow-x-auto">
-							<table class="table table-sm">
-								<thead>
-									<tr>
-										<th>Código</th><th>Insumo</th><th>Unidad</th><th class="text-right">Cantidad</th
-										>
-										{#if veImportes}
-											<th class="text-right">Costo</th><th class="text-right">Precio lista</th>
-											<th class="text-right">Precio neto</th>
-										{/if}
-									</tr>
-								</thead>
-								<tbody>
-									{#each insumosAdicionales as insumo (insumo.id)}
-										<tr>
-											<td class="font-mono text-sm">{insumo.codigo}</td>
-											<td>{insumo.nombre}</td>
-											<td>{insumo.unidad}</td>
-											<td class="text-right">{insumo.cantidad}</td>
-											{#if veImportes}
-												<td class="text-right">${formatearDosDecimales(insumo.costo_unitario)}</td>
-												<td class="text-right"
-													>${formatearDosDecimales(insumo.precio_lista_unitario)}</td
-												>
-												<td class="text-right">${formatearDosDecimales(insumo.precio_unitario)}</td>
-											{/if}
-										</tr>
-									{/each}
-								</tbody>
-							</table>
-						</div>
-					</div>
+				<div>
+					<dt>Anticipo</dt>
+					<dd>{formatearMoneda(pedido.anticipo)}</dd>
 				</div>
 			{/if}
-
-			<div class="grid grid-cols-2 gap-4">
-				{#if veImportes}
-					<PedidoPagos pedidoId={pedido.id} />
-				{/if}
-				<PedidoEnvios pedidoId={pedido.id} />
-			</div>
-
-			<!-- Historial del pedido -->
-			<div class="card bg-base-100 shadow">
-				<div class="card-body">
-					<h3 class="card-title">Historial</h3>
-					{#snippet headerHistorial()}
-						<th>Fecha</th>
-						<th>Actividad</th>
-						<th>Detalle</th>
-						<th>Responsable</th>
-					{/snippet}
-					{#snippet rowHistorial(log: Awaited<ReturnType<typeof getHistorialPedido>>[number])}
-						{@const color =
-							log.tipo === TIPO_LOG_PEDIDO.ESTADO
-								? log.estado_nuevo?.color || 'ghost'
-								: log.tipo === TIPO_LOG_PEDIDO.ENVIO
-									? 'info'
-									: 'success'}
-						<td>
-							{log.fecha ? formatearFecha(new Date(log.fecha)) : '-'}
-						</td>
-						<td>
-							<span class="badge badge-sm badge-{color}">{log.titulo}</span>
-						</td>
-						<td>
-							{#if log.tipo === TIPO_LOG_PEDIDO.ESTADO}
-								{log.estado_anterior?.nombre || 'Creado'} → {log.estado_nuevo?.nombre || '-'}
-								{#if log.detalle}<p class="text-xs text-base-content/60">{log.detalle}</p>{/if}
-							{:else}
-								{log.detalle || '-'}
-							{/if}
-						</td>
-						<td>{log.empleado || '-'}</td>
-					{/snippet}
-					<Table
-						data={await getHistorialPedido(parseInt(page.params.id ?? ''))}
-						header={headerHistorial}
-						row={rowHistorial}
-					/>
+			{#if pedido.observaciones}
+				<div class="col-span-full">
+					<dt>Observaciones</dt>
+					<dd class="whitespace-pre-wrap">{pedido.observaciones}</dd>
 				</div>
-			</div>
-		</div>
+			{/if}
+		</dl>
+	</Seccion>
+
+	<Seccion titulo="Productos"
+		><Table data={lineas}>
+			{#snippet header()}
+				<th>Producto</th>
+				<th class="numero">Cant.</th>
+				{#if veImportes}
+					<th class="numero">Costo</th>
+					<th class="numero">Precio lista</th>
+					<th class="numero">Precio neto</th>
+					<th class="numero">Subtotal</th>
+				{/if}
+				<th>Fabricación</th>
+			{/snippet}
+			{#snippet row(linea: (typeof lineas)[number])}
+				<td>
+					<p>{linea.producto_nombre || linea.descripcion_personalizada || '-'}</p>
+					<p class="font-mono text-xs text-base-content/60">
+						{linea.es_personalizado ? 'Personalizado' : linea.producto_codigo}
+					</p>
+				</td>
+				<td class="numero">{linea.cantidad}</td>
+				{#if veImportes}
+					<td class="numero">{formatearMoneda(linea.costo_materiales)}</td>
+					<td class="numero">{formatearMoneda(linea.precio_lista_unitario)}</td>
+					<td class="numero">{formatearMoneda(linea.precio_unitario)}</td>
+					<td class="numero font-medium">{formatearMoneda(linea.subtotal)}</td>
+				{/if}
+				<td>
+					{#if linea.reserva_stock}
+						<span class="badge badge-soft badge-sm badge-info">
+							{ETIQUETA_RESERVA[linea.reserva_stock.estado] ??
+								`Reservado · ${linea.reserva_stock.ubicacion_nombre}`}
+						</span>
+					{:else if linea.produccion}
+						{@const p = linea.produccion}
+						<a
+							href={resolve(`/fabricacion/${p.orden_id}`)}
+							class={['badge badge-soft badge-sm', p.es_final ? 'badge-success' : 'badge-warning']}
+						>
+							OF-{p.orden_id} · {p.terminadas}/{p.total}
+						</a>
+					{:else}
+						<Can modulo="fabricacion" accion="create">
+							<a class="btn btn-xs" href={resolve(`/fabricacion/crear?linea=${linea.id}`)}>
+								Pasar a fabricación
+							</a>
+						</Can>
+					{/if}
+				</td>
+			{/snippet}
+			{#snippet footer()}
+				{#if veImportes}
+					<th colspan="5" class="numero">Total</th>
+					<th class="numero text-base text-base-content">{formatearMoneda(pedido.total)}</th>
+					<th></th>
+				{/if}
+			{/snippet}
+		</Table>
+	</Seccion>
+
+	{#if insumosAdicionales.length}
+		<Seccion titulo="Insumos adicionales">
+			<Table data={insumosAdicionales}>
+				{#snippet header()}
+					<th>Insumo</th>
+					<th class="numero">Cantidad</th>
+					{#if veImportes}
+						<th class="numero">Costo</th>
+						<th class="numero">Precio lista</th>
+						<th class="numero">Precio neto</th>
+					{/if}
+				{/snippet}
+				{#snippet row(insumo: (typeof insumosAdicionales)[number])}
+					<td>
+						<p>{insumo.nombre}</p>
+						<p class="font-mono text-xs text-base-content/60">{insumo.codigo}</p>
+					</td>
+					<td class="numero">{insumo.cantidad} {insumo.unidad}</td>
+					{#if veImportes}
+						<td class="numero">{formatearMoneda(insumo.costo_unitario)}</td>
+						<td class="numero">{formatearMoneda(insumo.precio_lista_unitario)}</td>
+						<td class="numero">{formatearMoneda(insumo.precio_unitario)}</td>
+					{/if}
+				{/snippet}
+			</Table>
+		</Seccion>
 	{/if}
+
+	<div class="grid items-start gap-4 sm:gap-6 lg:grid-cols-3">
+		<div class="flex min-w-0 flex-col gap-4 sm:gap-6 lg:col-span-2">
+			<ArchivosAdjuntos tipo="pedido" entidadId={pedido.id} {adjuntos} />
+		</div>
+
+		<div class="flex min-w-0 flex-col gap-4 sm:gap-6">
+			{#if veImportes}<PedidoPagos pedidoId={pedido.id} />{/if}
+			<PedidoEnvios pedidoId={pedido.id} />
+			<Seccion titulo="Historial">
+				<Historial eventos={historial} />
+			</Seccion>
+		</div>
+	</div>
 </PageLayout>
-
-<Modal bind:open={showEliminar} title="Eliminar Pedido" onClose={cerrarModal}>
-	<p>¿Eliminar el pedido <strong>{pedido?.numero_pedido}</strong>?</p>
-
-	{#snippet actions()}
-		<button class="btn" onclick={cerrarModal}>Cancelar</button>
-		<button class="btn btn-error" onclick={confirmarEliminar}>Eliminar</button>
-	{/snippet}
-</Modal>

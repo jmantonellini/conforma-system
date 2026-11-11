@@ -233,7 +233,7 @@
 			class="space-y-4"
 		>
 			<!-- Contacto -->
-			<fieldset class="fieldset rounded-box border border-base-300 bg-base-200 p-4">
+			<fieldset class="fieldset seccion">
 				<legend class="fieldset-legend text-lg">¿Quién consulta?</legend>
 
 				<div class="grid gap-4 md:grid-cols-4">

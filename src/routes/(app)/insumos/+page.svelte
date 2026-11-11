@@ -1,208 +1,136 @@
 <script lang="ts">
-	import { goto, invalidateAll } from '$app/navigation';
 	import { resolve } from '$app/paths';
 	import {
 		Can,
+		ColumnaOrden,
 		ExcelMenu,
 		Highlight,
-		PageLayout,
-		Pagination,
-		SearchBar,
-		Table
+		Icono,
+		Listado,
+		filtrar,
+		parametro
 	} from '$lib/components/ui';
-	import { Delete, Edit } from '$lib/components/ui/icons';
 	import { eliminarInsumo } from '$lib/remote/insumos.remote';
-	import { toast } from '$lib/stores/toast.svelte';
-	import { debounce } from '$lib/utils/debounce';
-	import { can as tienePermiso } from '$lib/utils/permissions';
-	import { formatearDosDecimales } from '$lib/utils/precios';
-	import { SvelteURLSearchParams } from 'svelte/reactivity';
+	import { confirmarYEjecutar } from '$lib/stores/confirmacion.svelte';
+	import { can } from '$lib/utils/permissions';
+	import { formatearMoneda } from '$lib/utils/precios';
 	import type { PageProps } from './$types';
 
 	let { data }: PageProps = $props();
-	let search = $state('');
-	let tipo = $state('');
-	let categoriaId = $state('');
-	let currentPage = $state(1);
-	let sort = $state<'nombre' | 'codigo' | 'costo_unitario'>('nombre');
-	let direction = $state<'asc' | 'desc'>('asc');
-
-	$effect(() => {
-		search = data.search ?? '';
-		tipo = data.tipo ?? '';
-		categoriaId = data.categoriaId ?? '';
-		currentPage = data.currentPage ?? 1;
-		sort = data.sort ?? 'nombre';
-		direction = (data.direction ?? 'asc') as typeof direction;
-	});
-
-	function handleSearchChange() {
-		const params = new SvelteURLSearchParams();
-		if (search) params.set('search', search);
-		if (tipo) params.set('tipo', tipo);
-		if (categoriaId) params.set('categoria', categoriaId);
-		if (currentPage > 1) params.set('page', currentPage.toString());
-		if (sort !== 'nombre') params.set('sort', sort);
-		if (direction !== 'asc') params.set('direction', direction);
-		goto(resolve(`/insumos?${params.toString()}`));
-	}
-
-	function handleSort(key: string) {
-		if (!['nombre', 'codigo', 'costo_unitario'].includes(key)) return;
-		const sortKey = key as typeof sort;
-		if (sort === sortKey) direction = direction === 'asc' ? 'desc' : 'asc';
-		else {
-			sort = sortKey;
-			direction = 'asc';
-		}
-		currentPage = 1;
-		handleSearchChange();
-	}
-
-	const formatearCantidad = (cantidad: number) =>
-		new Intl.NumberFormat('es-AR', { maximumFractionDigits: 3 }).format(cantidad);
+	const busqueda = $derived(parametro('search'));
+	const TIPOS = [
+		['material', 'Material'],
+		['mano_obra', 'Mano de obra'],
+		['indirecto', 'Costo indirecto'],
+		['herramienta', 'Herramienta']
+	] as const;
+	const formatearCantidad = new Intl.NumberFormat('es-AR', { maximumFractionDigits: 3 }).format;
 </script>
 
-<PageLayout>
-	<div class="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-		<div class="flex flex-1 flex-wrap gap-3 lg:flex-nowrap">
-			<div class="w-full sm:w-80">
-				<SearchBar
-					autofocus
-					bind:search
-					oninput={() => {
-						currentPage = 1;
-						debounce(handleSearchChange);
-					}}
-				/>
-			</div>
-			<select
-				class="select select-sm"
-				bind:value={tipo}
-				onchange={() => {
-					currentPage = 1;
-					handleSearchChange();
-				}}
-			>
-				<option value="">Todos los tipos</option>
-				<option value="material">Material</option>
-				<option value="mano_obra">Mano de obra</option>
-				<option value="indirecto">Costo indirecto</option>
-				<option value="herramienta">Herramienta</option>
-			</select>
-			<select
-				class="select select-sm"
-				bind:value={categoriaId}
-				onchange={() => {
-					currentPage = 1;
-					handleSearchChange();
-				}}
-			>
-				<option value="">Todas las categorías</option>
-				{#each data.categorias as categoria (categoria.id)}
-					<option value={String(categoria.id)}>{categoria.nombre}</option>
-				{/each}
-			</select>
-		</div>
-		<div class="flex gap-3">
-			<Can modulo="insumos" accion="edit">
-				<a class="btn btn-outline btn-sm" href={resolve('/insumos/movimientos')}>Movimientos</a>
-			</Can>
-			<ExcelMenu
-				importHref={resolve('/insumos/importar')}
-				exportHref={resolve('/insumos/exportar')}
-				canImport={tienePermiso(data.user, data.permisos, 'insumos', 'import')}
-				canExport={tienePermiso(data.user, data.permisos, 'insumos', 'view')}
-			/>
-			<Can modulo="insumos" accion="create">
-				<a class="btn btn-primary btn-sm" href={resolve('/insumos/crear')}>+ Nuevo insumo</a>
-			</Can>
-		</div>
-	</div>
-
-	<div class="card bg-base-100 shadow">
-		<div class="card-body p-0">
-			{#snippet header(onSort: ((key: string) => void) | undefined)}
-				<th><button class="link" onclick={() => onSort?.('codigo')}>Código</button></th><th
-					><button class="link" onclick={() => onSort?.('nombre')}>Descripción</button></th
-				><th>Imagen</th><th>Tipo</th><th>Categoría</th><th>Unidad</th><th class="text-right"
-					>Existencia</th
-				><th class="text-right"
-					><button class="link" onclick={() => onSort?.('costo_unitario')}>Costo vigente</button
-					></th
-				><th>Acciones</th>
-			{/snippet}
-			{#snippet row(insumo: (typeof data.insumos.data)[number])}
-				<td class="font-mono text-sm"><Highlight text={insumo.codigo} query={search} /></td>
-				<td class="font-medium"><Highlight text={insumo.nombre} query={search} /></td>
-				<td>
-					{#if insumo.imagen_key}
-						<img
-							class="h-10 w-10 rounded border border-base-300 object-cover"
-							src={resolve(`/insumos/${insumo.id}/imagen`)}
-							alt="Imagen de {insumo.nombre}"
-							loading="lazy"
-						/>
-					{:else}
-						<span class="text-base-content/40">-</span>
-					{/if}
-				</td>
-				<td
-					><span class="badge badge-ghost badge-sm whitespace-nowrap"
-						><Highlight
-							text={typeof insumo.tipo === 'object' ? insumo.tipo?.nombre : insumo.tipo}
-							query={search}
-						/></span
-					></td
-				>
-				<td><Highlight text={insumo.categoria?.nombre ?? 'Sin categoría'} query={search} /></td>
-				<td>{insumo.unidad}</td>
-				<td class="text-right font-semibold">{formatearCantidad(insumo.stock)}</td>
-				<td class="text-right">${formatearDosDecimales(insumo.costo_unitario)}</td>
-				<td>
-					<div class="flex justify-center gap-2">
-						<Can modulo="insumos" accion="edit">
-							<a
-								class="btn btn-circle btn-ghost btn-sm"
-								title="Editar"
-								href={resolve(`/insumos/${insumo.id}`)}
-							>
-								<Edit />
-							</a>
-						</Can>
-						<Can modulo="insumos" accion="delete">
-							<button
-								class="btn btn-circle btn-ghost text-error btn-sm"
-								title="Eliminar"
-								onclick={async () => {
-									await eliminarInsumo(insumo.id);
-									await invalidateAll();
-									toast.success('Insumo eliminado');
-								}}><Delete /></button
-							>
-						</Can>
-					</div>
-				</td>
-			{/snippet}
-			<Table
-				data={data.insumos.data}
-				{header}
-				{row}
-				onSort={handleSort}
-				emptyMessage="No hay insumos registrados"
-			/>
-			{#if data.insumos.totalPages > 1}
-				<div class="mt-6 flex justify-center">
-					<Pagination
-						currentPage={data.currentPage}
-						totalPages={data.insumos.totalPages}
-						onPageChange={(page) => {
-							currentPage = page;
-							handleSearchChange();
-						}}
+<Listado
+	titulo="Insumos"
+	datos={data.insumos.data}
+	total={data.insumos.total}
+	pagina={data.currentPage}
+	paginas={data.insumos.totalPages}
+	buscar="Código, descripción, categoría..."
+	vacio="No hay insumos para estos filtros"
+>
+	{#snippet acciones()}
+		<Can modulo="insumos" accion="edit">
+			<a class="btn btn-sm" href={resolve('/insumos/movimientos')}>Movimientos</a>
+		</Can>
+		<Can modulo="insumos" accion="create">
+			<a class="btn btn-primary btn-sm" href={resolve('/insumos/crear')}>
+				<Icono nombre="mas_simple" /> Nuevo insumo
+			</a>
+		</Can>
+	{/snippet}
+	{#snippet filtros()}
+		<select
+			class="select w-44 select-sm"
+			value={parametro('tipo')}
+			onchange={(e) => filtrar({ tipo: e.currentTarget.value })}
+		>
+			<option value="">Todos los tipos</option>
+			{#each TIPOS as [valor, etiqueta] (valor)}<option value={valor}>{etiqueta}</option>{/each}
+		</select>
+		<select
+			class="select w-48 select-sm"
+			value={parametro('categoria')}
+			onchange={(e) => filtrar({ categoria: e.currentTarget.value })}
+		>
+			<option value="">Todas las categorías</option>
+			{#each data.categorias as categoria (categoria.id)}
+				<option value={String(categoria.id)}>{categoria.nombre}</option>
+			{/each}
+		</select>
+	{/snippet}
+	{#snippet herramientas()}
+		<ExcelMenu
+			importHref={resolve('/insumos/importar')}
+			exportHref={resolve('/insumos/exportar')}
+			canImport={can(data.user, data.permisos, 'insumos', 'import')}
+			canExport={can(data.user, data.permisos, 'insumos', 'view')}
+		/>
+	{/snippet}
+	{#snippet header()}
+		<ColumnaOrden clave="nombre" porDefecto="nombre">Insumo</ColumnaOrden>
+		<th>Tipo</th>
+		<th>Categoría</th>
+		<th class="text-right">Existencia</th>
+		<ColumnaOrden clave="costo_unitario" porDefecto="nombre" class="text-right">Costo</ColumnaOrden>
+		<th></th>
+	{/snippet}
+	{#snippet row(insumo: (typeof data.insumos.data)[number])}
+		<td class="max-w-80">
+			<div class="flex items-center gap-3">
+				{#if insumo.imagen_key}
+					<img
+						class="size-9 shrink-0 rounded-field border border-base-300 object-cover"
+						src={resolve(`/insumos/${insumo.id}/imagen`)}
+						alt=""
+						loading="lazy"
 					/>
+				{/if}
+				<div class="min-w-0">
+					<a class="enlace-fila block truncate" href={resolve(`/insumos/${insumo.id}`)}>
+						<Highlight text={insumo.nombre} query={busqueda} />
+					</a>
+					<p class="secundario font-mono"><Highlight text={insumo.codigo} query={busqueda} /></p>
 				</div>
-			{/if}
-		</div>
-	</div>
-</PageLayout>
+			</div>
+		</td>
+		<td>
+			<span class="badge badge-ghost badge-sm whitespace-nowrap">
+				{typeof insumo.tipo === 'object' ? insumo.tipo?.nombre : insumo.tipo}
+			</span>
+		</td>
+		<td class="text-base-content/70">
+			<Highlight text={insumo.categoria?.nombre ?? 'Sin categoría'} query={busqueda} />
+		</td>
+		<td class="numero">
+			<span class={['font-medium', insumo.stock <= 0 && 'text-error']}>
+				{formatearCantidad(insumo.stock)}
+			</span>
+			<span class="secundario">{insumo.unidad}</span>
+		</td>
+		<td class="numero">{formatearMoneda(insumo.costo_unitario)}</td>
+		<td class="w-0">
+			<Can modulo="insumos" accion="delete">
+				<button
+					class="btn btn-square btn-ghost text-base-content/50 btn-sm hover:text-error"
+					title="Eliminar"
+					onclick={() =>
+						confirmarYEjecutar({
+							mensaje: `¿Eliminar el insumo ${insumo.nombre}?`,
+							ejecutar: () => eliminarInsumo(insumo.id),
+							exito: 'Insumo eliminado'
+						})}
+				>
+					<Icono nombre="papelera" />
+				</button>
+			</Can>
+		</td>
+	{/snippet}
+</Listado>

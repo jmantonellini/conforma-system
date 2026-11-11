@@ -38,6 +38,10 @@ export function formatearDosDecimales(valor: number | null | undefined) {
 	return formatoDosDecimales.format(Number(valor ?? 0));
 }
 
+/** Importe con signo: `$ 1.234,56`. */
+export const formatearMoneda = (valor: number | null | undefined) =>
+	`$ ${formatearDosDecimales(valor)}`;
+
 export function calcularIva21(base: number) {
 	return redondearPrecio(base * 0.21);
 }

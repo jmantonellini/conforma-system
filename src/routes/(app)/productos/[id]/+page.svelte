@@ -7,6 +7,7 @@
 	} from '$lib/remote/productos.remote';
 	import {
 		Can,
+		EncabezadoDetalle,
 		FormErrors,
 		PageLayout,
 		FormFieldWrapper,
@@ -19,7 +20,7 @@
 	import { goto } from '$app/navigation';
 	import { page } from '$app/state';
 	import { resolve } from '$app/paths';
-	import { calcularPrecioVenta, formatearDosDecimales, redondearPrecio } from '$lib/utils/precios';
+	import { calcularPrecioVenta, formatearMoneda, redondearPrecio } from '$lib/utils/precios';
 	import type { PageProps } from './$types';
 	import { CATEGORIAS_PRODUCTO, TIPOS_USO_PRODUCTO } from '$lib/types/catalogos';
 
@@ -56,7 +57,6 @@
 		tiposUso.find((tipoUso) => String(tipoUso.id) === tipoUsoActual)
 	);
 
-	let showDeleteModal = $state(false);
 	const mapearReceta = () =>
 		(data.receta ?? []).map((linea) => ({
 			insumo_id: linea.insumo_id ? String(linea.insumo_id) : '',
@@ -125,14 +125,20 @@
 </script>
 
 <PageLayout>
-	<div class="flex items-center justify-between">
-		<button onclick={() => history.back()} class="btn btn-ghost btn-sm">← Volver</button>
-		<Can modulo="productos" accion="delete">
-			<button class="btn btn-outline btn-error btn-sm" onclick={() => (showDeleteModal = true)}
-				>Eliminar</button
-			>
-		</Can>
-	</div>
+	<EncabezadoDetalle
+		titulo={data.producto.nombre}
+		subtitulo={data.producto.codigo}
+		volver={{ href: '/productos', etiqueta: 'Productos' }}
+		eliminar={{
+			modulo: 'productos',
+			mensaje: `¿Eliminar el producto ${data.producto.nombre}?`,
+			onConfirmar: async () => {
+				await eliminarProducto(data.producto.id);
+				toast.success('Producto eliminado');
+				goto(resolve('/productos'));
+			}
+		}}
+	/>
 	<Can modulo="productos" accion="edit">
 		<form
 			{...form.enhance(async (formInstance) => {
@@ -149,13 +155,13 @@
 					);
 				}
 			})}
-			class="space-y-6"
+			class="flex flex-col gap-4 sm:gap-6"
 		>
 			<input type="hidden" name="id" value={page.params.id} />
 			<input type="hidden" name="receta" value={JSON.stringify(receta)} />
 
 			<!-- Datos básicos -->
-			<fieldset class="fieldset rounded-box border border-base-300 bg-base-200 p-4">
+			<fieldset class="fieldset seccion">
 				<legend class="fieldset-legend">Datos básicos</legend>
 				<div class="grid grid-cols-1 gap-4 md:grid-cols-4">
 					<FormFieldWrapper label="Código" id="codigo">
@@ -178,7 +184,7 @@
 					</FormFieldWrapper>
 					<FormFieldWrapper label="Margen bruto (%)" id="margen_porcentaje">
 						<input
-							class="remove-arrow input"
+							class="input"
 							min="0"
 							max="99.99"
 							step="0.01"
@@ -188,13 +194,13 @@
 					<div class="stat rounded-box border border-base-300 bg-base-100 p-3">
 						<div class="stat-title">Costo de receta</div>
 						<div class="stat-value text-xl">
-							${formatearDosDecimales(costoReceta)}
+							{formatearMoneda(costoReceta)}
 						</div>
 					</div>
 					<div class="stat rounded-box border border-primary/30 bg-primary/5 p-3">
 						<div class="stat-title">Precio de lista</div>
 						<div class="stat-value text-xl text-primary">
-							${formatearDosDecimales(precioVenta)}
+							{formatearMoneda(precioVenta)}
 						</div>
 					</div>
 				</div>
@@ -202,7 +208,7 @@
 
 			<!-- Vehículo (solo si categoría es Escape) -->
 			{#if categoriaSeleccionada?.slug === CATEGORIAS_PRODUCTO.ESCAPES}
-				<fieldset class="fieldset rounded-box border border-base-300 bg-base-200 p-4">
+				<fieldset class="fieldset seccion">
 					<legend class="fieldset-legend">Vehículo</legend>
 					<div class="grid grid-cols-1 gap-4 md:grid-cols-3">
 						<FormFieldWrapper label="Tipo" id="tipo_vehiculo_id">
@@ -289,12 +295,12 @@
 
 				<div class="flex flex-col gap-4 lg:flex-row">
 					<!-- Medidas (solo si es Escape) -->
-					<fieldset class="fieldset rounded-box border border-base-300 bg-base-200 p-4 lg:w-1/3">
+					<fieldset class="fieldset seccion lg:w-1/3">
 						<legend class="fieldset-legend">Medidas Primario</legend>
 						<div class="grid grid-cols-2 gap-4">
 							<FormFieldWrapper label="Diámetro" id="medidas_primario_diametro">
 								<input
-									class="remove-arrow input"
+									class="input"
 									{...form.fields.medidas_primario_diametro.as(
 										'number',
 										data.producto.medidas_primario_diametro ?? 0
@@ -303,7 +309,7 @@
 							</FormFieldWrapper>
 							<FormFieldWrapper label="Largo" id="medidas_primario_largo">
 								<input
-									class="remove-arrow input"
+									class="input"
 									{...form.fields.medidas_primario_largo.as(
 										'number',
 										data.producto.medidas_primario_largo ?? 0
@@ -313,12 +319,12 @@
 						</div>
 					</fieldset>
 
-					<fieldset class="fieldset rounded-box border border-base-300 bg-base-200 p-4 lg:w-1/3">
+					<fieldset class="fieldset seccion lg:w-1/3">
 						<legend class="fieldset-legend">Medidas Secundario</legend>
 						<div class="grid grid-cols-2 gap-4">
 							<FormFieldWrapper label="Diámetro" id="medidas_secundario_diametro">
 								<input
-									class="remove-arrow input"
+									class="input"
 									{...form.fields.medidas_secundario_diametro.as(
 										'number',
 										data.producto.medidas_secundario_diametro ?? 0
@@ -327,7 +333,7 @@
 							</FormFieldWrapper>
 							<FormFieldWrapper label="Largo" id="medidas_secundario_largo">
 								<input
-									class="remove-arrow input"
+									class="input"
 									{...form.fields.medidas_secundario_largo.as(
 										'number',
 										data.producto.medidas_secundario_largo ?? 0
@@ -336,12 +342,12 @@
 							</FormFieldWrapper>
 						</div>
 					</fieldset>
-					<fieldset class="fieldset rounded-box border border-base-300 bg-base-200 p-4 lg:w-1/3">
+					<fieldset class="fieldset seccion lg:w-1/3">
 						<legend class="fieldset-legend">Trombon</legend>
 						<div class="grid grid-cols-2 gap-4">
 							<FormFieldWrapper label="Diámetro Inicial" id="trombon_diametro_inicial">
 								<input
-									class="remove-arrow input"
+									class="input"
 									{...form.fields.trombon_diametro_inicial.as(
 										'number',
 										data.producto.trombon_diametro_inicial ?? 0
@@ -350,7 +356,7 @@
 							</FormFieldWrapper>
 							<FormFieldWrapper label="Diámetro Final" id="trombon_diametro_final">
 								<input
-									class="remove-arrow input"
+									class="input"
 									{...form.fields.trombon_diametro_final.as(
 										'number',
 										data.producto.trombon_diametro_final ?? 0
@@ -358,13 +364,13 @@
 								/>
 							</FormFieldWrapper>
 							<FormFieldWrapper label="Largo" id="trombon_largo">
-								<input class="remove-arrow input" {...form.fields.trombon_largo.as('number')} />
+								<input class="input" {...form.fields.trombon_largo.as('number')} />
 							</FormFieldWrapper>
 						</div>
 					</fieldset>
 				</div>
 			{/if}
-			<fieldset class="fieldset rounded-box border border-base-300 bg-base-200 p-4">
+			<fieldset class="fieldset seccion">
 				<legend class="fieldset-legend">Receta del producto</legend>
 				{#each receta as linea, indice (indice)}
 					{@const unidad =
@@ -393,7 +399,7 @@
 							options={opcionesComponentes}
 						/>
 						<input
-							class="remove-arrow input w-16 input-sm"
+							class="input w-16 input-sm"
 							type="number"
 							min="0"
 							step="0.01"
@@ -419,10 +425,10 @@
 					<button class="btn btn-outline btn-sm" type="button" onclick={agregarInsumo}
 						>+ Agregar componente</button
 					>
-					<span class="font-semibold">Costo expandido: ${formatearDosDecimales(costoReceta)}</span>
+					<span class="font-semibold">Costo expandido: {formatearMoneda(costoReceta)}</span>
 				</div>
 			</fieldset>
-			<fieldset class="fieldset rounded-box border border-base-300 bg-base-200 p-4 lg:w-1/2">
+			<fieldset class="fieldset seccion lg:w-1/2">
 				<legend class="fieldset-legend">Observaciones</legend>
 				<FormFieldWrapper id="trombon_observaciones">
 					<textarea
@@ -450,19 +456,3 @@
 		adjuntos={data.producto.adjuntos}
 	/>
 </PageLayout>
-
-<!-- Modal eliminar -->
-{#if showDeleteModal}
-	<dialog class="modal-open modal">
-		<div class="modal-box">
-			<h3 class="text-lg font-bold">Eliminar Pedido</h3>
-			<p class="py-4">¿Eliminar el producto {data.producto?.id}?</p>
-			<div class="modal-action">
-				<button class="btn" onclick={() => (showDeleteModal = false)}>Cancelar</button>
-				<button class="btn btn-error" onclick={async () => eliminarProducto(data.producto?.id)}
-					>Eliminar</button
-				>
-			</div>
-		</div>
-	</dialog>
-{/if}

@@ -1,196 +1,102 @@
 <script lang="ts">
-	import { mensajeError } from '$lib/utils/errores';
+	import { resolve } from '$app/paths';
+	import {
+		EstadoBadge,
+		Highlight,
+		Icono,
+		Listado,
+		Persona,
+		filtrar,
+		parametro
+	} from '$lib/components/ui';
 	import {
 		getEstadosFabricacion,
 		getOrdenesFabricacion
 	} from '$lib/remote/fabricacion-consultas.remote';
-	import { eliminarOrdenFabricacion } from '$lib/remote/fabricacion.remote';
-	import { Highlight, Table, PageLayout, Pagination, Modal } from '$lib/components/ui';
-	import { goto, invalidateAll } from '$app/navigation';
-	import { SvelteURLSearchParams } from 'svelte/reactivity';
-	import { resolve } from '$app/paths';
-	import { Delete, Eye } from '$lib/components/ui/icons';
-	import { page } from '$app/state';
-	import { toast } from '$lib/stores/toast.svelte';
-	import SearchBar from '$lib/components/ui/SearchBar.svelte';
-	import { debounce } from '$lib/utils/debounce';
+	import { ETIQUETA_PRIORIDAD } from '$lib/types/dominio';
+	import { estaVencido, formatearFecha } from '$lib/utils/fechas';
 
-	let estados = await getEstadosFabricacion();
-	let showModal = $state(false);
-	let deleteOrdenId = $state('');
-	let estadoFilter = $state(0);
-	let currentPage = $state(1);
-	let search = $state('');
-
-	$effect(() => {
-		const params = page.url.searchParams;
-		search = params.get('search') ?? '';
-		estadoFilter = Number(params.get('estado')) || 0;
-		currentPage = Number(params.get('page')) || 1;
-	});
-
-	function closeModal() {
-		showModal = false;
-	}
-
-	let ordenesData = $derived(
+	const estados = await getEstadosFabricacion();
+	const busqueda = $derived(parametro('search'));
+	const ordenes = $derived(
 		await getOrdenesFabricacion({
-			search: search || undefined,
-			estado: estadoFilter || undefined,
-			page: currentPage
+			search: busqueda || undefined,
+			estado: Number(parametro('estado')) || undefined,
+			page: Number(parametro('page')) || 1
 		})
 	);
-
-	function handleSearchChange() {
-		const params = new SvelteURLSearchParams();
-		if (search) params.set('search', search);
-		if (estadoFilter) params.set('estado', String(estadoFilter));
-		if (currentPage > 1) params.set('page', String(currentPage));
-
-		goto(resolve(`/fabricacion?${params.toString()}`));
-	}
 </script>
 
-<PageLayout>
-	<div class="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-		<div class="flex flex-1 flex-wrap gap-4">
-			<div class="w-full sm:w-80">
-				<SearchBar
-					autofocus
-					bind:search
-					oninput={() => {
-						currentPage = 1;
-						debounce(handleSearchChange);
-					}}
-				/>
-			</div>
-			<select
-				bind:value={estadoFilter}
-				class="select w-48 select-sm"
-				onchange={() => {
-					currentPage = 1;
-					handleSearchChange();
-				}}
-			>
-				<option value={0}>Todos los estados</option>
-				{#each estados as e (e.id)}
-					<option value={e.id}>{e.nombre}</option>
-				{/each}
-			</select>
-		</div>
-		<a href={resolve('/fabricacion/crear')} class="btn btn-primary btn-sm">+ Nueva Orden</a>
-	</div>
-
-	<div class="card bg-base-100 shadow">
-		<div class="card-body p-0">
-			{#snippet header()}
-				<th>N° Orden</th>
-				<th>Estado</th>
-				<th>Trabajo</th>
-				<th>Producto</th>
-				<th class="text-center">Progreso</th>
-				<th>Prioridad</th>
-				<th class="text-center">Acciones</th>
-			{/snippet}
-
-			{#snippet row(orden: (typeof ordenesData.ordenes)[number])}
-				<td class="font-mono text-sm"><Highlight text={`OF-${orden.id}`} query={search} /></td>
-				<td>
-					<span
-						class={`badge badge-soft badge-sm whitespace-nowrap capitalize badge-${orden.estado?.color}`}
-					>
-						{orden.estado?.nombre}
-					</span>
-				</td>
-				<td class="font-medium"><Highlight text={orden.nombre_trabajo} query={search} /></td>
-				<td>
-					<Highlight text={orden.producto_nombre || '-'} query={search} />
-					{#if orden.es_para_stock}
-						<span class="ml-2 badge badge-sm badge-info">Stock</span>
-					{/if}
-				</td>
-				<td class="text-center">
-					<div class="flex items-center gap-2">
-						<progress
-							class="progress w-24"
-							value={orden.cantidad_producida}
-							max={orden.cantidad_total}
-						></progress>
-						<span class="text-sm">{orden.cantidad_producida}/{orden.cantidad_total}</span>
-					</div>
-				</td>
-				<td>
-					{#if orden.prioridad === 2}
-						<span class="badge badge-sm badge-error">Crítica</span>
-					{:else if orden.prioridad === 1}
-						<span class="badge badge-sm badge-warning">Urgente</span>
-					{:else}
-						<span class="badge badge-ghost badge-sm">Normal</span>
-					{/if}
-				</td>
-				<td class="flex flex-nowrap items-center gap-1">
-					<a
-						class="btn btn-circle btn-ghost btn-sm"
-						title="Ver cliente"
-						href={resolve(`/fabricacion/${orden.id}`)}
-					>
-						<Eye />
-					</a>
-					<button
-						class="btn btn-circle btn-ghost text-error btn-sm"
-						title="Eliminar"
-						onclick={() => {
-							deleteOrdenId = String(orden.id);
-							showModal = true;
-						}}
-					>
-						<Delete />
-					</button>
-				</td>
-			{/snippet}
-
-			<Table
-				data={ordenesData.ordenes}
-				loading={false}
-				emptyMessage="No hay órdenes de fabricación"
-				{header}
-				{row}
-			/>
-
-			{#if ordenesData.totalPages > 1}
-				<div class="mt-6 flex justify-center">
-					<Pagination
-						currentPage={ordenesData.currentPage}
-						totalPages={ordenesData.totalPages}
-						onPageChange={(page) => {
-							currentPage = page;
-							handleSearchChange();
-						}}
-					/>
-				</div>
-			{/if}
-		</div>
-	</div>
-</PageLayout>
-
-<Modal bind:open={showModal} title="Eliminar orden de fabricación" onClose={closeModal}>
-	<div class="py-4">
-		<p>¿Seguro que quieres eliminar esta orden de fabricación?</p>
-	</div>
-	{#snippet actions()}
-		<button class="btn" onclick={closeModal}>Cancelar</button>
-		<button
-			class="btn btn-error"
-			onclick={async () => {
-				try {
-					await eliminarOrdenFabricacion(deleteOrdenId);
-					closeModal();
-					await invalidateAll();
-					toast.success('Orden eliminada');
-				} catch (error) {
-					toast.error(mensajeError(error, 'Error al eliminar'));
-				}
-			}}>Eliminar</button
-		>
+<Listado
+	titulo="Fabricación"
+	datos={ordenes.ordenes}
+	total={ordenes.total}
+	pagina={ordenes.currentPage}
+	paginas={ordenes.totalPages}
+	buscar="Trabajo, pedido, cliente, producto..."
+	vacio="No hay órdenes de fabricación para estos filtros"
+>
+	{#snippet acciones()}
+		<a class="btn btn-primary btn-sm" href={resolve('/fabricacion/crear')}>
+			<Icono nombre="mas_simple" /> Nueva orden
+		</a>
 	{/snippet}
-</Modal>
+	{#snippet filtros()}
+		<select
+			class="select w-48 select-sm"
+			value={parametro('estado')}
+			onchange={(e) => filtrar({ estado: e.currentTarget.value })}
+		>
+			<option value="">Todos los estados</option>
+			{#each estados as estado (estado.id)}
+				<option value={String(estado.id)}>{estado.nombre}</option>
+			{/each}
+		</select>
+	{/snippet}
+	{#snippet header()}
+		<th>Orden</th>
+		<th>Trabajo</th>
+		<th>Estado</th>
+		<th>Progreso</th>
+		<th>Prioridad</th>
+		<th>Responsable</th>
+		<th>Entrega</th>
+	{/snippet}
+	{#snippet row(orden: (typeof ordenes.ordenes)[number])}
+		<td>
+			<a class="enlace-fila font-mono" href={resolve(`/fabricacion/${orden.id}`)}>
+				<Highlight text={`OF-${orden.id}`} query={busqueda} />
+			</a>
+		</td>
+		<td>
+			<p class="font-medium"><Highlight text={orden.nombre_trabajo} query={busqueda} /></p>
+			<p class="secundario">
+				{orden.es_para_stock
+					? 'Stock interno'
+					: [orden.pedido?.numero, orden.cliente_nombre].filter(Boolean).join(' · ')}
+			</p>
+		</td>
+		<td><EstadoBadge class="badge-sm" estado={orden.estado} /></td>
+		<td>
+			<div class="flex items-center gap-2">
+				<progress
+					class="progress w-20 progress-primary"
+					value={orden.cantidad_producida}
+					max={orden.cantidad_total}
+				></progress>
+				<span class="text-xs text-base-content/60 tabular-nums">
+					{orden.cantidad_producida}/{orden.cantidad_total}
+				</span>
+			</div>
+		</td>
+		<td><EstadoBadge class="badge-sm" estado={ETIQUETA_PRIORIDAD[orden.prioridad ?? 0]} /></td>
+		<td><Persona nombre={orden.empleado?.nombre} apellido={orden.empleado?.apellido} /></td>
+		<td
+			class={estaVencido(orden.fecha_fin_estimada) && !orden.estado?.es_final
+				? 'font-medium text-error'
+				: 'text-base-content/70'}
+		>
+			{formatearFecha(orden.fecha_fin_estimada)}
+		</td>
+	{/snippet}
+</Listado>

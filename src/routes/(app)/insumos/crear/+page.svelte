@@ -2,7 +2,14 @@
 	import { onDestroy } from 'svelte';
 	import { goto } from '$app/navigation';
 	import { resolve } from '$app/paths';
-	import { Can, FormActions, FormErrors, FormFieldWrapper, PageLayout } from '$lib/components/ui';
+	import {
+		Can,
+		EncabezadoDetalle,
+		FormActions,
+		FormErrors,
+		FormFieldWrapper,
+		PageLayout
+	} from '$lib/components/ui';
 	import {
 		crearInsumo,
 		getCategoriasInsumo,
@@ -42,7 +49,7 @@
 </script>
 
 <PageLayout>
-	<a href={resolve('/insumos')} class="btn btn-ghost btn-sm">← Volver</a>
+	<EncabezadoDetalle titulo="Nuevo insumo" volver={{ href: '/insumos', etiqueta: 'Insumos' }} />
 	<Can modulo="insumos" accion="create">
 		<form
 			{...form.enhance(async (instance) => {
@@ -70,7 +77,7 @@
 			})}
 			class="space-y-6"
 		>
-			<fieldset class="fieldset rounded-box border border-base-300 bg-base-200 p-4">
+			<fieldset class="fieldset seccion">
 				<legend class="fieldset-legend">Datos del insumo</legend>
 				<div class="grid gap-4 md:grid-cols-2">
 					<FormFieldWrapper label="Código" id="codigo" required>
@@ -125,16 +132,11 @@
 						</select>
 					</FormFieldWrapper>
 					<FormFieldWrapper label="Costo unitario" id="costo_unitario" required>
-						<input
-							class="remove-arrow input"
-							min="0"
-							step="0.01"
-							{...form.fields.costo_unitario.as('number')}
-						/>
+						<input class="input" min="0" step="0.01" {...form.fields.costo_unitario.as('number')} />
 					</FormFieldWrapper>
 					<FormFieldWrapper label="Flete (%)" id="flete_porcentaje">
 						<input
-							class="remove-arrow input"
+							class="input"
 							min="0"
 							step="0.01"
 							{...form.fields.flete_porcentaje.as('number')}

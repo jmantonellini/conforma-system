@@ -1,13 +1,12 @@
 <script lang="ts">
 	import './layout.css';
 	import favicon from '$lib/assets/favicon.svg';
-	import { Toaster } from '$lib/components/ui';
-	import ModalManager from '$lib/components/ui/ModalManager.svelte';
+	import { Confirmacion, Toaster } from '$lib/components/ui';
 
 	let { children } = $props();
 </script>
 
 <svelte:head><link rel="icon" href={favicon} /></svelte:head>
 <Toaster />
-<ModalManager />
+<Confirmacion />
 {@render children()}

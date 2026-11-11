@@ -68,7 +68,7 @@
 	]);
 </script>
 
-<div class="flex min-h-screen flex-col">
+<div class="flex min-h-screen flex-col bg-base-200">
 	<Header session={data.session} />
 	<SideBar {tabs}>
 		{@render children()}

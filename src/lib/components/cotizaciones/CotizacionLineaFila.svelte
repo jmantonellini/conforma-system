@@ -1,7 +1,12 @@
 <script lang="ts">
 	import { SearchSelect } from '$lib/components/ui';
 	import type { InsumoOpcion, LineaEdicion, ProductoOpcion } from '$lib/types/cotizacion-editor';
-	import { formatearDosDecimales, parsearNumeroDecimal, redondearPrecio } from '$lib/utils/precios';
+	import {
+		formatearDosDecimales,
+		formatearMoneda,
+		parsearNumeroDecimal,
+		redondearPrecio
+	} from '$lib/utils/precios';
 	import { describeMaterialReceta, esMaterialSubproducto } from '$lib/utils/receta-producto';
 
 	type Props = {
@@ -114,7 +119,7 @@
 	<td>
 		<div class="flex items-center gap-1">
 			<input
-				class="remove-arrow input w-20 text-right input-sm"
+				class="input w-20 text-right input-sm"
 				type="number"
 				min="1"
 				disabled={bloqueada}
@@ -128,7 +133,7 @@
 	<td class="text-right">
 		{#if !linea.visible_cliente}
 			<input
-				class="remove-arrow input w-32 text-right input-sm"
+				class="input w-32 text-right input-sm"
 				type="text"
 				inputmode="decimal"
 				disabled={bloqueada}
@@ -144,7 +149,7 @@
 			/>
 		{:else}
 			<input
-				class="remove-arrow input w-32 text-right input-sm"
+				class="input w-32 text-right input-sm"
 				type="text"
 				inputmode="decimal"
 				disabled={bloqueada}
@@ -159,7 +164,7 @@
 		{/if}
 	</td>
 	<td class="text-right font-semibold">
-		${formatearDosDecimales(
+		{formatearMoneda(
 			(linea.visible_cliente ? linea.precio_unitario : linea.costo_materiales) * linea.cantidad
 		)}
 	</td>
@@ -222,7 +227,7 @@
 						<label class="flex items-center gap-2 text-xs">
 							Cantidad
 							<input
-								class="remove-arrow input w-24 input-sm"
+								class="input w-24 input-sm"
 								type="number"
 								min="0.000001"
 								step="any"
@@ -247,7 +252,7 @@
 										{material.cantidad}
 										{material.unidad ?? ''} · {material.nombre}
 										<span class="text-base-content/60">
-											${formatearDosDecimales(material.subtotal)}
+											{formatearMoneda(material.subtotal)}
 										</span>
 									</span>
 									<button
@@ -284,7 +289,7 @@
 							{#if esMaterialSubproducto(material)}
 								<span class="text-base-content/60">subproducto</span>
 							{:else}
-								<span>${formatearDosDecimales(material.subtotal)}</span>
+								<span>{formatearMoneda(material.subtotal)}</span>
 							{/if}
 						</li>
 					{/each}

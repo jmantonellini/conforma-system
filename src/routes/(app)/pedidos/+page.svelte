@@ -1,127 +1,80 @@
 <script lang="ts">
-	import { goto } from '$app/navigation';
 	import { resolve } from '$app/paths';
-	import { Highlight, Table, SearchBar, Pagination, Can } from '$lib/components/ui';
-	import PageLayout from '$lib/components/ui/PageLayout.svelte';
-	import { Eye } from '$lib/components/ui/icons';
-	import type { PageProps } from './$types';
-	import { debounce } from '$lib/utils/debounce';
-	import { SvelteURLSearchParams } from 'svelte/reactivity';
-	import { formatearFecha } from '$lib/utils/fechas';
-	import { formatearDosDecimales } from '$lib/utils/precios';
-	import { can } from '$lib/utils/permissions';
 	import { page } from '$app/state';
-
-	const puedeVerTotales = can(page.data.user, page.data.permisos, 'importes', 'view');
+	import {
+		Can,
+		EstadoBadge,
+		Highlight,
+		Icono,
+		Listado,
+		filtrar,
+		parametro
+	} from '$lib/components/ui';
+	import { estaVencido, formatearFecha } from '$lib/utils/fechas';
+	import { formatearMoneda } from '$lib/utils/precios';
+	import { can } from '$lib/utils/permissions';
+	import type { PageProps } from './$types';
 
 	let { data }: PageProps = $props();
-
-	let search = $state('');
-	let estadoFilter = $state('');
-	let currentPage = $state(1);
-
-	$effect(() => {
-		search = data.search ?? '';
-		estadoFilter = data.estadoFilter ?? '';
-		currentPage = data.currentPage ?? 1;
-	});
-
-	function handleSearchChange() {
-		const params = new SvelteURLSearchParams();
-		if (search) params.set('search', search);
-		if (estadoFilter) params.set('estado', estadoFilter);
-		if (currentPage > 1) params.set('page', currentPage.toString());
-		goto(resolve(`/pedidos?${params.toString()}`));
-	}
+	const veImportes = can(page.data.user, page.data.permisos, 'importes', 'view');
+	const busqueda = $derived(parametro('search'));
 </script>
 
-<PageLayout>
-	<div class="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-		<div class="flex flex-1 flex-wrap gap-4">
-			<div class="w-full sm:w-80">
-				<SearchBar
-					autofocus
-					bind:search
-					oninput={() => {
-						currentPage = 1;
-						debounce(handleSearchChange);
-					}}
-				/>
-			</div>
-			<select
-				bind:value={estadoFilter}
-				class="select w-48 select-sm"
-				onchange={() => {
-					currentPage = 1;
-					handleSearchChange();
-				}}
-			>
-				<option value="">Todos los estados</option>
-				{#each data.estados as est (est.id)}
-					<option value={String(est.id)}>{est.nombre}</option>
-				{/each}
-			</select>
-		</div>
+<Listado
+	titulo="Pedidos"
+	datos={data.pedidos}
+	total={data.total}
+	pagina={data.currentPage}
+	paginas={data.totalPages}
+	buscar="Buscar por número..."
+	vacio="No hay pedidos para estos filtros"
+>
+	{#snippet acciones()}
 		<Can modulo="pedidos" accion="create">
-			<a class="btn btn-primary btn-sm" href={resolve('/pedidos/crear')}>+ Nuevo Pedido</a>
+			<a class="btn btn-primary btn-sm" href={resolve('/pedidos/crear')}>
+				<Icono nombre="mas_simple" /> Nuevo pedido
+			</a>
 		</Can>
-	</div>
-
-	<div class="card bg-base-100 shadow">
-		<div class="card-body p-0">
-			{#snippet header()}
-				<th>N° Pedido</th>
-				<th>Cliente</th>
-				<th>Fecha</th>
-				<th>Entrega</th>
-				{#if puedeVerTotales}<th class="text-right">Total</th>{/if}
-				<th>Estado</th>
-				<th class="text-center">Acciones</th>
-			{/snippet}
-
-			{#snippet row(pedido: (typeof data.pedidos)[number])}
-				<td class="font-mono text-sm"><Highlight text={pedido.numero_pedido} query={search} /></td>
-				<td class="font-medium"><Highlight text={pedido.cliente_nombre || '-'} query={search} /></td
-				>
-				<td>{formatearFecha(new Date(pedido.fecha_pedido))}</td>
-				<td class:text-error={pedido.fecha_entrega && pedido.fecha_entrega < new Date()}>
-					{pedido.fecha_entrega ? formatearFecha(new Date(pedido.fecha_entrega)) : '-'}
-				</td>
-				{#if puedeVerTotales}<td class="text-right font-medium">
-						${formatearDosDecimales(pedido.total)}
-					</td>{/if}
-				<td>
-					<span class="badge badge-dash capitalize badge-{pedido.estado_color}">
-						{pedido.estado_nombre}
-					</span>
-				</td>
-				<td class="text-center">
-					<a class="btn btn-circle btn-ghost btn-sm" href={resolve(`/pedidos/${pedido.id}`)}>
-						<Eye />
-					</a>
-				</td>
-			{/snippet}
-
-			<Table
-				data={data.pedidos}
-				loading={false}
-				emptyMessage="No hay pedidos registrados"
-				{header}
-				{row}
+	{/snippet}
+	{#snippet filtros()}
+		<select
+			class="select w-48 select-sm"
+			value={parametro('estado')}
+			onchange={(e) => filtrar({ estado: e.currentTarget.value })}
+		>
+			<option value="">Todos los estados</option>
+			{#each data.estados as estado (estado.id)}
+				<option value={String(estado.id)}>{estado.nombre}</option>
+			{/each}
+		</select>
+	{/snippet}
+	{#snippet header()}
+		<th>Número</th>
+		<th>Cliente</th>
+		<th>Fecha</th>
+		<th>Entrega</th>
+		{#if veImportes}<th class="text-right">Total</th>{/if}
+		<th>Estado</th>
+	{/snippet}
+	{#snippet row(pedido: (typeof data.pedidos)[number])}
+		<td>
+			<a class="enlace-fila font-mono" href={resolve(`/pedidos/${pedido.id}`)}>
+				<Highlight text={pedido.numero_pedido} query={busqueda} />
+			</a>
+		</td>
+		<td class="font-medium">{pedido.cliente_nombre || '-'}</td>
+		<td class="text-base-content/70">{formatearFecha(pedido.fecha_pedido)}</td>
+		<td
+			class={estaVencido(pedido.fecha_entrega) ? 'font-medium text-error' : 'text-base-content/70'}
+		>
+			{formatearFecha(pedido.fecha_entrega)}
+		</td>
+		{#if veImportes}<td class="numero font-medium">{formatearMoneda(pedido.total)}</td>{/if}
+		<td>
+			<EstadoBadge
+				class="badge-sm"
+				estado={{ nombre: pedido.estado_nombre, color: pedido.estado_color }}
 			/>
-
-			{#if data.totalPages > 1}
-				<div class="mt-6 flex justify-center">
-					<Pagination
-						currentPage={data.currentPage}
-						totalPages={data.totalPages}
-						onPageChange={(page) => {
-							currentPage = page;
-							handleSearchChange();
-						}}
-					/>
-				</div>
-			{/if}
-		</div>
-	</div>
-</PageLayout>
+		</td>
+	{/snippet}
+</Listado>

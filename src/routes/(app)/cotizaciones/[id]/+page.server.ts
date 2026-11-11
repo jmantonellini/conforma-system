@@ -1,6 +1,7 @@
 import { error } from '@sveltejs/kit';
 import {
 	getCotizacionById,
+	getEstadosCotizacion,
 	getHistorialCotizacion,
 	getNotasCotizacion
 } from '$lib/remote/cotizaciones-consultas.remote';
@@ -22,10 +23,11 @@ export const load: PageServerLoad = async ({ params, parent }) => {
 	const id = Number(params.id);
 	if (!Number.isSafeInteger(id) || id < 1) error(404, 'Cotización no encontrada');
 	const { cotizacion, lineas, adjuntos } = await getCotizacionById(id);
-	const [historial, notas, empleados] = await Promise.all([
+	const [historial, notas, empleados, estados] = await Promise.all([
 		getHistorialCotizacion(id),
 		getNotasCotizacion(id),
-		getEmpleados()
+		getEmpleados(),
+		getEstadosCotizacion()
 	]);
 	const catalogos = puedeEditarCotizacion
 		? await Promise.all([
@@ -37,6 +39,7 @@ export const load: PageServerLoad = async ({ params, parent }) => {
 			])
 		: null;
 	return {
+		estados,
 		cotizacion,
 		lineas,
 		adjuntos,

@@ -28,21 +28,25 @@
 	}
 </script>
 
-<header class="navbar bg-base-200 px-10 py-4 shadow-sm">
+<header class="navbar sticky top-0 z-40 border-b border-base-300 bg-base-100 px-4 sm:px-6">
 	<div class="navbar-start h-auto">
-		<img src={Logo} alt="Conforma Logo" class="h-10 w-auto" />
+		<img src={Logo} alt="Conforma Logo" class="h-8 w-auto" />
 	</div>
-	<div class="navbar-end gap-4">
-		<button class="btn btn-outline btn-secondary" onclick={() => openModal()}>Feedback!</button>
+	<div class="navbar-end gap-2">
+		<button class="btn hidden btn-ghost btn-sm sm:inline-flex" onclick={() => openModal()}
+			>Feedback</button
+		>
 		<CampanaNotificaciones />
 		{#if session}
 			<!-- <span>Bienvenido, {data.session?.username} ({data.session.rol})</span> -->
-			<button onclick={handleLogout} class="btn btn-ghost" type="submit">Cerrar sesión</button>
+			<button onclick={handleLogout} class="btn btn-ghost btn-sm" type="submit"
+				>Cerrar sesión</button
+			>
 		{/if}
 	</div>
 </header>
 
-<Modal bind:open={modalOpen} title="Recomendarions y errores" onClose={closeModal}>
+<Modal bind:open={modalOpen} title="Sugerencias y errores" onClose={closeModal}>
 	<form
 		id="feedback-form"
 		{...form.enhance(async (form) => {

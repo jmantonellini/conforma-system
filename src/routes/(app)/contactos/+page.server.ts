@@ -17,11 +17,8 @@ export const load: PageServerLoad = async ({ url }) => {
 
 	return {
 		contactos: contactos.data,
+		total: contactos.total,
 		totalPages: contactos.totalPages,
-		currentPage: contactos.currentPage,
-		search,
-		rolFilter: rol,
-		sort,
-		direction
+		currentPage: contactos.currentPage
 	};
 };

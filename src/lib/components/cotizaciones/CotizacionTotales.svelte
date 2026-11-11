@@ -47,7 +47,7 @@
 	<label class="flex items-center gap-2 text-sm">
 		Validez (días)
 		<input
-			class="remove-arrow input w-12 input-sm"
+			class="input w-12 input-sm"
 			type="number"
 			min="1"
 			value={validezDias}
@@ -70,7 +70,7 @@
 			Descuento general (%)
 			<input
 				id="descuento-global"
-				class="remove-arrow input w-12 text-right input-sm"
+				class="input w-12 text-right input-sm"
 				type="number"
 				min="0"
 				max="99.99"
@@ -86,7 +86,7 @@
 		<label class="flex items-center gap-2 text-sm font-semibold">
 			<span>Total final</span>
 			<input
-				class="remove-arrow input w-40 text-right text-lg font-bold input-sm"
+				class="input w-40 text-right text-lg font-bold input-sm"
 				type="text"
 				inputmode="decimal"
 				aria-label="Precio final de la cotización"

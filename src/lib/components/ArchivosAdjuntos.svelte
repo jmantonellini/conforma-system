@@ -3,7 +3,7 @@
 	import { page } from '$app/state';
 	import { invalidateAll } from '$app/navigation';
 	import { resolve } from '$app/paths';
-	import { Can } from '$lib/components/ui';
+	import { Can, Seccion } from '$lib/components/ui';
 	import { toast } from '$lib/stores/toast.svelte';
 	import type { Adjunto, TipoEntidadAdjunto } from '$lib/types/adjuntos';
 	import { can } from '$lib/utils/permissions';
@@ -144,12 +144,11 @@
 	}
 </script>
 
-<fieldset class="fieldset rounded-box border border-base-300 bg-base-200 p-4">
-	<legend class="fieldset-legend">Archivos adjuntos</legend>
+<Seccion titulo="Archivos adjuntos">
 	{#if puedeSubir}
 		<div
 			class={[
-				'mt-3 rounded-box border border-dashed border-base-300 p-4 transition-colors',
+				'rounded-box border border-dashed border-base-300 p-4 transition-colors',
 				arrastrandoArchivos && 'border-primary bg-primary/5'
 			]}
 			role="region"
@@ -170,7 +169,7 @@
 				accept={tipo === 'producto' && marcarComoPlano
 					? 'image/jpeg,image/png,image/webp'
 					: TIPOS_ARCHIVO}
-				class="file-input w-full max-w-md"
+				class="file-input w-full min-w-0"
 				disabled={subiendo}
 				onchange={seleccionarArchivos}
 			/>
@@ -185,9 +184,9 @@
 	{#if subiendo}
 		<p class="mt-2 text-sm text-base-content/60">Subiendo archivos...</p>
 	{/if}
-	<div class="flex flex-wrap gap-3">
+	<div class="grid grid-cols-[repeat(auto-fill,minmax(10rem,1fr))] gap-3">
 		{#each adjuntos as adjunto (adjunto.id)}
-			<div class="card w-64 max-w-full bg-base-100">
+			<div class="card overflow-hidden">
 				{#if esImagen(adjunto.mime_type)}
 					<button
 						type="button"
@@ -198,7 +197,7 @@
 						<img
 							src={urlAdjunto(adjunto.id)}
 							alt={adjunto.nombre_original}
-							class="h-40 w-full rounded-t-box object-cover"
+							class="h-32 w-full object-cover"
 						/>
 					</button>
 				{:else if esAudio(adjunto.mime_type)}
@@ -246,10 +245,10 @@
 				</div>
 			</div>
 		{:else}
-			<p class="text-sm text-base-content/50">Sin archivos adjuntos.</p>
+			<p class="col-span-full text-sm text-base-content/60">Sin archivos adjuntos.</p>
 		{/each}
 	</div>
-</fieldset>
+</Seccion>
 
 <dialog class="modal" {@attach registrarDialogImagen} aria-labelledby="imagen-ampliada-titulo">
 	<div class="modal-box w-[min(96vw,80rem)] max-w-none p-3">

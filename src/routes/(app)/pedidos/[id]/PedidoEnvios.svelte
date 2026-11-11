@@ -1,5 +1,12 @@
 <script lang="ts">
-	import { Can, FormErrors, Modal, FormFieldWrapper } from '$lib/components/ui';
+	import {
+		Can,
+		EstadoBadge,
+		FormErrors,
+		Modal,
+		FormFieldWrapper,
+		Seccion
+	} from '$lib/components/ui';
 	import {
 		crearEnvio,
 		marcarEntregado,
@@ -23,54 +30,45 @@
 	}
 </script>
 
-<div class="card w-full bg-base-100 shadow">
-	<div class="card-body">
-		<div class="flex items-center justify-between">
-			<h3 class="card-title">Envíos</h3>
-			<Can modulo="pedidos" accion="edit">
-				<button class="btn btn-primary btn-sm" onclick={() => (showModal = true)}>
-					+ Registrar envío
-				</button>
-			</Can>
-		</div>
-
-		{#if envios.length === 0}
-			<p class="mt-2 text-sm text-base-content/50">Sin envíos registrados</p>
-		{:else}
+<Seccion titulo="Envíos">
+	{#snippet acciones()}
+		<Can modulo="pedidos" accion="edit">
+			<button class="btn btn-sm" onclick={() => (showModal = true)}>+ Registrar</button>
+		</Can>
+	{/snippet}
+	{#if envios.length}
+		<ul class="list -mx-4 sm:-mx-5">
 			{#each envios as envio (envio.id)}
-				<div class="mt-2 flex items-center justify-between rounded bg-base-200 p-3">
+				{@const entregado = envio.estado === ESTADO_ENVIO.ENTREGADO}
+				<li class="list-row items-center">
 					<div>
-						<p class="font-semibold">{envio.transportista}</p>
-						<p class="text-sm text-base-content/70">
-							Guía: {envio.numero_guia || '-'} · Bultos: {envio.cantidad_bultos} ·
-							<span
-								class="badge badge-dash badge-sm capitalize badge-{envio.estado ===
-								ESTADO_ENVIO.ENTREGADO
-									? 'success'
-									: 'warning'}"
-							>
-								{envio.estado}
-							</span>
+						<p class="font-medium">{envio.transportista}</p>
+						<p class="text-xs text-base-content/60">
+							Guía {envio.numero_guia || '-'} · {envio.cantidad_bultos} bultos
 						</p>
 					</div>
-					{#if envio.estado !== ESTADO_ENVIO.ENTREGADO}
+					<EstadoBadge
+						class="badge-sm capitalize"
+						estado={{ nombre: envio.estado, color: entregado ? 'success' : 'warning' }}
+					/>
+					{#if !entregado}
 						<Can modulo="pedidos" accion="edit">
 							<button
-								class="btn btn-sm btn-success"
+								class="btn btn-xs"
 								onclick={async () => {
 									await marcarEntregado(String(envio.id));
 									toast.success('Envío marcado como entregado');
-								}}
+								}}>Entregado</button
 							>
-								Confirmar entrega
-							</button>
 						</Can>
 					{/if}
-				</div>
+				</li>
 			{/each}
-		{/if}
-	</div>
-</div>
+		</ul>
+	{:else}
+		<p class="text-sm text-base-content/60">Sin envíos registrados</p>
+	{/if}
+</Seccion>
 
 <Modal bind:open={showModal} title="Registrar Envío" onClose={cerrar}>
 	<form
@@ -99,7 +97,7 @@
 			</FormFieldWrapper>
 
 			<FormFieldWrapper label="Bultos" id="cantidad_bultos">
-				<input class="remove-arrow input" {...form.fields.cantidad_bultos.as('number')} />
+				<input class="input" {...form.fields.cantidad_bultos.as('number')} />
 			</FormFieldWrapper>
 
 			<FormFieldWrapper label="Observaciones" id="observaciones">

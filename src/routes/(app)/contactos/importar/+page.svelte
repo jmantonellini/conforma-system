@@ -2,10 +2,10 @@
 	import { mensajeError } from '$lib/utils/errores';
 	import { goto } from '$app/navigation';
 	import { resolve } from '$app/paths';
-	import { Can, PageLayout } from '$lib/components/ui';
+	import { Can, EncabezadoDetalle, PageLayout } from '$lib/components/ui';
 	import { importarContactos } from '$lib/remote/contactos.remote';
 	import { toast } from '$lib/stores/toast.svelte';
-	import { formatearDosDecimales } from '$lib/utils/precios';
+	import { formatearMoneda } from '$lib/utils/precios';
 
 	type FilaContacto = {
 		razon_social: string;
@@ -72,11 +72,13 @@
 </script>
 
 <PageLayout>
-	<a href={resolve('/contactos')} class="btn btn-ghost btn-sm">← Volver</a>
+	<EncabezadoDetalle
+		titulo="Importar contactos"
+		volver={{ href: '/contactos', etiqueta: 'Contactos' }}
+	/>
 	<Can modulo="contactos" accion="create">
-		<div class="card mt-4 bg-base-100 shadow">
+		<div class="card">
 			<div class="card-body gap-4">
-				<h1 class="card-title">Importar contactos desde Excel</h1>
 				<p class="text-sm text-base-content/70">
 					Columna requerida: razón social. También podés incluir nombre, apellido, CUIT, email,
 					teléfono, rol, distribuidor, compensación, comisión, saldo y datos de proveedor.
@@ -116,7 +118,7 @@
 											>{fila.apellido || '-'}</td
 										><td>{fila.cuit || '-'}</td><td>{fila.rol}</td><td
 											>{fila.es_distribuidor ? 'Sí' : 'No'}</td
-										><td>${formatearDosDecimales(fila.saldo_disponible)}</td></tr
+										><td>{formatearMoneda(fila.saldo_disponible)}</td></tr
 									>
 								{/each}
 							</tbody>

@@ -20,7 +20,7 @@
 </script>
 
 <PageLayout>
-	<div class="card bg-base-100 shadow-sm">
+	<div class="card">
 		<div class="card-body p-0">
 			{#snippet headerTareas()}
 				<th>Estado</th>

@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { confirmarYEjecutar } from '$lib/stores/confirmacion.svelte';
 	import { Can, FormFieldWrapper, Modal, PageLayout, Table } from '$lib/components/ui';
 	import { Edit, Delete } from '$lib/components/ui/icons';
 	import {
@@ -115,15 +116,13 @@
 		}
 	}
 
-	async function eliminar(tipo: Section, id: number) {
-		if (!confirm('¿Eliminar este registro?')) return;
-		try {
-			await (tipo === 'categorias' ? eliminarCategoriaProducto({ id }) : eliminarEstado({ id }));
-			toast.success('Registro eliminado');
-		} catch (error) {
-			toast.error(mensajeError(error, 'No se pudo eliminar'));
-		}
-	}
+	const eliminar = (tipo: Section, id: number) =>
+		confirmarYEjecutar({
+			mensaje: '¿Eliminar este registro?',
+			ejecutar: () =>
+				tipo === 'categorias' ? eliminarCategoriaProducto({ id }) : eliminarEstado({ id }),
+			exito: 'Registro eliminado'
+		});
 
 	function abrirNuevaTransicion() {
 		estadoOrigenId = '';
@@ -145,15 +144,12 @@
 		}
 	}
 
-	async function eliminarTransicion(id: number) {
-		if (!confirm('¿Eliminar esta transición?')) return;
-		try {
-			await eliminarTransicionEstadoAdmin({ id, flujo });
-			toast.success('Transición eliminada');
-		} catch (error) {
-			toast.error(mensajeError(error, 'No se pudo eliminar la transición'));
-		}
-	}
+	const eliminarTransicion = (id: number) =>
+		confirmarYEjecutar({
+			mensaje: '¿Eliminar esta transición?',
+			ejecutar: () => eliminarTransicionEstadoAdmin({ id, flujo }),
+			exito: 'Transición eliminada'
+		});
 
 	function nombreEstado(id: number) {
 		return estadosSeleccionados.find((estado) => estado.id === id)?.nombre ?? `Estado ${id}`;
@@ -172,7 +168,7 @@
 		</div>
 
 		{#if esCategorias}
-			<div class="card bg-base-100 shadow">
+			<div class="card">
 				<div class="card-body p-0">
 					<div class="flex items-center justify-between p-6">
 						<h2 class="card-title">Categorías de productos</h2>
@@ -220,7 +216,7 @@
 					onclick={() => (vistaEstado = 'transiciones')}>Transiciones</button
 				>
 			</div>
-			<div class="card bg-base-100 shadow">
+			<div class="card">
 				<div class="card-body p-0">
 					<div class="flex items-center justify-between p-6">
 						<h2 class="card-title">

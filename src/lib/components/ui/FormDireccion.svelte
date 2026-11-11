@@ -16,7 +16,7 @@
 	}
 </script>
 
-<fieldset class="fieldset rounded-box border border-base-300 bg-base-200 p-4">
+<fieldset class="fieldset seccion">
 	<legend class="fieldset-legend">Dirección</legend>
 
 	<div class="grid gap-4 md:grid-cols-3">

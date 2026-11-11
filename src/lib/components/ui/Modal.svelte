@@ -1,6 +1,6 @@
 <script lang="ts">
 	import type { Snippet } from 'svelte';
-	import { fly } from 'svelte/transition';
+	import { scale } from 'svelte/transition';
 
 	let {
 		open = $bindable(),
@@ -28,24 +28,48 @@
 </script>
 
 {#if open}
-	<dialog {@attach showDialog} class="modal" onclose={handleClose} oncancel={handleClose}>
-		<div class="modal-box" transition:fly={{ y: 20, duration: 200 }}>
-			{#if title}
-				<h3 class="mb-4 text-lg font-bold">{title}</h3>
-			{/if}
+	<dialog
+		{@attach showDialog}
+		class="modal modal-bottom sm:modal-middle"
+		onclose={handleClose}
+		oncancel={handleClose}
+	>
+		<div
+			class="modal-box flex max-h-[85vh] flex-col p-0 shadow-xl"
+			transition:scale={{ start: 0.97, duration: 150 }}
+		>
+			<header class="flex items-center justify-between gap-4 border-b border-base-300 px-5 py-3.5">
+				<h3 class="font-semibold">{title}</h3>
+				<button
+					type="button"
+					class="btn btn-square btn-ghost btn-sm"
+					aria-label="Cerrar"
+					onclick={handleClose}
+				>
+					<svg
+						viewBox="0 0 24 24"
+						class="size-4"
+						fill="none"
+						stroke="currentColor"
+						stroke-width="2"
+					>
+						<path d="M6 6l12 12M18 6L6 18" stroke-linecap="round" />
+					</svg>
+				</button>
+			</header>
 
-			{@render children()}
+			<div class="overflow-y-auto px-5 py-4">{@render children()}</div>
 
-			<div class="modal-action">
+			<footer class="flex justify-end gap-2 border-t border-base-300 bg-base-200/50 px-5 py-3">
 				{#if actions}
 					{@render actions()}
 				{:else}
-					<button class="btn" onclick={handleClose}>Cerrar</button>
+					<button class="btn btn-sm" onclick={handleClose}>Cerrar</button>
 				{/if}
-			</div>
+			</footer>
 		</div>
-		<form method="dialog" class="modal-backdrop">
-			<button onclick={handleClose}>close</button>
+		<form method="dialog" class="modal-backdrop bg-base-content/25 backdrop-blur-[2px]">
+			<button onclick={handleClose}>Cerrar</button>
 		</form>
 	</dialog>
 {/if}

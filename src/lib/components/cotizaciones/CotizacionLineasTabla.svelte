@@ -1,7 +1,7 @@
 <script lang="ts">
 	import CotizacionLineaFila from '$lib/components/cotizaciones/CotizacionLineaFila.svelte';
 	import type { InsumoOpcion, LineaEdicion, ProductoOpcion } from '$lib/types/cotizacion-editor';
-	import { formatearDosDecimales } from '$lib/utils/precios';
+	import { formatearDosDecimales, formatearMoneda } from '$lib/utils/precios';
 
 	type Props = {
 		lineas: LineaEdicion[];
@@ -50,7 +50,7 @@
 	}: Props = $props();
 </script>
 
-<div class="overflow-visible rounded-box border border-base-300">
+<div class="overflow-x-auto rounded-box border border-base-300 xl:overflow-visible">
 	<table class="table min-w-232 table-sm">
 		<thead>
 			<tr>
@@ -87,7 +87,7 @@
 				<tr>
 					<td colspan="4" class="text-right font-semibold">Subtotal</td>
 					<td class="text-right font-semibold">
-						${formatearDosDecimales(totalBase)}
+						{formatearMoneda(totalBase)}
 					</td>
 					<td></td>
 				</tr>
@@ -96,7 +96,7 @@
 						Descuento general ({formatearDosDecimales(descuentoGlobal)}%)
 					</td>
 					<td class="text-right font-semibold">
-						-${formatearDosDecimales(importeDescuento)}
+						-{formatearMoneda(importeDescuento)}
 					</td>
 					<td></td>
 				</tr>
@@ -105,7 +105,7 @@
 				<tr>
 					<td colspan="4" class="text-right font-semibold">IVA (21%)</td>
 					<td class="text-right font-semibold">
-						${formatearDosDecimales(importeIva)}
+						{formatearMoneda(importeIva)}
 					</td>
 					<td></td>
 				</tr>

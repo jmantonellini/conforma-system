@@ -318,13 +318,7 @@
 			</FormFieldWrapper>
 		{/if}
 		<FormFieldWrapper id="cantidad_stock" label="Cantidad" required>
-			<input
-				class="remove-arrow input w-full"
-				type="number"
-				min="1"
-				step="1"
-				bind:value={cantidad}
-			/>
+			<input class="input w-full" type="number" min="1" step="1" bind:value={cantidad} />
 		</FormFieldWrapper>
 		<FormFieldWrapper id="observaciones_stock" label="Observaciones">
 			<textarea class="textarea w-full resize-none" rows="2" bind:value={observaciones}></textarea>

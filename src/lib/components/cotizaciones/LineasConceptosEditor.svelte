@@ -1,9 +1,9 @@
 <script lang="ts">
 	import { page } from '$app/state';
-	import { onMount } from 'svelte';
+	import { onMount, type Snippet } from 'svelte';
 	import CotizacionLineasTabla from '$lib/components/cotizaciones/CotizacionLineasTabla.svelte';
 	import CotizacionNuevoInsumoDialog from '$lib/components/cotizaciones/CotizacionNuevoInsumoDialog.svelte';
-	import { Can } from '$lib/components/ui';
+	import { Can, Seccion } from '$lib/components/ui';
 	import { getProductoConReceta, getProductoPrecio } from '$lib/remote/productos.remote';
 	import type {
 		InsumoOpcion,
@@ -39,6 +39,7 @@
 		incluirIva: boolean;
 		importeIva: number;
 		onChange?: (lineas: LineaEdicion[]) => void;
+		pie?: Snippet;
 	};
 
 	let {
@@ -57,7 +58,8 @@
 		importeDescuento,
 		incluirIva,
 		importeIva,
-		onChange
+		onChange,
+		pie
 	}: Props = $props();
 
 	let siguienteId = $state(Date.now());
@@ -320,10 +322,7 @@
 	});
 </script>
 
-<fieldset class="fieldset rounded-box border border-base-300 bg-base-200 p-4">
-	<legend class="fieldset-legend"
-		>{contexto === 'pedido' ? 'Conceptos del pedido' : 'Líneas de cotización'}</legend
-	>
+<Seccion titulo={contexto === 'pedido' ? 'Conceptos del pedido' : 'Líneas de cotización'}>
 	<div class="flex flex-col gap-4">
 		<div class="flex flex-wrap items-center gap-2">
 			<button
@@ -394,7 +393,7 @@
 					)
 			)}
 			{#if lineasConStock.length}
-				<fieldset class="fieldset rounded-box border border-base-300 bg-base-200 p-4">
+				<fieldset class="fieldset seccion">
 					<legend class="fieldset-legend">Origen de productos</legend>
 					<div class="flex flex-col gap-3">
 						{#each lineasConStock as linea (linea.idx)}
@@ -431,7 +430,8 @@
 			{/if}
 		{/if}
 	</div>
-</fieldset>
+	{@render pie?.()}
+</Seccion>
 
 <CotizacionNuevoInsumoDialog
 	bind:open={nuevoInsumoAbierto}

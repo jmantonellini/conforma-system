@@ -7,487 +7,318 @@
 		eliminarOrdenFabricacion
 	} from '$lib/remote/fabricacion.remote';
 	import {
+		getEstadosFabricacion,
 		getOrdenFabricacion,
 		getHistorialUnidades
 	} from '$lib/remote/fabricacion-consultas.remote';
-	import { NavegacionProceso, PageLayout, Modal, Table } from '$lib/components/ui';
+	import {
+		EncabezadoDetalle,
+		EstadoBadge,
+		Historial,
+		Icono,
+		Modal,
+		PageLayout,
+		Seccion,
+		Table
+	} from '$lib/components/ui';
 	import ArchivosAdjuntos from '$lib/components/ArchivosAdjuntos.svelte';
 	import { toast } from '$lib/stores/toast.svelte';
 	import { goto, invalidateAll } from '$app/navigation';
 	import { resolve } from '$app/paths';
-	import { formatearFecha } from '$lib/utils/fechas.js';
+	import { formatearFecha } from '$lib/utils/fechas';
 	import type { MaterialSnapshot } from '$lib/types/linea-comercial';
-	import { ESTADO_FABRICACION, PRIORIDAD_FABRICACION } from '$lib/types/dominio';
+	import { ESTADO_FABRICACION, ETIQUETA_PRIORIDAD } from '$lib/types/dominio';
 	import { getEmpleados } from '$lib/remote/empleados.remote';
 	import { consumirRecetaOrden, getMovimientosInsumos } from '$lib/remote/insumos.remote';
 	import { can } from '$lib/utils/permissions';
 	import InsumosMovimientosTabla from '$lib/components/insumos/InsumosMovimientosTabla.svelte';
 
 	let { params } = $props();
-	const orden = $derived(await getOrdenFabricacion(Number(params.id)));
-	const historial = $derived(await getHistorialUnidades(Number(params.id)));
+	const id = $derived(Number(params.id));
+	const orden = $derived(await getOrdenFabricacion(id));
+	const historial = $derived(await getHistorialUnidades(id));
+	const estados = $derived(await getEstadosFabricacion());
 
-	let isLoading = $state(false);
-	const insumosRequeridos = $derived((orden.insumos_requeridos ?? []) as MaterialSnapshot[]);
-	const insumosAdicionales = $derived((orden.insumos_adicionales ?? []) as MaterialSnapshot[]);
 	const puedeVerMovimientos = can(page.data.user, page.data.permisos, 'insumos', 'view');
 	const puedeEditarInsumos = can(page.data.user, page.data.permisos, 'insumos', 'edit');
-	const empleadosConsumo = $derived(puedeEditarInsumos ? await getEmpleados() : []);
-	const movimientosInsumos = $derived(
-		puedeVerMovimientos
-			? await getMovimientosInsumos({ orden_id: Number(params.id), limit: 100 })
-			: []
+	const empleados = $derived(puedeEditarInsumos ? await getEmpleados() : []);
+	const movimientos = $derived(
+		puedeVerMovimientos ? await getMovimientosInsumos({ orden_id: id, limit: 100 }) : []
 	);
-	const recetaYaConsumida = $derived(
-		movimientosInsumos.some((movimiento) => movimiento.fuente === 'receta')
-	);
+	const recetaConsumida = $derived(movimientos.some((m) => m.fuente === 'receta'));
+	const listasInsumos = $derived([
+		{ titulo: 'Insumos requeridos', items: orden.insumos_requeridos as MaterialSnapshot[] },
+		{ titulo: 'Adicionales del pedido', items: orden.insumos_adicionales as MaterialSnapshot[] }
+	]);
+	const medidas = $derived([
+		['Primario', orden.medidas?.primario_diametro, orden.medidas?.primario_largo],
+		['Secundario', orden.medidas?.secundario_diametro, orden.medidas?.secundario_largo],
+		['Trombón', orden.medidas?.trombon_diametro_inicial, orden.medidas?.trombon_largo]
+	] as const);
 
-	let modal = $state({
-		open: false,
-		tipo: 'pausa' as 'pausa' | 'eliminar',
-		titulo: '',
-		mensaje: '',
-		onConfirm: () => {}
-	});
-
-	let comentario = $state('');
+	let ocupado = $state(false);
 	let empleadoReceta = $state('');
+	let unidadAPausar = $state<{ id: number; estadoId: number } | null>(null);
+	let motivoPausa = $state('');
 
-	async function consumirReceta() {
-		if (isLoading || !empleadoReceta) return;
-		isLoading = true;
+	async function ejecutar(accion: () => Promise<unknown>, exito: string) {
+		if (ocupado) return;
+		ocupado = true;
 		try {
-			await consumirRecetaOrden({ orden_id: orden.id, empleado_id: Number(empleadoReceta) });
-			toast.success('Consumo de receta registrado');
-			await invalidateAll();
+			await accion();
+			toast.success(exito);
 		} catch (error) {
-			toast.error(mensajeError(error, 'No se pudo consumir la receta'));
+			toast.error(mensajeError(error, 'No se pudo completar la acción'));
 		} finally {
-			isLoading = false;
+			ocupado = false;
 		}
 	}
 
-	async function cambiarEstado(unidadId: number, estadoDestinoId: number, comentarioText?: string) {
-		if (isLoading) return;
-		isLoading = true;
-		try {
-			await cambiarEstadoUnidad({
-				unidad_id: String(unidadId),
-				estado_destino_id: String(estadoDestinoId),
-				comentario: comentarioText
-			});
-			toast.success('Estado cambiado');
-		} catch (error) {
-			toast.error(mensajeError(error, 'Error'));
-		} finally {
-			isLoading = false;
-		}
+	const cambiarEstado = (unidadId: number, estadoId: number, comentario?: string) =>
+		ejecutar(
+			() =>
+				cambiarEstadoUnidad({
+					unidad_id: String(unidadId),
+					estado_destino_id: String(estadoId),
+					comentario
+				}),
+			'Estado actualizado'
+		);
+
+	async function confirmarPausa() {
+		if (!unidadAPausar) return;
+		await cambiarEstado(unidadAPausar.id, unidadAPausar.estadoId, motivoPausa.trim());
+		unidadAPausar = null;
+		motivoPausa = '';
 	}
 
-	async function reanudar(unidadId: number, comentarioText?: string) {
-		if (isLoading) return;
-		isLoading = true;
-		try {
-			await reanudarUnidad({
-				unidad_id: String(unidadId),
-				comentario: comentarioText
-			});
-			toast.success('Unidad reanudada');
-		} catch (error) {
-			toast.error(mensajeError(error, 'Error'));
-		} finally {
-			isLoading = false;
-		}
-	}
-
-	function manejarPausa(unidadId: number) {
-		modal = {
-			open: true,
-			tipo: 'pausa',
-			titulo: 'Motivo de la pausa',
-			mensaje: 'Describe el motivo de la pausa...',
-			onConfirm: async () => {
-				// Buscar el estado "pausado" entre las transiciones disponibles
-				const unidad = orden.unidades.find((u) => u.id === unidadId);
-				const estadoPausado = unidad?.transiciones_disponibles.find(
-					(t) => t.slug === ESTADO_FABRICACION.PAUSADO
-				);
-				if (estadoPausado) {
-					await cambiarEstado(unidadId, estadoPausado.id, comentario.trim());
-				}
-				modal.open = false;
-				comentario = '';
-			}
-		};
-	}
-
-	function manejarEliminar() {
-		modal = {
-			open: true,
-			tipo: 'eliminar',
-			titulo: 'Eliminar Orden de Fabricación',
-			mensaje: '¿Seguro que quieres eliminar esta orden?',
-			onConfirm: async () => {
-				await eliminarOrdenFabricacion(String(orden.id));
-				modal.open = false;
-				toast.success('Orden eliminada');
-				await invalidateAll();
-				goto(resolve('/fabricacion'));
-			}
-		};
-	}
-
-	function cerrarModal() {
-		modal.open = false;
-		comentario = '';
+	async function eliminar() {
+		await eliminarOrdenFabricacion(String(orden.id));
+		toast.success('Orden eliminada');
+		goto(resolve('/fabricacion'));
 	}
 </script>
 
 <PageLayout>
-	<div class="screen-view flex flex-col gap-4">
-		<div class="grid grid-cols-[auto_1fr_auto] items-center gap-3">
-			<button onclick={() => history.back()} class="btn btn-ghost btn-sm">← Volver</button>
-			<div class="flex justify-center">
-				<NavegacionProceso
-					currentKey="fabricacion"
-					steps={[
-						...(orden.navegacion.cotizacion_id
-							? [
-									{
-										key: 'cotizacion',
-										label: 'Cotización',
-										href: `/cotizaciones/${orden.navegacion.cotizacion_id}`
-									}
-								]
-							: []),
-						...(orden.navegacion.pedido_id
-							? [
-									{
-										key: 'pedido',
-										label: 'Pedido',
-										href: `/pedidos/${orden.navegacion.pedido_id}`
-									}
-								]
-							: []),
-						{ key: 'fabricacion', label: 'Fabricación', status: orden.estado?.nombre }
-					]}
-				/>
-			</div>
-			<div class="flex items-center gap-2">
-				<a
-					class="btn btn-outline btn-sm"
-					href={resolve(`/fabricacion/${orden.id}/pdf`)}
-					target="_blank"
-					rel="noreferrer"
-				>
-					Imprimir orden
-				</a>
-				<button class="btn btn-outline btn-error btn-sm" onclick={manejarEliminar}>
-					Eliminar
-				</button>
-			</div>
-		</div>
+	<EncabezadoDetalle
+		titulo="OF-{orden.id}"
+		subtitulo={orden.nombre_trabajo}
+		volver={{ href: '/fabricacion', etiqueta: 'Fabricación' }}
+		estado={orden.estado}
+		{estados}
+		actual="fabricacion"
+		proceso={{ cotizacion: orden.navegacion.cotizacion_id, pedido: orden.navegacion.pedido_id }}
+		eliminar={{
+			modulo: 'fabricacion',
+			mensaje: `¿Eliminar la orden OF-${orden.id} y sus unidades? Esta acción no se puede deshacer.`,
+			onConfirmar: eliminar
+		}}
+	>
+		{#snippet acciones()}
+			<a
+				class="btn btn-sm"
+				href={resolve(`/fabricacion/${orden.id}/pdf`)}
+				target="_blank"
+				rel="noreferrer"><Icono nombre="imprimir" /> Imprimir</a
+			>
+		{/snippet}
+	</EncabezadoDetalle>
 
-		<!-- Cards de resumen -->
-		<div class="stats w-full stats-vertical shadow lg:stats-horizontal">
-			<div class="stat bg-base-200">
-				<div class="stat-title">Progreso</div>
-				<div class="stat-value text-lg">{orden.cantidad_producida}/{orden.cantidad_total}</div>
-				<progress
-					class="progress w-full"
-					value={orden.cantidad_producida}
-					max={orden.cantidad_total}
-				></progress>
+	<Seccion>
+		<dl class="datos">
+			<div>
+				<dt>Progreso</dt>
+				<dd class="flex items-center gap-2">
+					<progress
+						class="progress w-24 progress-primary"
+						value={orden.cantidad_producida}
+						max={orden.cantidad_total}
+					></progress>
+					<span class="tabular-nums">{orden.cantidad_producida}/{orden.cantidad_total}</span>
+				</dd>
 			</div>
-			<div class="stat bg-base-200">
-				<div class="stat-title">Cliente</div>
-				<div class="stat-value text-lg">
-					{orden.es_para_stock ? 'Stock interno' : orden.cliente_nombre}
-				</div>
+			<div>
+				<dt>Cliente</dt>
+				<dd>{orden.es_para_stock ? 'Stock interno' : (orden.cliente_nombre ?? '-')}</dd>
 			</div>
-			<div class="stat bg-base-200">
-				<div class="stat-title">Estado</div>
-				<div class="stat-value">
-					<span
-						class={`badge badge-soft whitespace-nowrap capitalize badge-${orden.estado?.color}`}
-					>
-						{orden.estado?.nombre}
-					</span>
-				</div>
+			<div>
+				<dt>Prioridad</dt>
+				<dd><EstadoBadge estado={ETIQUETA_PRIORIDAD[orden.prioridad ?? 0]} /></dd>
 			</div>
-			<div class="stat bg-base-200">
-				<div class="stat-title">Prioridad</div>
-				<div class="stat-value">
-					{#if orden.prioridad === PRIORIDAD_FABRICACION.CRITICA}
-						<span class="badge badge-error">Crítica</span>
-					{:else if orden.prioridad === PRIORIDAD_FABRICACION.URGENTE}
-						<span class="badge badge-warning">Urgente</span>
-					{:else}
-						<span class="badge badge-ghost">Normal</span>
-					{/if}
-				</div>
+			<div>
+				<dt>Asignado a</dt>
+				<dd>
+					{orden.empleado ? `${orden.empleado.nombre} ${orden.empleado.apellido}` : 'Sin asignar'}
+				</dd>
 			</div>
-			<div class="stat bg-base-200">
-				<div class="stat-title">Asignado a</div>
-				<div class="stat-value text-lg">{orden.empleado?.nombre || 'Sin asignar'}</div>
+			<div>
+				<dt>Entrega estimada</dt>
+				<dd>{formatearFecha(orden.fecha_fin_estimada)}</dd>
 			</div>
-		</div>
+		</dl>
+	</Seccion>
 
-		<!-- Información técnica para fabricación -->
-		<div class="card bg-base-100 shadow">
-			<div class="card-body gap-6">
-				<h3 class="card-title">Información para fabricar</h3>
-				<div class="flex flex-wrap items-start justify-between gap-3">
-					<div>
-						<p class="text-sm text-base-content/70">
-							{orden.producto?.codigo ? `${orden.producto.codigo} · ` : ''}{orden.producto
-								?.nombre ||
-								orden.descripcion_producto ||
-								'Trabajo personalizado'}
-						</p>
-					</div>
-					{#if orden.producto}
-						<a class="btn btn-outline btn-sm" href={resolve(`/productos/${orden.producto.id}`)}>
-							Ver producto
-						</a>
-					{/if}
-				</div>
-
-				<div class="flex flex-col gap-3">
-					{#if orden.producto}
-						<div class="flex gap-3">
-							<div class="rounded-box bg-base-200 p-3">
-								<p class="text-sm text-base-content/60">Primario</p>
-								<p>
-									Diámetro: {orden.medidas?.primario_diametro ?? '-'} · Largo:
-									{orden.medidas?.primario_largo ?? '-'}
-								</p>
-							</div>
-							<div class="rounded-box bg-base-200 p-3">
-								<p class="text-sm text-base-content/60">Secundario</p>
-								<p>
-									Diámetro: {orden.medidas?.secundario_diametro ?? '-'} · Largo:
-									{orden.medidas?.secundario_largo ?? '-'}
-								</p>
-							</div>
-							<div class="rounded-box bg-base-200 p-3 sm:col-span-2">
-								<p class="text-sm text-base-content/60">Trombón</p>
-								<p>
-									Diámetro inicial: {orden.medidas?.trombon_diametro_inicial ?? '-'} · Largo:
-									{orden.medidas?.trombon_largo ?? '-'}
-								</p>
-								{#if orden.medidas?.trombon_observaciones}
-									<p class="mt-1 text-sm text-base-content/70">
-										{orden.medidas.trombon_observaciones}
-									</p>
-								{/if}
-							</div>
-						</div>
-					{/if}
-
-					<div>
-						<h4 class="mb-3 font-semibold">Insumos requeridos</h4>
-						{#if insumosRequeridos.length}
-							<ul class="divide-y divide-base-300 rounded-box border border-base-300">
-								{#each insumosRequeridos as insumo, key (key)}
-									<li class="flex items-center justify-between gap-3 p-3">
-										<span>
-											<span class="font-mono text-sm">{insumo.codigo ?? '—'}</span>
-											<span class="ml-2">{insumo.nombre}</span>
-										</span>
-										<span class="font-semibold whitespace-nowrap"
-											>{insumo.cantidad} {insumo.unidad ?? ''}</span
-										>
-									</li>
-								{/each}
-							</ul>
-						{:else}
-							<p class="text-sm text-base-content/60">No hay una receta de insumos asociada.</p>
-						{/if}
-						{#if insumosAdicionales.length}
-							<h4 class="mt-6 mb-3 font-semibold">Insumos adicionales del pedido</h4>
-							<ul class="divide-y divide-base-300 rounded-box border border-base-300">
-								{#each insumosAdicionales as insumo, key (key)}
-									<li class="flex items-center justify-between gap-3 p-3">
-										<span>
-											<span class="font-mono text-sm">{insumo.codigo}</span>
-											<span class="ml-2">{insumo.nombre}</span>
-										</span>
-										<span class="font-semibold whitespace-nowrap"
-											>{insumo.cantidad} {insumo.unidad}</span
-										>
-									</li>
-								{/each}
-							</ul>
-						{/if}
-						{#if puedeEditarInsumos}
-							<div
-								class="mt-5 flex flex-wrap items-end justify-between gap-3 border-t border-base-300 pt-4"
+	<Seccion titulo="Unidades"
+		><Table data={orden.unidades}>
+			{#snippet header()}
+				<th>N° serie</th>
+				<th>Estado</th>
+				<th>Comentario</th>
+				<th class="text-right">Mover a</th>
+			{/snippet}
+			{#snippet row(unidad: (typeof orden.unidades)[number])}
+				<td class="font-mono">{unidad.numero_serie}</td>
+				<td><EstadoBadge class="badge-sm" estado={unidad.estado} /></td>
+				<td class="text-sm text-base-content/70">{unidad.comentario_estado ?? ''}</td>
+				<td>
+					<div class="flex flex-wrap justify-end gap-1">
+						{#if unidad.esta_pausada}
+							<button
+								class="btn btn-xs"
+								disabled={ocupado}
+								onclick={() =>
+									ejecutar(
+										() => reanudarUnidad({ unidad_id: String(unidad.id) }),
+										'Unidad reanudada'
+									)}>Reanudar</button
 							>
-								<div class="flex flex-wrap items-end gap-3">
-									<label class="form-control w-64">
-										<span class="label-text mb-2">Empleado responsable</span>
-										<select class="select select-sm" bind:value={empleadoReceta}>
-											<option value="">Seleccionar...</option>
-											{#each empleadosConsumo as empleado (empleado.id)}
-												<option value={String(empleado.id)}
-													>{empleado.nombre} {empleado.apellido}</option
-												>
-											{/each}
-										</select>
-									</label>
-									<button
-										class="btn btn-outline btn-sm"
-										onclick={consumirReceta}
-										disabled={isLoading ||
-											!empleadoReceta ||
-											recetaYaConsumida ||
-											!insumosRequeridos.length}
-									>
-										{recetaYaConsumida ? 'Receta consumida' : 'Consumir receta prevista'}
-									</button>
-									<a
-										class="btn btn-primary btn-sm"
-										href={resolve(`/insumos/movimientos?orden=${orden.id}`)}
-									>
-										Registrar consumo real
-									</a>
-								</div>
-							</div>
+						{:else}
+							{#each unidad.transiciones_disponibles as destino (destino.id)}
+								<button
+									class={[
+										'btn btn-xs',
+										destino.orden > unidad.estado.orden &&
+										destino.slug !== ESTADO_FABRICACION.PAUSADO
+											? 'btn-soft btn-primary'
+											: 'btn-ghost'
+									]}
+									disabled={ocupado}
+									onclick={() =>
+										destino.slug === ESTADO_FABRICACION.PAUSADO
+											? (unidadAPausar = { id: unidad.id, estadoId: destino.id })
+											: cambiarEstado(unidad.id, destino.id)}>{destino.nombre}</button
+								>
+							{/each}
 						{/if}
 					</div>
-				</div>
+				</td>
+			{/snippet}
+		</Table>
+	</Seccion>
 
-				<ArchivosAdjuntos tipo="fabricacion" entidadId={orden.id} adjuntos={orden.adjuntos} />
-			</div>
-		</div>
-
-		<!-- Unidades -->
-		<div class="card bg-base-100 shadow">
-			<div class="card-body">
-				<h3 class="card-title">Unidades de fabricación</h3>
-				{#snippet headerUnidades()}
-					<th>N° Serie</th>
-					<th>Estado</th>
-					<th>Comentario</th>
-					<th class="text-center">Acciones</th>
+	<div class="grid items-start gap-4 sm:gap-6 lg:grid-cols-3">
+		<div class="flex min-w-0 flex-col gap-4 sm:gap-6 lg:col-span-2">
+			<Seccion
+				titulo="Información para fabricar"
+				descripcion={[orden.producto?.codigo, orden.producto?.nombre ?? orden.descripcion_producto]
+					.filter(Boolean)
+					.join(' · ') || 'Trabajo personalizado'}
+			>
+				{#snippet acciones()}
+					{#if orden.producto}
+						<a class="btn btn-sm" href={resolve(`/productos/${orden.producto.id}`)}>Ver producto</a>
+					{/if}
 				{/snippet}
-				{#snippet rowUnidad(unidad: (typeof orden.unidades)[number])}
-					<td class="font-mono">{unidad.numero_serie}</td>
-					<td>
-						<span class="badge badge-sm badge-{unidad.estado?.color}">
-							{unidad.estado?.nombre}
-						</span>
-					</td>
-					<td>{unidad.comentario_estado ?? ''}</td>
-					<td>
-						<div class="flex flex-wrap justify-center gap-1">
-							{#if unidad.esta_pausada}
-								<button
-									class="btn btn-outline btn-success btn-xs"
-									onclick={() => reanudar(unidad.id)}
-									disabled={isLoading}
-								>
-									Reanudar
-								</button>
-							{:else}
-								{#each unidad.transiciones_disponibles as transicion (transicion.id)}
-									<button
-										class="btn btn-{transicion.color} btn-outline btn-xs"
-										onclick={() =>
-											transicion.slug === ESTADO_FABRICACION.PAUSADO
-												? manejarPausa(unidad.id)
-												: cambiarEstado(unidad.id, transicion.id)}
-										disabled={isLoading}
-									>
-										{transicion.nombre}
-									</button>
-								{:else}
-									<span class="text-xs text-base-content/50">Sin acciones</span>
+				{#if orden.producto}
+					<dl class="datos">
+						{#each medidas as [nombre, diametro, largo] (nombre)}
+							<div>
+								<dt>{nombre}</dt>
+								<dd>Ø {diametro ?? '-'} · L {largo ?? '-'}</dd>
+							</div>
+						{/each}
+						{#if orden.medidas?.trombon_observaciones}
+							<div class="col-span-full">
+								<dt>Observaciones</dt>
+								<dd>{orden.medidas.trombon_observaciones}</dd>
+							</div>
+						{/if}
+					</dl>
+				{/if}
+				{#each listasInsumos as lista (lista.titulo)}
+					{#if lista.items.length}
+						<div>
+							<h3 class="mb-1 text-sm font-medium text-base-content/60">{lista.titulo}</h3>
+							<ul class="list rounded-box border border-base-300">
+								{#each lista.items as insumo, indice (indice)}
+									<li class="list-row py-2">
+										<span class="font-mono text-xs text-base-content/60"
+											>{insumo.codigo ?? '—'}</span
+										>
+										<span>{insumo.nombre}</span>
+										<span class="numero font-medium">{insumo.cantidad} {insumo.unidad ?? ''}</span>
+									</li>
 								{/each}
-							{/if}
+							</ul>
 						</div>
-					</td>
-				{/snippet}
-				<Table data={orden.unidades} header={headerUnidades} row={rowUnidad} />
-			</div>
+					{/if}
+				{/each}
+			</Seccion>
+
+			{#if puedeVerMovimientos}
+				<Seccion titulo="Consumo de insumos">
+					{#snippet acciones()}
+						{#if puedeEditarInsumos}
+							<div class="join">
+								<select class="select join-item select-sm" bind:value={empleadoReceta}>
+									<option value="">Responsable...</option>
+									{#each empleados as empleado (empleado.id)}
+										<option value={String(empleado.id)}
+											>{empleado.nombre} {empleado.apellido}</option
+										>
+									{/each}
+								</select>
+								<button
+									class="btn join-item btn-sm"
+									disabled={ocupado ||
+										!empleadoReceta ||
+										recetaConsumida ||
+										!orden.insumos_requeridos.length}
+									onclick={() =>
+										ejecutar(async () => {
+											await consumirRecetaOrden({
+												orden_id: orden.id,
+												empleado_id: Number(empleadoReceta)
+											});
+											await invalidateAll();
+										}, 'Consumo de receta registrado')}
+								>
+									{recetaConsumida ? 'Receta consumida' : 'Consumir receta'}
+								</button>
+							</div>
+							<a
+								class="btn btn-primary btn-sm"
+								href={resolve(`/insumos/movimientos?orden=${orden.id}`)}>Registrar consumo real</a
+							>
+						{/if}
+					{/snippet}
+					<InsumosMovimientosTabla {movimientos} emptyMessage="Sin consumos registrados" />
+				</Seccion>
+			{/if}
 		</div>
 
-		<!-- Historial de cambios -->
-		<div class="card bg-base-100 shadow">
-			<div class="card-body">
-				<h3 class="card-title">Historial de cambios</h3>
-				{#snippet headerHistorial()}
-					<th>Unidad</th>
-					<th>Fecha</th>
-					<th>Estado anterior</th>
-					<th>Estado nuevo</th>
-					<th>Empleado</th>
-					<th>Comentario</th>
-				{/snippet}
-				{#snippet rowHistorial(log: (typeof historial)[number])}
-					<td class="font-mono">{log.unidad || '-'}</td>
-					<td>{log.fecha ? formatearFecha(new Date(log.fecha)) : '-'}</td>
-					<td>
-						<span class="badge badge-soft badge-sm badge-{log.estado_anterior?.color || 'ghost'}">
-							{log.estado_anterior?.nombre || '-'}
-						</span>
-					</td>
-					<td>
-						<span class="badge badge-soft badge-sm badge-{log.estado_nuevo?.color || 'ghost'}">
-							{log.estado_nuevo?.nombre || '-'}
-						</span>
-					</td>
-					<td class="text-right">{log.empleado || '-'}</td>
-					<td class="text-right">{log.comentario || '-'}</td>
-				{/snippet}
-				<Table
-					data={historial}
-					header={headerHistorial}
-					row={rowHistorial}
-					emptyMessage="Sin movimientos registrados"
-				/>
-			</div>
+		<div class="flex min-w-0 flex-col gap-4 sm:gap-6">
+			<ArchivosAdjuntos tipo="fabricacion" entidadId={orden.id} adjuntos={orden.adjuntos} />
+			<Seccion titulo="Historial">
+				<Historial eventos={historial} />
+			</Seccion>
 		</div>
-
-		{#if puedeVerMovimientos}
-			<div class="card bg-base-100 shadow">
-				<div class="card-body">
-					<h3 class="card-title">Historial de consumo</h3>
-					<InsumosMovimientosTabla
-						movimientos={movimientosInsumos}
-						emptyMessage="Sin consumos registrados para esta orden"
-					/>
-				</div>
-			</div>
-		{/if}
 	</div>
 </PageLayout>
 
-<Modal bind:open={modal.open} title={modal.titulo} onClose={cerrarModal}>
-	{#if modal.tipo === 'pausa'}
-		<div class="py-4">
-			<textarea
-				class="textarea w-full resize-none"
-				rows="3"
-				bind:value={comentario}
-				placeholder={modal.mensaje}
-			></textarea>
-		</div>
-	{:else if modal.tipo === 'eliminar'}
-		<div class="py-4">
-			<p>{modal.mensaje}</p>
-		</div>
-	{/if}
-
+<Modal
+	open={unidadAPausar !== null}
+	title="Motivo de la pausa"
+	onClose={() => (unidadAPausar = null)}
+>
+	<textarea
+		class="textarea w-full"
+		rows="3"
+		bind:value={motivoPausa}
+		placeholder="Describí el motivo de la pausa..."
+	></textarea>
 	{#snippet actions()}
-		<button class="btn" onclick={cerrarModal}>Cancelar</button>
-		<button
-			class="btn {modal.tipo === 'eliminar' ? 'btn-error' : 'btn-primary'}"
-			onclick={modal.onConfirm}
-			disabled={isLoading}
-		>
-			{modal.tipo === 'eliminar' ? 'Eliminar' : 'Confirmar'}
-		</button>
+		<button class="btn" onclick={() => (unidadAPausar = null)}>Cancelar</button>
+		<button class="btn btn-primary" disabled={ocupado} onclick={confirmarPausa}>Pausar</button>
 	{/snippet}
 </Modal>

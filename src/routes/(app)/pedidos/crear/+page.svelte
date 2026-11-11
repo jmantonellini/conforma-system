@@ -16,7 +16,7 @@
 	import { Paths } from '$lib/types';
 	import { can } from '$lib/utils/permissions';
 	import type { InsumoOpcion, LineaEdicion, ProductoOpcion } from '$lib/types/cotizacion-editor';
-	import { formatearDosDecimales, redondearPrecio } from '$lib/utils/precios';
+	import { formatearMoneda, redondearPrecio } from '$lib/utils/precios';
 	import { fechaInputManana } from '$lib/utils/fechas';
 
 	let form = crearPedido;
@@ -303,7 +303,7 @@
 		class="space-y-6"
 	>
 		<!-- Datos del Cliente -->
-		<fieldset class="fieldset rounded-box border border-base-300 bg-base-200 p-4">
+		<fieldset class="fieldset seccion">
 			<legend class="fieldset-legend">Información del Cliente</legend>
 
 			<div class="grid gap-4 md:grid-cols-4">
@@ -330,7 +330,7 @@
 				/>
 				{#if distribuidorSeleccionado}
 					<p class="self-end text-sm text-base-content/70">
-						Saldo disponible: ${formatearDosDecimales(distribuidorSeleccionado.saldo_disponible)}
+						Saldo disponible: {formatearMoneda(distribuidorSeleccionado.saldo_disponible)}
 					</p>
 				{/if}
 				{#if distribuidorSeleccionado}
@@ -339,7 +339,7 @@
 						id="porcentaje_comision_distribuidor"
 					>
 						<input
-							class="remove-arrow input input-sm"
+							class="input input-sm"
 							min="0"
 							max="100"
 							step="0.01"
@@ -349,8 +349,8 @@
 							)}
 						/>
 						<p class="mt-1 text-xs text-base-content/70">
-							Se descontarán ${formatearDosDecimales(montoComisionDistribuidor)} al entregar. Saldo posterior:
-							${formatearDosDecimales(saldoLuegoDeEntrega)}
+							Se descontarán {formatearMoneda(montoComisionDistribuidor)} al entregar. Saldo posterior:
+							{formatearMoneda(saldoLuegoDeEntrega)}
 						</p>
 						{#if saldoLuegoDeEntrega < 0}
 							<p class="mt-1 text-xs text-error">El saldo no alcanza para cubrir la comisión.</p>
@@ -370,7 +370,7 @@
 				<!-- Anticipo -->
 				<FormFieldWrapper label="Anticipo (opcional)" id="anticipo">
 					<input
-						class="remove-arrow input input-sm"
+						class="input input-sm"
 						placeholder="0"
 						min="0"
 						{...form.fields?.anticipo?.as('number')}
@@ -396,7 +396,7 @@
 				<div class="mt-4 max-w-md">
 					<FormFieldWrapper label="Monto a usar del distribuidor" id="monto_credito_distribuidor">
 						<input
-							class="remove-arrow input input-sm"
+							class="input input-sm"
 							placeholder="0.00"
 							min="0"
 							step="0.01"
@@ -429,12 +429,12 @@
 		<div class="flex justify-end">
 			<div class="text-right">
 				<p class="text-sm text-base-content/70">Total</p>
-				<p class="text-3xl font-bold">${formatearDosDecimales(total)}</p>
+				<p class="text-3xl font-bold">{formatearMoneda(total)}</p>
 			</div>
 		</div>
 
 		<!-- Observaciones -->
-		<fieldset class="fieldset rounded-box border border-base-300 bg-base-200 p-4">
+		<fieldset class="fieldset seccion">
 			<legend class="fieldset-legend">Observaciones</legend>
 
 			<FormFieldWrapper label="Observaciones" id="observaciones">
@@ -448,7 +448,7 @@
 			</FormFieldWrapper>
 		</fieldset>
 
-		<fieldset class="fieldset rounded-box border border-base-300 bg-base-200 p-4">
+		<fieldset class="fieldset seccion">
 			<legend class="fieldset-legend">Archivos adjuntos</legend>
 			<FormFieldWrapper label="Archivos adjuntos" id="archivos">
 				<input

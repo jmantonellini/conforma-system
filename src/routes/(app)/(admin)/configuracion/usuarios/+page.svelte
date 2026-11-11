@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { confirmarYEjecutar } from '$lib/stores/confirmacion.svelte';
 	import { FormErrors, FormFieldWrapper, Modal, PageLayout, Table } from '$lib/components/ui';
 	import { Delete, Edit } from '$lib/components/ui/icons';
 	import { getEmpleadosSinUsuario } from '$lib/remote/empleados.remote';
@@ -28,8 +29,7 @@
 </script>
 
 <PageLayout>
-	<div class="mb-6 flex flex-col items-center gap-4 lg:flex-row lg:justify-between">
-		<button onclick={() => history.back()} class="btn btn-ghost btn-sm">← Volver</button>
+	<div class="flex justify-end">
 		<button
 			class="btn btn-primary btn-sm"
 			onclick={() => {
@@ -67,18 +67,12 @@
 					<button
 						class="btn btn-circle btn-ghost text-error btn-sm"
 						title="Eliminar"
-						onclick={async () => {
-							if (confirm('¿Eliminar este usuario?')) {
-								try {
-									await deleteUsuario(usuario.id);
-									toast.success('Usuario eliminado');
-								} catch (error) {
-									console.log(error);
-
-									toast.error('Error al eliminar cliente');
-								}
-							}
-						}}
+						onclick={() =>
+							confirmarYEjecutar({
+								mensaje: '¿Eliminar este usuario?',
+								ejecutar: () => deleteUsuario(usuario.id),
+								exito: 'Usuario eliminado'
+							})}
 					>
 						<Delete />
 					</button>

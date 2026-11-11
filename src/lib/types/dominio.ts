@@ -56,3 +56,10 @@ export const PRIORIDAD_FABRICACION = Object.freeze({
 	URGENTE: 1,
 	CRITICA: 2
 } as const);
+
+/** Etiqueta y color (daisyUI) de cada prioridad de fabricación. */
+export const ETIQUETA_PRIORIDAD: Record<number, { nombre: string; color: string }> = {
+	[PRIORIDAD_FABRICACION.NORMAL]: { nombre: 'Normal', color: 'neutral' },
+	[PRIORIDAD_FABRICACION.URGENTE]: { nombre: 'Urgente', color: 'warning' },
+	[PRIORIDAD_FABRICACION.CRITICA]: { nombre: 'Crítica', color: 'error' }
+};

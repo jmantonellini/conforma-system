@@ -140,14 +140,14 @@
 
 				<div
 					role="listitem"
-					class="group card cursor-grab bg-base-100 shadow-sm transition-all duration-200 hover:scale-[1.01] hover:shadow-md active:scale-[0.98] active:cursor-grabbing"
+					class="group card cursor-grab transition-all duration-200 hover:scale-[1.01] hover:shadow-md active:scale-[0.98] active:cursor-grabbing"
 					draggable="true"
 					ondragstart={(e) => onDragStart(e, tarea)}
 					ondragover={(e) => onDragOver(e, tarea.id)}
 					ondragleave={onDragLeave}
 					ondrop={(e) => onDropReordenar(e, tarea)}
 				>
-					<div class="card-body py-2 px-4">
+					<div class="card-body px-4 py-2">
 						<div class="flex items-start justify-between gap-2">
 							<h3 class="card-title text-sm">{tarea.titulo}</h3>
 							<div

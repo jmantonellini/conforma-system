@@ -25,11 +25,6 @@ export const load: PageServerLoad = async ({ url }) => {
 	return {
 		insumos,
 		categorias,
-		search,
-		tipo,
-		categoriaId: categoriaId ? String(categoriaId) : '',
-		currentPage: page,
-		sort,
-		direction
+		currentPage: page
 	};
 };

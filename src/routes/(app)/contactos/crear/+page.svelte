@@ -1,6 +1,12 @@
 <script lang="ts">
 	import { resolve } from '$app/paths';
-	import { FormActions, FormErrors, FormFieldWrapper, PageLayout } from '$lib/components/ui';
+	import {
+		EncabezadoDetalle,
+		FormActions,
+		FormErrors,
+		FormFieldWrapper,
+		PageLayout
+	} from '$lib/components/ui';
 	import FormDireccion from '$lib/components/ui/FormDireccion.svelte';
 	import { crearContacto, obtenerDatosCuitARCA } from '$lib/remote/contactos.remote';
 	import { toast } from '$lib/stores/toast.svelte';
@@ -127,7 +133,10 @@
 </script>
 
 <PageLayout>
-	<a href={resolve('/contactos')} class="btn btn-ghost btn-sm">← Volver</a>
+	<EncabezadoDetalle
+		titulo="Nuevo contacto"
+		volver={{ href: '/contactos', etiqueta: 'Contactos' }}
+	/>
 	<form
 		{...form.enhance(async (instance) => {
 			try {
@@ -141,7 +150,7 @@
 		})}
 		class="space-y-6"
 	>
-		<fieldset class="fieldset rounded-box border border-base-300 bg-base-200 p-4">
+		<fieldset class="fieldset seccion">
 			<legend class="fieldset-legend">Información del contacto</legend>
 			<div class="grid gap-4 md:grid-cols-3">
 				<FormFieldWrapper id="cuit" label="CUIT">
@@ -201,7 +210,7 @@
 				{#if esDistribuidor}
 					<FormFieldWrapper id="porcentaje_compensacion" label="Comisión (%)">
 						<input
-							class="remove-arrow input"
+							class="input"
 							min="0"
 							max="100"
 							step="0.01"
@@ -211,7 +220,7 @@
 					</FormFieldWrapper>
 					<FormFieldWrapper id="saldo_disponible" label="Saldo disponible">
 						<input
-							class="remove-arrow input"
+							class="input"
 							min="0"
 							step="0.01"
 							{...form.fields.saldo_disponible.as('number', 0)}

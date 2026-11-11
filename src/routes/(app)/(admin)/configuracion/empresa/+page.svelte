@@ -31,7 +31,7 @@
 			{...actualizarConfiguracionEmpresa.enhance(async (instance) => {
 				if (await instance.submit()) toast.success('Datos actualizados');
 			})}
-			class="card mt-6 bg-base-100 shadow"
+			class="card mt-6"
 		>
 			<div class="card-body">
 				<div class="grid gap-4 md:grid-cols-2">
@@ -80,7 +80,7 @@
 			</div>
 		</form>
 
-		<div class="card mt-4 bg-base-100 shadow">
+		<div class="card mt-4">
 			<div class="card-body">
 				<h2 class="card-title">Logo</h2>
 				{#if config.logo_url}<img

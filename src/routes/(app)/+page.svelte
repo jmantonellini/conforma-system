@@ -1,4 +1,6 @@
 <script lang="ts">
+	import { confirmarYEjecutar } from '$lib/stores/confirmacion.svelte';
+	import { ETIQUETA_PRIORIDAD } from '$lib/types/dominio';
 	import {
 		getTareas,
 		crearTarea,
@@ -10,11 +12,12 @@
 	} from '$lib/remote/tareas.remote';
 	import { getEmpleados } from '$lib/remote/empleados.remote';
 	import {
+		EstadoBadge,
 		FormErrors,
-		PageLayout,
-		Modal,
 		FormFieldWrapper,
 		KanBanBoard,
+		Modal,
+		PageLayout,
 		Table
 	} from '$lib/components/ui';
 	import { toast } from '$lib/stores/toast.svelte';
@@ -36,14 +39,7 @@
 		asignado_a: ''
 	});
 	const form = crearTarea;
-	const prioridadesOrden = new Map([
-		[2, { clase: 'badge-error', nombre: 'Crítica' }],
-		[1, { clase: 'badge-warning', nombre: 'Urgente' }]
-	]);
 	let esModoCreacion = $derived(modalMode !== 'edit');
-	function obtenerPrioridad(prioridad: number | null) {
-		return prioridadesOrden.get(prioridad ?? 0) ?? { clase: 'badge-ghost', nombre: 'Normal' };
-	}
 
 	function formatearFechaInput(value: Date | string | null | undefined) {
 		if (!value) return '';
@@ -92,21 +88,28 @@
 		await reordenarTareas({ tareas: updates });
 	}
 
-	async function handleEliminar(id: number) {
-		if (confirm('¿Eliminar esta tarea?')) {
-			tareas = tareas.filter((t) => t.id !== id);
-			await eliminarTarea(String(id));
-			toast.success('Tarea eliminada');
-		}
-	}
+	const handleEliminar = (id: number) =>
+		confirmarYEjecutar({
+			mensaje: '¿Eliminar esta tarea?',
+			ejecutar: async () => {
+				await eliminarTarea(String(id));
+				tareas = tareas.filter((t) => t.id !== id);
+			},
+			exito: 'Tarea eliminada'
+		});
 
-	async function handleArchivar(id: number) {
-		if (confirm('¿Archivar esta tarea?')) {
-			tareas = tareas.filter((t) => t.id !== id);
-			await archivarTarea({ id: String(id), archivada: true });
-			toast.success('Tarea archivada');
-		}
-	}
+	const handleArchivar = (id: number) =>
+		confirmarYEjecutar({
+			titulo: 'Archivar',
+			accion: 'Archivar',
+			peligro: false,
+			mensaje: '¿Archivar esta tarea?',
+			ejecutar: async () => {
+				await archivarTarea({ id: String(id), archivada: true });
+				tareas = tareas.filter((t) => t.id !== id);
+			},
+			exito: 'Tarea archivada'
+		});
 
 	async function handleGuardarEdicion(event: SubmitEvent) {
 		event.preventDefault();
@@ -134,7 +137,7 @@
 <PageLayout>
 	<div class="flex flex-col gap-4">
 		<!-- PEDIDOS ACTIVOS: Contexto de negocio -->
-		<div class="card bg-base-100 shadow">
+		<div class="card">
 			<div class="card-body">
 				<div class="mb-4 flex items-center justify-between">
 					<h2 class="card-title">Órdenes activas</h2>
@@ -155,14 +158,10 @@
 
 				{#snippet rowOrden(o: (typeof ordenesActivas)[number])}
 					<td>
-						<span class={`badge badge-sm ${obtenerPrioridad(o.prioridad).clase}`}>
-							{obtenerPrioridad(o.prioridad).nombre}
-						</span>
+						<EstadoBadge class="badge-sm" estado={ETIQUETA_PRIORIDAD[o.prioridad ?? 0]} />
 					</td>
 					<td>
-						<span class={`badge badge-sm whitespace-nowrap badge-${o.estado?.color}`}>
-							{o.estado?.nombre}
-						</span>
+						<EstadoBadge class="badge-sm" estado={o.estado} />
 					</td>
 					<td>
 						<a class="link link-primary" href={resolve(`/fabricacion/${o.id}`)}>
@@ -186,7 +185,7 @@
 							-
 						{/if}
 					</td>
-					<td>
+					<td class="whitespace-nowrap">
 						<progress class="progress w-20" value={o.cantidad_producida} max={o.cantidad_total}
 						></progress>
 						<span class="ml-2 text-xs">{o.cantidad_producida}/{o.cantidad_total}</span>

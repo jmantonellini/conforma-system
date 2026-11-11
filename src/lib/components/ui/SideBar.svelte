@@ -1,92 +1,94 @@
 <script lang="ts">
+	import { onMount, type Component, type Snippet } from 'svelte';
+	import { resolve } from '$app/paths';
+	import type { Pathname } from '$app/types';
 	import { page } from '$app/state';
 	import { SideBarToggle } from '$lib/components/ui/icons';
 
-	let { tabs, children } = $props();
+	type Tab = {
+		href: string;
+		label: string;
+		icon?: Component;
+		subtabs?: { href: string; label: string }[];
+	};
 
-	let drawerOpen = $state(true);
+	let { tabs, children }: { tabs: Tab[]; children: Snippet } = $props();
 
-	function isActive(href: string) {
-		if (href === '/') return page.url.pathname === '/';
-		return href && page.url.pathname.startsWith(href);
-	}
+	// En escritorio el menú arranca expandido; en mobile es un overlay que arranca cerrado.
+	let abierto = $state(true);
+	const esMobile = () => !matchMedia('(min-width: 1024px)').matches;
+	onMount(() => {
+		if (esMobile()) abierto = false;
+	});
+	const navegar = (tab: Tab) => {
+		if (esMobile()) abierto = false;
+		else if (tab.subtabs?.length) abierto = true;
+	};
 
-	function hasActiveSubtab(tab: { subtabs?: { href: string }[] }) {
-		return tab.subtabs?.some((subtab) => isActive(subtab.href)) ?? false;
-	}
-
-	function isTabActive(tab: { href: string; subtabs?: { href: string }[] }) {
-		return isActive(tab.href) || hasActiveSubtab(tab);
-	}
-
-	function handleTabClick(tab: { subtabs?: unknown[] }) {
-		if (!drawerOpen && tab.subtabs && tab.subtabs.length > 0) {
-			drawerOpen = true;
-		}
-	}
+	const activo = (href: string) =>
+		href === '/' ? page.url.pathname === '/' : page.url.pathname.startsWith(href);
+	const tabActivo = (tab: Tab) => activo(tab.href) || !!tab.subtabs?.some((s) => activo(s.href));
 </script>
 
-<div class="drawer lg:drawer-open">
-	<input id="my-drawer-4" type="checkbox" class="drawer-toggle" bind:checked={drawerOpen} />
+<div class="drawer grow lg:drawer-open">
+	<input id="menu-lateral" type="checkbox" class="drawer-toggle" bind:checked={abierto} />
 
-	<div class="drawer-content">
-		<div class="p-2 lg:hidden">
-			<label for="my-drawer-4" aria-label="open sidebar" class="btn btn-square btn-ghost">
-				<SideBarToggle />
-			</label>
-		</div>
+	<div class="drawer-content min-w-0">
+		<label
+			for="menu-lateral"
+			aria-label="Abrir menú"
+			class="btn m-2 btn-square btn-ghost lg:hidden"
+		>
+			<SideBarToggle />
+		</label>
 		{@render children()}
 	</div>
 
-	<div class="drawer-side is-drawer-close:overflow-visible">
-		<label for="my-drawer-4" aria-label="close sidebar" class="drawer-overlay"></label>
+	<div class="drawer-side z-30 is-drawer-close:overflow-visible">
+		<label for="menu-lateral" aria-label="Cerrar menú" class="drawer-overlay"></label>
 		<aside
-			class="flex h-full min-h-screen w-full flex-col overflow-hidden bg-base-200 px-4 is-drawer-close:w-21 is-drawer-open:w-64"
+			class="flex min-h-full flex-col border-r border-base-300 bg-base-100 is-drawer-close:w-16 is-drawer-open:w-60"
 		>
-			<div class="flex items-center justify-end pt-4 pb-2">
-				<label
-					for="my-drawer-4"
-					aria-label="toggle sidebar"
-					class="btn btn-square btn-ghost btn-sm"
-					class:rotate-180={drawerOpen}
-				>
-					<SideBarToggle />
-				</label>
-			</div>
-
-			<nav class="flex h-full w-full flex-col gap-2">
-				{#each tabs ?? [] as tab (tab.href)}
-					<a
-						href={tab.href}
-						onclick={() => handleTabClick(tab)}
-						class="flex w-full items-center gap-4 rounded px-4 py-2 text-sm whitespace-nowrap hover:bg-gray-200"
-						class:bg-gray-300={isTabActive(tab)}
-						class:text-primary={isTabActive(tab)}
-					>
-						{#if tab.icon && typeof tab.icon !== 'string'}
-							{@const Icon = tab.icon}
-							<Icon />
+			<label
+				for="menu-lateral"
+				aria-label="Contraer menú"
+				class={['btn m-2 btn-square self-end btn-ghost btn-sm', abierto && 'rotate-180']}
+			>
+				<SideBarToggle />
+			</label>
+			<ul class="menu w-full grow gap-1">
+				{#each tabs as tab (tab.href)}
+					<li>
+						<a
+							href={resolve(tab.href as Pathname as '/')}
+							class={[
+								tabActivo(tab) && 'menu-active',
+								'is-drawer-close:tooltip is-drawer-close:tooltip-right'
+							]}
+							data-tip={tab.label}
+							onclick={() => navegar(tab)}
+						>
+							{#if tab.icon}<tab.icon />{/if}
+							<span class="is-drawer-close:hidden">{tab.label}</span>
+						</a>
+						{#if tab.subtabs && tabActivo(tab) && abierto}
+							<ul>
+								{#each tab.subtabs as subtab (subtab.href)}
+									<li>
+										<a
+											href={resolve(subtab.href as Pathname as '/')}
+											class={[activo(subtab.href) && 'menu-active']}
+											onclick={() => navegar(subtab)}
+										>
+											{subtab.label}
+										</a>
+									</li>
+								{/each}
+							</ul>
 						{/if}
-						<span class="is-drawer-close:hidden">
-							{tab.label}
-						</span>
-					</a>
-
-					{#if tab.subtabs && isTabActive(tab) && drawerOpen}
-						<div class="ml-4 flex flex-col gap-1">
-							{#each tab.subtabs as subtab (subtab.href)}
-								<a
-									href={subtab.href}
-									class="block rounded px-4 py-2 text-sm whitespace-nowrap hover:bg-gray-200"
-									class:bg-gray-300={subtab.href && page.url.pathname.startsWith(subtab.href)}
-								>
-									{subtab.label}
-								</a>
-							{/each}
-						</div>
-					{/if}
+					</li>
 				{/each}
-			</nav>
+			</ul>
 		</aside>
 	</div>
 </div>

@@ -2,7 +2,14 @@
 	import { onDestroy } from 'svelte';
 	import { goto, invalidateAll } from '$app/navigation';
 	import { resolve } from '$app/paths';
-	import { Can, FormActions, FormErrors, FormFieldWrapper, PageLayout } from '$lib/components/ui';
+	import {
+		Can,
+		EncabezadoDetalle,
+		FormActions,
+		FormErrors,
+		FormFieldWrapper,
+		PageLayout
+	} from '$lib/components/ui';
 	import {
 		actualizarInsumo,
 		getCategoriasInsumo,
@@ -44,7 +51,11 @@
 </script>
 
 <PageLayout>
-	<button onclick={() => goto(resolve('/insumos'))} class="btn btn-ghost btn-sm">← Volver</button>
+	<EncabezadoDetalle
+		titulo={data.insumo.nombre}
+		subtitulo={data.insumo.codigo}
+		volver={{ href: '/insumos', etiqueta: 'Insumos' }}
+	/>
 	<Can modulo="insumos" accion="edit">
 		<form
 			{...form.enhance(async (formInstance) => {
@@ -66,11 +77,10 @@
 					toast.error('No se pudo actualizar el insumo');
 				}
 			})}
-			class="card mt-4 bg-base-100 shadow"
+			class="flex flex-col gap-4 seccion"
 		>
-			<div class="card-body">
+			<div class="contents">
 				<input type="hidden" name="id" value={data.insumo.id} />
-				<h1 class="card-title">Editar insumo</h1>
 				<div class="grid gap-4 md:grid-cols-5">
 					<FormFieldWrapper label="Código" id="codigo" required
 						><input
@@ -160,7 +170,7 @@
 					</FormFieldWrapper>
 					<FormFieldWrapper label="Costo unitario" id="costo_unitario" required
 						><input
-							class="remove-arrow input"
+							class="input"
 							min="0"
 							step="0.01"
 							{...form.fields.costo_unitario.as(
@@ -171,7 +181,7 @@
 					>
 					<FormFieldWrapper label="Flete (%)" id="flete_porcentaje">
 						<input
-							class="remove-arrow input"
+							class="input"
 							min="0"
 							step="0.01"
 							{...form.fields.flete_porcentaje.as('number', data.insumo.flete_porcentaje ?? 0)}

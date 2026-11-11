@@ -111,7 +111,7 @@
 		<FormFieldWrapper label="Costo por unidad" id="nuevo-insumo-costo">
 			<input
 				id="nuevo-insumo-costo"
-				class="remove-arrow input w-full input-sm"
+				class="input w-full input-sm"
 				type="text"
 				inputmode="decimal"
 				bind:value={nuevoInsumo.costo_unitario}

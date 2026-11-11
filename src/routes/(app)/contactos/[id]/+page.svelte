@@ -1,11 +1,19 @@
 <script lang="ts">
 	import { goto } from '$app/navigation';
 	import { resolve } from '$app/paths';
-	import { Can, FormActions, FormErrors, FormFieldWrapper, PageLayout } from '$lib/components/ui';
+	import {
+		Can,
+		EncabezadoDetalle,
+		FormActions,
+		FormErrors,
+		FormFieldWrapper,
+		PageLayout,
+		Seccion
+	} from '$lib/components/ui';
 	import FormDireccion from '$lib/components/ui/FormDireccion.svelte';
 	import { actualizarContacto, eliminarContacto } from '$lib/remote/contactos.remote';
 	import { toast } from '$lib/stores/toast.svelte';
-	import { formatearDosDecimales } from '$lib/utils/precios';
+	import { formatearMoneda } from '$lib/utils/precios';
 	import type { PageProps } from './$types';
 
 	let { data }: PageProps = $props();
@@ -21,14 +29,9 @@
 	let editando = $state(false);
 
 	async function eliminar() {
-		if (!confirm(`¿Eliminar el contacto "${contacto.razon_social}"?`)) return;
-		try {
-			await eliminarContacto(contacto.id);
-			toast.success('Contacto eliminado');
-			goto(resolve('/contactos'));
-		} catch {
-			toast.error('No se pudo eliminar el contacto');
-		}
+		await eliminarContacto(contacto.id);
+		toast.success('Contacto eliminado');
+		goto(resolve('/contactos'));
 	}
 </script>
 
@@ -44,11 +47,19 @@
 				toast.error('No se pudo actualizar el contacto');
 			}
 		})}
-		class="space-y-6"
+		class="flex flex-col gap-4 sm:gap-6"
 	>
-		<div class="flex items-center justify-between">
-			<a href={resolve('/contactos')} class="btn btn-ghost btn-sm">← Volver</a>
-			<div class="flex gap-2">
+		<EncabezadoDetalle
+			titulo={contacto.razon_social}
+			subtitulo={contacto.cuit}
+			volver={{ href: '/contactos', etiqueta: 'Contactos' }}
+			eliminar={{
+				modulo: 'contactos',
+				mensaje: `¿Eliminar el contacto ${contacto.razon_social}?`,
+				onConfirmar: eliminar
+			}}
+		>
+			{#snippet acciones()}
 				<Can modulo="contactos" accion="edit">
 					{#if editando}
 						<FormActions
@@ -58,19 +69,14 @@
 						/>
 					{:else}
 						<button type="button" class="btn btn-primary btn-sm" onclick={() => (editando = true)}
-							>Editar contacto</button
+							>Editar</button
 						>
 					{/if}
 				</Can>
-				<Can modulo="contactos" accion="delete">
-					<button type="button" class="btn btn-outline btn-error btn-sm" onclick={eliminar}
-						>Eliminar contacto</button
-					>
-				</Can>
-			</div>
-		</div>
+			{/snippet}
+		</EncabezadoDetalle>
 		<div class="flex flex-col gap-4 md:flex-row">
-			<fieldset class="fieldset rounded-box border border-base-300 bg-base-200 p-4">
+			<fieldset class="fieldset seccion">
 				<legend class="fieldset-legend">Datos del contacto</legend>
 				<div class="grid gap-4 md:grid-cols-3">
 					<input type="hidden" name="id" value={contacto.id} />
@@ -145,7 +151,7 @@
 					{#if esDistribuidor}
 						<FormFieldWrapper id="porcentaje_compensacion" label="Comisión (%)">
 							<input
-								class="remove-arrow input"
+								class="input"
 								disabled={!editando}
 								min="0"
 								max="100"
@@ -158,7 +164,7 @@
 						</FormFieldWrapper>
 						<FormFieldWrapper id="saldo_disponible" label="Saldo disponible">
 							<input
-								class="remove-arrow input"
+								class="input"
 								disabled={!editando}
 								min="0"
 								step="0.01"
@@ -222,35 +228,32 @@
 		</div>
 	</form>
 
-	<section class="card mt-6 bg-base-100 shadow">
-		<div class="card-body">
-			<h2 class="card-title">Historial de pedidos</h2>
-			{#if data.pedidos.length}
-				<div class="overflow-x-auto">
-					<table class="table table-sm">
-						<thead
-							><tr><th>Pedido</th><th>Fecha</th><th>Estado</th><th class="text-right">Total</th></tr
-							></thead
-						>
-						<tbody>
-							{#each data.pedidos as pedido (pedido.id)}
-								<tr>
-									<td
-										><a class="link link-primary" href={resolve(`/pedidos/${pedido.id}`)}
-											>{pedido.numero_pedido}</a
-										></td
-									>
-									<td>{pedido.fecha_pedido?.toLocaleDateString('es-AR') || '-'}</td>
-									<td><span class="badge badge-sm">{pedido.estado || 'Sin estado'}</span></td>
-									<td class="text-right">${formatearDosDecimales(pedido.precio_total)}</td>
-								</tr>
-							{/each}
-						</tbody>
-					</table>
-				</div>
-			{:else}
-				<p class="text-sm text-base-content/70">Todavía no hay pedidos para este contacto.</p>
-			{/if}
-		</div>
-	</section>
+	<Seccion titulo="Historial de pedidos">
+		{#if data.pedidos.length}
+			<div class="overflow-x-auto">
+				<table class="table table-sm">
+					<thead
+						><tr><th>Pedido</th><th>Fecha</th><th>Estado</th><th class="text-right">Total</th></tr
+						></thead
+					>
+					<tbody>
+						{#each data.pedidos as pedido (pedido.id)}
+							<tr>
+								<td
+									><a class="link link-primary" href={resolve(`/pedidos/${pedido.id}`)}
+										>{pedido.numero_pedido}</a
+									></td
+								>
+								<td>{pedido.fecha_pedido?.toLocaleDateString('es-AR') || '-'}</td>
+								<td><span class="badge badge-sm">{pedido.estado || 'Sin estado'}</span></td>
+								<td class="numero">{formatearMoneda(pedido.precio_total)}</td>
+							</tr>
+						{/each}
+					</tbody>
+				</table>
+			</div>
+		{:else}
+			<p class="text-sm text-base-content/70">Todavía no hay pedidos para este contacto.</p>
+		{/if}
+	</Seccion>
 </PageLayout>
