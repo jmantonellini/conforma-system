@@ -1,4 +1,40 @@
 SET LOCAL TIME ZONE 'UTC';--> statement-breakpoint
+DO $$
+DECLARE
+	objeto record;
+	nuevo text;
+BEGIN
+	FOR objeto IN
+		SELECT c.conname AS nombre, t.relname AS tabla
+		FROM pg_constraint c
+		JOIN pg_class t ON t.oid = c.conrelid
+		JOIN pg_namespace n ON n.oid = t.relnamespace
+		WHERE n.nspname = 'public' AND c.conname LIKE '%empresa%'
+	LOOP
+		nuevo := replace(objeto.nombre, 'empresa', 'contacto');
+		IF EXISTS (SELECT 1 FROM pg_class WHERE relname = nuevo) OR EXISTS (SELECT 1 FROM pg_constraint WHERE conname = nuevo) THEN
+			nuevo := left(objeto.nombre, 55) || '_legado';
+		END IF;
+		EXECUTE format('ALTER TABLE public.%I RENAME CONSTRAINT %I TO %I', objeto.tabla, objeto.nombre, nuevo);
+	END LOOP;
+
+	FOR objeto IN
+		SELECT c.relname AS nombre, c.relkind AS tipo
+		FROM pg_class c
+		JOIN pg_namespace n ON n.oid = c.relnamespace
+		WHERE n.nspname = 'public' AND c.relkind IN ('i', 'S') AND c.relname LIKE '%empresa%'
+	LOOP
+		nuevo := replace(objeto.nombre, 'empresa', 'contacto');
+		IF EXISTS (SELECT 1 FROM pg_class WHERE relname = nuevo) THEN
+			nuevo := left(objeto.nombre, 55) || '_legado';
+		END IF;
+		IF objeto.tipo = 'i' THEN
+			EXECUTE format('ALTER INDEX public.%I RENAME TO %I', objeto.nombre, nuevo);
+		ELSE
+			EXECUTE format('ALTER SEQUENCE public.%I RENAME TO %I', objeto.nombre, nuevo);
+		END IF;
+	END LOOP;
+END $$;--> statement-breakpoint
 CREATE TABLE "empresas" (
 	"id" serial PRIMARY KEY NOT NULL,
 	"razon_social" text NOT NULL,

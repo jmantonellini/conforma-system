@@ -48,6 +48,10 @@ const CONTROLES: { titulo: string; sql: string }[] = [
 			UNION ALL SELECT 'cotizaciones', count(*), '' FROM cotizaciones WHERE abs(descuento_global_porcentaje) >= 1000`
 	},
 	{
+		titulo: 'Columnas empresa_id heredadas (deberían llamarse contacto_id)',
+		sql: `SELECT table_name AS valor, 1 AS cantidad, '' AS ids FROM information_schema.columns WHERE table_schema = 'public' AND column_name = 'empresa_id'`
+	},
+	{
 		titulo: 'Último acceso con valores no convertibles',
 		sql: `SELECT ultimo_acceso::text AS valor, count(*) AS cantidad, string_agg(id::text, ', ') AS ids FROM usuarios WHERE ultimo_acceso > 32503680000 GROUP BY ultimo_acceso`
 	}
