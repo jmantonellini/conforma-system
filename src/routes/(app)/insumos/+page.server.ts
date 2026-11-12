@@ -1,4 +1,4 @@
-import { getCategoriasInsumo, getInsumos } from '$lib/remote/insumos.remote';
+import { getCategoriasInsumo, getInsumos } from '$lib/modulos/insumos/insumos.remote';
 import type { PageServerLoad } from './$types';
 
 export const load: PageServerLoad = async ({ url }) => {

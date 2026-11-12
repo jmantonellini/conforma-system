@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { PageLayout } from '$lib/components/ui';
+	import { PageLayout } from '$lib/ui';
 </script>
 
 <PageLayout>Tipos Materiales</PageLayout>

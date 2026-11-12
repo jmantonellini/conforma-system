@@ -13,7 +13,6 @@ import {
 export type { Tx };
 export type Ejecutor = typeof db | Tx;
 
-/** Cómo se identifica cada flujo en `logs_cambios_estado.entidad_tipo`. */
 const ENTIDAD_LOG = {
 	cotizacion: 'cotizacion',
 	pedido: 'pedido',
@@ -36,7 +35,6 @@ export async function estadoPorSlug(flujo: FlujoEstado, slug: string, ejecutor: 
 	return estado;
 }
 
-/** Destinos alcanzables desde un estado, en el formato que consumen las vistas de detalle. */
 export const transicionesDesde = (estadoId: number) =>
 	db
 		.select({
@@ -65,7 +63,6 @@ export async function transicionPermitida(ejecutor: Ejecutor, origenId: number, 
 	return Boolean(transicion);
 }
 
-/** Valida `origen → destino` contra la tabla de transiciones y devuelve el estado destino. */
 export async function validarTransicion(ejecutor: Ejecutor, origenId: number, destinoId: number) {
 	const origen = aliasedTable(estados, 'origen');
 	const [fila] = await ejecutor
@@ -121,7 +118,6 @@ export function registrarCambioEstado(
 	});
 }
 
-/** Historial de cambios de estado de una o varias entidades del flujo, más reciente primero. */
 export function historialEstados(flujo: FlujoEstado, entidadIds: number[]) {
 	const anterior = aliasedTable(estados, 'estado_anterior');
 	const nuevo = aliasedTable(estados, 'estado_nuevo');

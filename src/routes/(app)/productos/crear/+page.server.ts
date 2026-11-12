@@ -3,7 +3,7 @@ import {
 	getMarcas,
 	getTiposUso,
 	getTiposVehiculo
-} from '$lib/remote/productos.remote';
+} from '$lib/modulos/productos/productos.remote';
 import type { PageServerLoad } from './$types';
 
 export const load: PageServerLoad = async () => {

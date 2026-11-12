@@ -2,10 +2,10 @@ import { error } from '@sveltejs/kit';
 import { and, eq } from 'drizzle-orm';
 import { db } from '$lib/server/db';
 import { adjuntos, CATEGORIAS_ADJUNTO } from '$lib/server/db/schema';
-import type { CategoriaAdjunto } from '$lib/types/adjuntos';
+import type { CategoriaAdjunto } from '$lib/modulos/adjuntos/tipos';
 import { requirePermission } from '$lib/server/auth/permissions';
-import { eliminarObjeto, leerObjeto } from '$lib/server/services/object-storage.service';
-import { ENTIDADES_ADJUNTO, propietarioAdjunto } from '$lib/server/services/adjuntos.service';
+import { eliminarObjeto, leerObjeto } from '$lib/server/almacenamiento';
+import { ENTIDADES_ADJUNTO, propietarioAdjunto } from '$lib/modulos/adjuntos/adjuntos.server';
 
 async function obtenerAdjunto(id: number) {
 	const [adjunto] = await db.select().from(adjuntos).where(eq(adjuntos.id, id)).limit(1);
@@ -54,7 +54,6 @@ export async function DELETE({ params }) {
 	return new Response(null, { status: 204 });
 }
 
-/** Cambia la categoría de un archivo de producto (general, plano o portada). */
 export async function PATCH({ params, request }) {
 	const id = Number(params.id);
 	if (!Number.isSafeInteger(id) || id < 1) error(404, 'Archivo no encontrado');
@@ -72,7 +71,6 @@ export async function PATCH({ params, request }) {
 	}
 
 	await db.transaction(async (tx) => {
-		// Una sola portada: la anterior vuelve a ser un archivo general.
 		if (categoria === 'portada') {
 			await tx
 				.update(adjuntos)

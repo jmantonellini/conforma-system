@@ -11,21 +11,22 @@
 		MenuDesplegable,
 		Modal,
 		PageLayout,
+		Persona,
 		Seccion
-	} from '$lib/components/ui';
-	import type { Transicion } from '$lib/components/ui/EncabezadoDetalle.svelte';
-	import CotizacionLineasEditor from '$lib/components/cotizaciones/CotizacionLineasEditor.svelte';
-	import ArchivosAdjuntos from '$lib/components/ArchivosAdjuntos.svelte';
-	import { Document } from '$lib/components/ui/icons';
-	import { toast } from '$lib/stores/toast.svelte';
+	} from '$lib/ui';
+	import type { Transicion } from '$lib/ui/EncabezadoDetalle.svelte';
+	import CotizacionLineasEditor from '$lib/modulos/cotizaciones/componentes/CotizacionLineasEditor.svelte';
+	import ArchivosAdjuntos from '$lib/modulos/adjuntos/componentes/ArchivosAdjuntos.svelte';
+	import { Document } from '$lib/ui/icons';
+	import { toast } from '$lib/ui/toast.svelte';
 	import {
 		agregarNotaCotizacion,
 		asignarCotizacion,
 		cambiarEstadoCotizacion,
 		convertirCotizacionAPedido,
 		eliminarCotizacion
-	} from '$lib/remote/cotizaciones.remote';
-	import { CANALES_COTIZACION } from '$lib/utils/canales-cotizacion';
+	} from '$lib/modulos/cotizaciones/cotizaciones.remote';
+	import { CANALES_COTIZACION } from '$lib/modulos/cotizaciones/canales';
 	import { formatearFecha } from '$lib/utils/fechas';
 	import { can } from '$lib/utils/permissions';
 	import type { PageProps } from './$types';
@@ -37,17 +38,6 @@
 	const cliente = $derived(cotizacion.cliente);
 	const notas = $derived(data.notas.map((nota) => ({ ...nota, detalle: nota.contenido })));
 
-	const ACCION_POR_ESTADO: Record<string, string> = {
-		asignada: 'asignar',
-		en_cotizacion: 'cotizar',
-		lista_para_enviar: 'cotizar',
-		enviada: 'enviar',
-		aprobada: 'aprobar'
-	};
-
-	let empleadoSeleccionado = $derived(
-		cotizacion.asignado?.id ? String(cotizacion.asignado.id) : ''
-	);
 	let nota = $state('');
 	let rechazo = $state<{ estadoId: number; motivo: string } | null>(null);
 	let ocupado = $state(false);
@@ -108,7 +98,7 @@
 		estado={cotizacion.estado}
 		transiciones={cotizacion.pedido_id ? [] : cotizacion.transiciones}
 		onTransicion={manejarTransicion}
-		puedeTransicionar={(slug) => puede(ACCION_POR_ESTADO[slug] ?? 'edit')}
+		puedeTransicionar={() => puede('edit')}
 		estados={data.estados}
 		actual="cotizacion"
 		proceso={{
@@ -123,7 +113,7 @@
 	>
 		{#snippet acciones()}
 			{#if cotizacion.estado.slug === 'aprobada' && !cotizacion.pedido_id}
-				<Can modulo="cotizaciones" accion="convertir">
+				<Can modulo="pedidos" accion="create">
 					<button class="btn btn-primary btn-sm" onclick={generarPedido}>Generar pedido</button>
 				</Can>
 			{/if}
@@ -175,34 +165,37 @@
 			</div>
 			<div>
 				<dt>Asignada a</dt>
-				<dd>
-					{#if puede('asignar')}
-						<div class="join w-full">
-							<select class="select join-item select-sm" bind:value={empleadoSeleccionado}>
-								<option value="">Sin asignar</option>
-								{#each data.empleados as empleado (empleado.id)}
-									<option value={String(empleado.id)}>
+				<dd class="flex items-center gap-2">
+					<Persona
+						nombre={cotizacion.asignado?.nombre}
+						apellido={cotizacion.asignado?.apellido}
+						vacio="Sin asignar"
+					/>
+					{#if puede('edit')}
+						<MenuDesplegable class="btn btn-ghost btn-xs" titulo="Cambiar responsable">
+							{#snippet etiqueta()}{cotizacion.asignado ? 'Cambiar' : 'Asignar'}{/snippet}
+							<li class="menu-title">Asignar a</li>
+							{#each data.empleados as empleado (empleado.id)}
+								<li>
+									<button
+										disabled={ocupado}
+										class={[empleado.id === cotizacion.asignado?.id && 'menu-active']}
+										onclick={() =>
+											ejecutar(
+												() =>
+													asignarCotizacion({
+														cotizacion_id: cotizacion.id,
+														empleado_id: empleado.id
+													}),
+												`Asignada a ${empleado.nombre}`
+											)}
+									>
 										{empleado.nombre}
 										{empleado.apellido ?? ''}
-									</option>
-								{/each}
-							</select>
-							<button
-								class="btn join-item btn-sm"
-								disabled={ocupado || !empleadoSeleccionado}
-								onclick={() =>
-									ejecutar(
-										() =>
-											asignarCotizacion({
-												cotizacion_id: cotizacion.id,
-												empleado_id: Number(empleadoSeleccionado)
-											}),
-										'Cotización asignada'
-									)}>Asignar</button
-							>
-						</div>
-					{:else}
-						{cotizacion.asignado?.nombre ?? 'Sin asignar'}
+									</button>
+								</li>
+							{/each}
+						</MenuDesplegable>
 					{/if}
 				</dd>
 			</div>
@@ -220,7 +213,7 @@
 	</Seccion>
 
 	{#if veImportes}
-		<Can modulo="cotizaciones" accion="cotizar">
+		<Can modulo="cotizaciones" accion="edit">
 			<CotizacionLineasEditor
 				cotizacionId={cotizacion.id}
 				bloqueada={!!cotizacion.pedido_id}

@@ -4,7 +4,7 @@
 		{
 			"name": "dev-testdb",
 			"runtimeExecutable": "sh",
-			"runtimeArgs": ["-c", "DB_NAME=conforma_migtest pnpm dev --port 5174 --strictPort"],
+			"runtimeArgs": ["-c", "DB_NAME=conforma_migtest VITE_CACHE_DIR=node_modules/.vite-pruebas pnpm dev --port 5174 --strictPort"],
 			"port": 5174
 		}
 	]

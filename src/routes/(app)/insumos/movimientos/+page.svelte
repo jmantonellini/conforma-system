@@ -2,20 +2,20 @@
 	import { mensajeError } from '$lib/utils/errores';
 	import { page } from '$app/state';
 	import { resolve } from '$app/paths';
-	import { getEmpleados } from '$lib/remote/empleados.remote';
+	import { getEmpleadosOpciones } from '$lib/modulos/configuracion/empleados.remote';
 	import {
 		getInsumos,
 		getMovimientosInsumos,
 		registrarMovimientoInsumo
-	} from '$lib/remote/insumos.remote';
-	import { getOrdenesFabricacion } from '$lib/remote/fabricacion-consultas.remote';
-	import { FormFieldWrapper, PageLayout } from '$lib/components/ui';
-	import InsumosMovimientosTabla from '$lib/components/insumos/InsumosMovimientosTabla.svelte';
-	import { toast } from '$lib/stores/toast.svelte';
+	} from '$lib/modulos/insumos/insumos.remote';
+	import { getOrdenesFabricacion } from '$lib/modulos/fabricacion/fabricacion-consultas.remote';
+	import { FormFieldWrapper, PageLayout } from '$lib/ui';
+	import InsumosMovimientosTabla from '$lib/modulos/insumos/componentes/InsumosMovimientosTabla.svelte';
+	import { toast } from '$lib/ui/toast.svelte';
 	import { can } from '$lib/utils/permissions';
 
 	const insumos = $derived(await getInsumos({ limit: 100 }));
-	const empleados = $derived(await getEmpleados());
+	const empleados = $derived(await getEmpleadosOpciones());
 	const puedeVincularOrden = can(page.data.user, page.data.permisos, 'fabricacion', 'view');
 	const ordenes = $derived(
 		puedeVincularOrden ? await getOrdenesFabricacion({ limit: 100 }) : { ordenes: [] }

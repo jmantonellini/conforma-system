@@ -1,4 +1,4 @@
-import { getCategorias, getProductos } from '$lib/remote/productos.remote';
+import { getCategorias, getProductos } from '$lib/modulos/productos/productos.remote';
 import type { PageServerLoad } from './$types';
 
 export const load: PageServerLoad = async ({ url, setHeaders }) => {

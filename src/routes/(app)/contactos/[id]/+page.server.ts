@@ -1,4 +1,7 @@
-import { obtenerContactoPorId, obtenerPedidosContacto } from '$lib/remote/contactos.remote';
+import {
+	obtenerContactoPorId,
+	obtenerPedidosContacto
+} from '$lib/modulos/contactos/contactos.remote';
 import type { PageServerLoad } from './$types';
 
 export const load: PageServerLoad = async ({ params }) => {

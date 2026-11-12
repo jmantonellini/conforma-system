@@ -52,7 +52,7 @@ describe('reportarError', () => {
 		const { reportarError } = await import('./reportar-error');
 
 		reportarError(new Error('Falla 1'));
-		reportarError(new Error('Falla 2')); // mismo error con otro número: misma huella
+		reportarError(new Error('Falla 2'));
 		await esperar();
 		await esperar();
 

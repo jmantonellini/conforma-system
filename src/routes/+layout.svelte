@@ -1,7 +1,7 @@
 <script lang="ts">
 	import './layout.css';
 	import favicon from '$lib/assets/favicon.svg';
-	import { Confirmacion, Toaster } from '$lib/components/ui';
+	import { Confirmacion, Toaster } from '$lib/ui';
 
 	let { children } = $props();
 </script>

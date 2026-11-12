@@ -3,17 +3,20 @@
 		getModelos,
 		getCategoriasComp,
 		crearProducto,
-		getProductos
-	} from '$lib/remote/productos.remote';
-	import { getInsumos } from '$lib/remote/insumos.remote';
-	import { Can, PageLayout, FormFieldWrapper, FormActions, SearchSelect } from '$lib/components/ui';
-	import { Delete } from '$lib/components/ui/icons';
-	import { toast } from '$lib/stores/toast.svelte';
+		getProductos,
+		getAtributosCategoria
+	} from '$lib/modulos/productos/productos.remote';
+	import { getInsumos } from '$lib/modulos/insumos/insumos.remote';
+	import { Can, PageLayout, FormFieldWrapper, FormActions, SearchSelect, Seccion } from '$lib/ui';
+	import { Delete } from '$lib/ui/icons';
+	import { toast } from '$lib/ui/toast.svelte';
 	import { page } from '$app/state';
 	import { afterNavigate, goto, invalidateAll } from '$app/navigation';
 	import { resolve } from '$app/paths';
 	import { calcularPrecioVenta, formatearMoneda, redondearPrecio } from '$lib/utils/precios';
-	import { CATEGORIAS_PRODUCTO, TIPOS_USO_PRODUCTO } from '$lib/types/catalogos';
+	import { CATEGORIAS_PRODUCTO, TIPOS_USO_PRODUCTO } from '$lib/modulos/productos/tipos';
+	import AtributosCampos from '$lib/modulos/productos/componentes/AtributosCampos.svelte';
+	import type { ValoresAtributos } from '$lib/modulos/productos/atributos';
 
 	let categorias: { id: number; nombre: string; slug: string }[] = page.data.categorias;
 	let marcas = page.data.marcas;
@@ -40,6 +43,12 @@
 		categorias.find(
 			(categoria) => String(categoria.id) === crearProducto.fields.categoria_id.value()
 		)
+	);
+	let valoresAtributos = $state<ValoresAtributos>({});
+	const definiciones = $derived(
+		crearProducto.fields.categoria_id.value()
+			? await getAtributosCategoria(Number(crearProducto.fields.categoria_id.value()))
+			: []
 	);
 	let tipoUsoSeleccionado = $derived(
 		tiposDeUso.find((tipoUso) => String(tipoUso.id) === crearProducto.fields.tipo_uso_id.value())
@@ -147,7 +156,6 @@
 			class="space-y-3"
 		>
 			<input type="hidden" name="receta" value={JSON.stringify(receta)} />
-			<!-- Datos básicos -->
 			<fieldset class="fieldset seccion">
 				<legend class="fieldset-legend">Datos básicos</legend>
 
@@ -159,7 +167,6 @@
 						<input class="input input-sm" {...crearProducto.fields.nombre.as('text')} />
 					</FormFieldWrapper>
 
-					<!-- Categoría de producto y precio -->
 					<FormFieldWrapper label="Categoría de producto" id="categoria_id">
 						<select
 							{...crearProducto.fields.categoria_id.as('select')}
@@ -195,7 +202,6 @@
 				</div>
 			</fieldset>
 
-			<!-- Vehículo -->
 			{#if categoriaSeleccionada?.slug === CATEGORIAS_PRODUCTO.ESCAPES}
 				<div class="grid grid-cols-1 gap-4 md:grid-cols-2">
 					<fieldset class="fieldset space-y-3 rounded-box border border-base-300 bg-base-200 p-4">
@@ -277,88 +283,23 @@
 							{/if}
 						</div>
 					</fieldset>
-
-					<!-- Medidas -->
-					<fieldset class="fieldset seccion">
-						<legend class="fieldset-legend">Medidas</legend>
-
-						<div class="grid grid-cols-1 gap-4 md:grid-cols-7">
-							<fieldset class="col-span-2 fieldset seccion">
-								<legend class="fieldset-legend">Primario</legend>
-
-								<div class="grid grid-cols-2 gap-4">
-									<FormFieldWrapper label="Ø" id="medidas_primario_diametro">
-										<input
-											class="input input-sm"
-											{...crearProducto.fields.medidas_primario_diametro.as('number')}
-										/>
-									</FormFieldWrapper>
-									<FormFieldWrapper label="Largo" id="medidas_primario_largo">
-										<input
-											class="input input-sm"
-											{...crearProducto.fields.medidas_primario_largo.as('number')}
-										/>
-									</FormFieldWrapper>
-								</div>
-							</fieldset>
-
-							<fieldset class="col-span-2 fieldset seccion">
-								<legend class="fieldset-legend">Secundario</legend>
-								<div class="grid grid-cols-2 gap-4">
-									<FormFieldWrapper label="Ø" id="medidas_secundario_diametro">
-										<input
-											class="input input-sm"
-											{...crearProducto.fields.medidas_secundario_diametro.as('number')}
-										/>
-									</FormFieldWrapper>
-									<FormFieldWrapper label="Largo" id="medidas_secundario_largo">
-										<input
-											class="input input-sm"
-											{...crearProducto.fields.medidas_secundario_largo.as('number')}
-										/>
-									</FormFieldWrapper>
-								</div>
-							</fieldset>
-
-							<fieldset class="col-span-3 fieldset seccion">
-								<legend class="fieldset-legend">Trombon</legend>
-								<div class="grid grid-cols-3 gap-4">
-									<FormFieldWrapper label="Ø Inicial" id="trombon_diametro_inicial">
-										<input
-											class="input input-sm"
-											{...crearProducto.fields.trombon_diametro_inicial.as('number')}
-										/>
-									</FormFieldWrapper>
-									<FormFieldWrapper label="Largo" id="trombon_largo">
-										<input
-											class="input input-sm"
-											{...crearProducto.fields.trombon_largo.as('number')}
-										/>
-									</FormFieldWrapper>
-									<FormFieldWrapper label="Ø Final" id="trombon_diametro_final">
-										<input
-											class="input input-sm"
-											{...crearProducto.fields.trombon_diametro_final.as('number')}
-										/>
-									</FormFieldWrapper>
-								</div>
-							</fieldset>
-						</div>
-
-						<fieldset class="fieldset seccion">
-							<legend class="fieldset-legend">Observaciones</legend>
-							<FormFieldWrapper id="trombon_observaciones">
-								<textarea
-									class="textarea w-full resize-none"
-									rows={3}
-									{...crearProducto.fields.trombon_observaciones.as('text')}
-								>
-								</textarea>
-							</FormFieldWrapper>
-						</fieldset>
-					</fieldset>
 				</div>
 			{/if}
+
+			{#if definiciones.length}
+				<Seccion titulo="Medidas">
+					<AtributosCampos {definiciones} bind:valores={valoresAtributos} />
+				</Seccion>
+			{/if}
+
+			<Seccion titulo="Notas de fabricación" descripcion="Se imprimen en la orden de fabricación.">
+				<textarea
+					id="notas_fabricacion"
+					class="textarea w-full"
+					rows={3}
+					{...crearProducto.fields.notas_fabricacion.as('text')}
+				></textarea>
+			</Seccion>
 
 			<fieldset class="fieldset seccion">
 				<legend class="fieldset-legend">Receta del producto</legend>

@@ -1,4 +1,4 @@
-import { getPedidos, getEstadosPedido } from '$lib/remote/pedidos.remote';
+import { getPedidos, getEstadosPedido } from '$lib/modulos/pedidos/pedidos.remote';
 import type { PageServerLoad } from './$types';
 
 export const load: PageServerLoad = async ({ url }) => {

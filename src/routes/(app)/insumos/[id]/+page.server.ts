@@ -1,4 +1,4 @@
-import { getInsumoById, getMovimientosInsumos } from '$lib/remote/insumos.remote';
+import { getInsumoById, getMovimientosInsumos } from '$lib/modulos/insumos/insumos.remote';
 import type { PageServerLoad } from './$types';
 
 export const load: PageServerLoad = async ({ params }) => {

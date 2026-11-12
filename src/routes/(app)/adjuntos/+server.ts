@@ -11,9 +11,13 @@ import {
 	productos
 } from '$lib/server/db/schema';
 import { requirePermission } from '$lib/server/auth/permissions';
-import { eliminarObjeto, guardarObjeto } from '$lib/server/services/object-storage.service';
-import { ACCION_ADJUNTO, ENTIDAD_ADJUNTO, type TipoEntidadAdjunto } from '$lib/types/dominio';
-import { ENTIDADES_ADJUNTO } from '$lib/server/services/adjuntos.service';
+import { eliminarObjeto, guardarObjeto } from '$lib/server/almacenamiento';
+import {
+	ACCION_ADJUNTO,
+	ENTIDAD_ADJUNTO,
+	type TipoEntidadAdjunto
+} from '$lib/modulos/adjuntos/tipos';
+import { ENTIDADES_ADJUNTO } from '$lib/modulos/adjuntos/adjuntos.server';
 
 const MAX_FILE_SIZE = 25 * 1024 * 1024;
 const MAX_BATCH_SIZE = 25 * 1024 * 1024;
@@ -130,7 +134,6 @@ export async function POST({ request }) {
 				: original;
 			await guardarObjeto(archivoKey, contenido, mimeType);
 
-			// La portada es única: la nueva reemplaza a la anterior.
 			const anteriores =
 				categoria === 'portada'
 					? await db

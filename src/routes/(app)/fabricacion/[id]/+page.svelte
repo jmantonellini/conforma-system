@@ -1,16 +1,17 @@
 <script lang="ts">
+	import AtributosResumen from '$lib/modulos/productos/componentes/AtributosResumen.svelte';
 	import { mensajeError } from '$lib/utils/errores';
 	import { page } from '$app/state';
 	import {
 		cambiarEstadoUnidad,
 		reanudarUnidad,
 		eliminarOrdenFabricacion
-	} from '$lib/remote/fabricacion.remote';
+	} from '$lib/modulos/fabricacion/fabricacion.remote';
 	import {
 		getEstadosFabricacion,
 		getOrdenFabricacion,
 		getHistorialUnidades
-	} from '$lib/remote/fabricacion-consultas.remote';
+	} from '$lib/modulos/fabricacion/fabricacion-consultas.remote';
 	import {
 		EncabezadoDetalle,
 		EstadoBadge,
@@ -21,18 +22,18 @@
 		PageLayout,
 		Seccion,
 		Table
-	} from '$lib/components/ui';
-	import ArchivosAdjuntos from '$lib/components/ArchivosAdjuntos.svelte';
-	import { toast } from '$lib/stores/toast.svelte';
+	} from '$lib/ui';
+	import ArchivosAdjuntos from '$lib/modulos/adjuntos/componentes/ArchivosAdjuntos.svelte';
+	import { toast } from '$lib/ui/toast.svelte';
 	import { goto, invalidateAll } from '$app/navigation';
 	import { resolve } from '$app/paths';
 	import { formatearFecha } from '$lib/utils/fechas';
-	import type { MaterialSnapshot } from '$lib/types/linea-comercial';
-	import { ESTADO_FABRICACION, ETIQUETA_PRIORIDAD } from '$lib/types/dominio';
-	import { getEmpleados } from '$lib/remote/empleados.remote';
-	import { consumirRecetaOrden, getMovimientosInsumos } from '$lib/remote/insumos.remote';
+	import type { MaterialSnapshot } from '$lib/modulos/ventas/tipos';
+	import { ESTADO_FABRICACION, ETIQUETA_PRIORIDAD } from '$lib/modulos/fabricacion/tipos';
+	import { getEmpleadosOpciones } from '$lib/modulos/configuracion/empleados.remote';
+	import { consumirRecetaOrden, getMovimientosInsumos } from '$lib/modulos/insumos/insumos.remote';
 	import { can } from '$lib/utils/permissions';
-	import InsumosMovimientosTabla from '$lib/components/insumos/InsumosMovimientosTabla.svelte';
+	import InsumosMovimientosTabla from '$lib/modulos/insumos/componentes/InsumosMovimientosTabla.svelte';
 
 	let { params } = $props();
 	const id = $derived(Number(params.id));
@@ -42,7 +43,7 @@
 
 	const puedeVerMovimientos = can(page.data.user, page.data.permisos, 'insumos', 'view');
 	const puedeEditarInsumos = can(page.data.user, page.data.permisos, 'insumos', 'edit');
-	const empleados = $derived(puedeEditarInsumos ? await getEmpleados() : []);
+	const empleados = $derived(puedeEditarInsumos ? await getEmpleadosOpciones() : []);
 	const movimientos = $derived(
 		puedeVerMovimientos ? await getMovimientosInsumos({ orden_id: id, limit: 100 }) : []
 	);
@@ -51,11 +52,6 @@
 		{ titulo: 'Insumos requeridos', items: orden.insumos_requeridos as MaterialSnapshot[] },
 		{ titulo: 'Adicionales del pedido', items: orden.insumos_adicionales as MaterialSnapshot[] }
 	]);
-	const medidas = $derived([
-		['Primario', orden.medidas?.primario_diametro, orden.medidas?.primario_largo],
-		['Secundario', orden.medidas?.secundario_diametro, orden.medidas?.secundario_largo],
-		['Trombón', orden.medidas?.trombon_diametro_inicial, orden.medidas?.trombon_largo]
-	] as const);
 
 	let ocupado = $state(false);
 	let empleadoReceta = $state('');
@@ -220,21 +216,11 @@
 						<a class="btn btn-sm" href={resolve(`/productos/${orden.producto.id}`)}>Ver producto</a>
 					{/if}
 				{/snippet}
-				{#if orden.producto}
-					<dl class="datos">
-						{#each medidas as [nombre, diametro, largo] (nombre)}
-							<div>
-								<dt>{nombre}</dt>
-								<dd>Ø {diametro ?? '-'} · L {largo ?? '-'}</dd>
-							</div>
-						{/each}
-						{#if orden.medidas?.trombon_observaciones}
-							<div class="col-span-full">
-								<dt>Observaciones</dt>
-								<dd>{orden.medidas.trombon_observaciones}</dd>
-							</div>
-						{/if}
-					</dl>
+				<AtributosResumen grupos={orden.atributos} />
+				{#if orden.producto?.notas_fabricacion}
+					<p class="rounded-box bg-base-200/60 p-3 text-sm whitespace-pre-line">
+						{orden.producto.notas_fabricacion}
+					</p>
 				{/if}
 				{#each listasInsumos as lista (lista.titulo)}
 					{#if lista.items.length}

@@ -6,10 +6,10 @@
 		FormErrors,
 		FormFieldWrapper,
 		PageLayout
-	} from '$lib/components/ui';
-	import FormDireccion from '$lib/components/ui/FormDireccion.svelte';
-	import { crearContacto, obtenerDatosCuitARCA } from '$lib/remote/contactos.remote';
-	import { toast } from '$lib/stores/toast.svelte';
+	} from '$lib/ui';
+	import FormDireccion from '$lib/ui/FormDireccion.svelte';
+	import { crearContacto, obtenerDatosCuitARCA } from '$lib/modulos/contactos/contactos.remote';
+	import { toast } from '$lib/ui/toast.svelte';
 	import { page } from '$app/state';
 	import { esCuitValido, formatearCuit } from '$lib/utils/cuit';
 

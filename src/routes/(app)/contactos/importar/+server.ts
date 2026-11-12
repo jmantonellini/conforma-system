@@ -6,7 +6,7 @@ import {
 	normalizar,
 	normalizarCabecera,
 	numero
-} from '$lib/server/utils/contactos-importar-excel';
+} from '$lib/modulos/contactos/importar-excel.server';
 
 export async function POST({ request }) {
 	const formData = await request.formData();

@@ -11,10 +11,7 @@ async function main() {
 	const client = await pool.connect();
 	try {
 		await client.query('BEGIN');
-		for (const seedUrl of [
-			new URL('../src/lib/server/db/seed.sql', import.meta.url),
-			new URL('../src/lib/server/db/seed-cotizaciones.sql', import.meta.url)
-		]) {
+		for (const seedUrl of [new URL('../src/lib/server/db/seed.sql', import.meta.url)]) {
 			await client.query(readFileSync(seedUrl, 'utf-8'));
 		}
 		await client.query('COMMIT');

@@ -1,9 +1,11 @@
 import { drizzle } from 'drizzle-orm/node-postgres';
-import { Pool } from 'pg';
+import pg from 'pg';
 import * as schema from './schema';
 import { env } from '$env/dynamic/private';
 
-const pool = new Pool({
+pg.types.setTypeParser(pg.types.builtins.NUMERIC, Number);
+
+const pool = new pg.Pool({
 	host: env.DB_HOST || 'localhost',
 	port: parseInt(env.DB_PORT || '5432'),
 	user: env.DB_USER || 'postgres',
@@ -13,5 +15,12 @@ const pool = new Pool({
 
 export const db = drizzle(pool, { schema });
 
-/** Transacción de Drizzle (el `tx` de `db.transaction`). */
 export type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0];
+
+export async function secuencial<T extends unknown[]>(
+	...pasos: { [K in keyof T]: () => PromiseLike<T[K]> }
+): Promise<T> {
+	const resultados: unknown[] = [];
+	for (const paso of pasos) resultados.push(await paso());
+	return resultados as T;
+}

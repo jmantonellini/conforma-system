@@ -1,8 +1,8 @@
 <script lang="ts">
-	import { EstadoBadge, Listado } from '$lib/components/ui';
-	import { getEnvios, marcarEntregado } from '$lib/remote/envios.remote';
+	import { EstadoBadge, Listado } from '$lib/ui';
+	import { getEnvios, marcarEntregado } from '$lib/modulos/pedidos/envios.remote';
 	import { resolve } from '$app/paths';
-	import { toast } from '$lib/stores/toast.svelte';
+	import { toast } from '$lib/ui/toast.svelte';
 	import { formatearFecha } from '$lib/utils/fechas';
 
 	const envios = $derived(await getEnvios({ page: 1 }));

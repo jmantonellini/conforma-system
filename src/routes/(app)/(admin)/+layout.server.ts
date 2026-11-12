@@ -6,5 +6,3 @@ export const load = (async ({ cookies }) => {
 		session
 	};
 }) satisfies LayoutServerLoad;
-
-// LOGICA PARA SOLO ADMIN

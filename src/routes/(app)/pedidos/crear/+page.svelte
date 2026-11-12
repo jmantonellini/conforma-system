@@ -4,19 +4,19 @@
 	import { goto } from '$app/navigation';
 	import { resolve } from '$app/paths';
 	import { page } from '$app/state';
-	import { crearPedido } from '$lib/remote/pedidos.remote';
-	import { getDatosCreacionPedido } from '$lib/remote/pedidos-consultas.remote';
-	import { getProductosCatalogo } from '$lib/remote/productos.remote';
-	import { obtenerContactosCliente } from '$lib/remote/contactos.remote';
-	import LineasConceptosEditor from '$lib/components/cotizaciones/LineasConceptosEditor.svelte';
-	import ContactoRapido from '$lib/components/contactos/ContactoRapido.svelte';
-	import SearchSelect from '$lib/components/ui/SearchSelect.svelte';
-	import FormFieldWrapper from '$lib/components/ui/FormFieldWrapper.svelte';
-	import { FormActions, FormErrors, PageLayout } from '$lib/components/ui';
-	import { toast } from '$lib/stores/toast.svelte';
-	import { Paths } from '$lib/types';
+	import { crearPedido } from '$lib/modulos/pedidos/pedidos.remote';
+	import { getDatosCreacionPedido } from '$lib/modulos/pedidos/pedidos-consultas.remote';
+	import { getProductosCatalogo } from '$lib/modulos/productos/productos.remote';
+	import { obtenerContactosCliente } from '$lib/modulos/contactos/contactos.remote';
+	import LineasConceptosEditor from '$lib/modulos/cotizaciones/componentes/LineasConceptosEditor.svelte';
+	import ContactoRapido from '$lib/modulos/contactos/componentes/ContactoRapido.svelte';
+	import SearchSelect from '$lib/ui/SearchSelect.svelte';
+	import FormFieldWrapper from '$lib/ui/FormFieldWrapper.svelte';
+	import { FormActions, FormErrors, PageLayout } from '$lib/ui';
+	import { toast } from '$lib/ui/toast.svelte';
+	import { Paths } from '$lib/tipos';
 	import { can } from '$lib/utils/permissions';
-	import type { InsumoOpcion, LineaEdicion, ProductoOpcion } from '$lib/types/cotizacion-editor';
+	import type { InsumoOpcion, LineaEdicion, ProductoOpcion } from '$lib/modulos/cotizaciones/tipos';
 	import { formatearMoneda, redondearPrecio } from '$lib/utils/precios';
 	import { fechaInputManana } from '$lib/utils/fechas';
 
@@ -155,7 +155,6 @@
 				.reduce((sum, linea) => sum + linea.cantidad * linea.precio_unitario, 0)
 		)
 	);
-	// Opciones para el SearchSelect
 	let clientesOptions = $state(
 		clientes.data.length > 0
 			? clientes.data.map((c) => ({
@@ -281,7 +280,6 @@
 </script>
 
 <PageLayout>
-	<!-- Form -->
 	<form
 		{...form.enhance(async (form) => {
 			try {
@@ -312,12 +310,10 @@
 		})}
 		class="space-y-6"
 	>
-		<!-- Datos del Cliente -->
 		<fieldset class="fieldset seccion">
 			<legend class="fieldset-legend">Información del Cliente</legend>
 
 			<div class="grid gap-4 md:grid-cols-4">
-				<!-- Cliente -->
 				<SearchSelect
 					compacto
 					id="contacto_id"
@@ -331,7 +327,6 @@
 					createLabel="Crear contacto"
 				/>
 
-				<!-- Distribuidor -->
 				<SearchSelect
 					compacto
 					id="contacto_distribuidor_id"
@@ -372,7 +367,6 @@
 					</FormFieldWrapper>
 				{/if}
 
-				<!-- Fecha de entrega -->
 				<FormFieldWrapper label="Fecha de entrega prometida" id="fecha_entrega_prometida">
 					<input
 						class="input input-sm"
@@ -381,7 +375,6 @@
 					/>
 				</FormFieldWrapper>
 
-				<!-- Anticipo -->
 				<FormFieldWrapper label="Anticipo (opcional)" id="anticipo">
 					<input
 						class="input input-sm"
@@ -391,7 +384,6 @@
 					/>
 				</FormFieldWrapper>
 
-				<!-- Uso de saldo del distribuidor -->
 				<FormFieldWrapper label="Usar saldo del distribuidor" id="usar_credito_distribuidor">
 					<label class="label cursor-pointer justify-start gap-3">
 						<input
@@ -447,7 +439,6 @@
 			</div>
 		</div>
 
-		<!-- Observaciones -->
 		<fieldset class="fieldset seccion">
 			<legend class="fieldset-legend">Observaciones</legend>
 
@@ -497,7 +488,6 @@
 
 		<FormErrors {form} />
 
-		<!-- Actions -->
 		<FormActions
 			cancelHref={resolve(Paths.PEDIDOS)}
 			pending={!!form.pending || subiendoArchivos}

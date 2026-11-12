@@ -1,19 +1,11 @@
 <script lang="ts">
 	import { resolve } from '$app/paths';
-	import {
-		EstadoBadge,
-		Highlight,
-		Icono,
-		Listado,
-		Persona,
-		filtrar,
-		parametro
-	} from '$lib/components/ui';
+	import { EstadoBadge, Highlight, Icono, Listado, Persona, filtrar, parametro } from '$lib/ui';
 	import {
 		getEstadosFabricacion,
 		getOrdenesFabricacion
-	} from '$lib/remote/fabricacion-consultas.remote';
-	import { ETIQUETA_PRIORIDAD } from '$lib/types/dominio';
+	} from '$lib/modulos/fabricacion/fabricacion-consultas.remote';
+	import { ETIQUETA_PRIORIDAD } from '$lib/modulos/fabricacion/tipos';
 	import { estaVencido, formatearFecha } from '$lib/utils/fechas';
 
 	const estados = await getEstadosFabricacion();

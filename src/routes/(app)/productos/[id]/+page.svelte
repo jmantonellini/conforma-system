@@ -3,8 +3,10 @@
 		getModelos,
 		getCategoriasComp,
 		actualizarProducto,
-		eliminarProducto
-	} from '$lib/remote/productos.remote';
+		eliminarProducto,
+		getAtributosCategoria
+	} from '$lib/modulos/productos/productos.remote';
+	import AtributosCampos from '$lib/modulos/productos/componentes/AtributosCampos.svelte';
 	import {
 		Can,
 		EncabezadoDetalle,
@@ -15,15 +17,15 @@
 		FormActions,
 		SearchSelect,
 		Seccion
-	} from '$lib/components/ui';
-	import ArchivosAdjuntos from '$lib/components/ArchivosAdjuntos.svelte';
-	import { toast } from '$lib/stores/toast.svelte';
+	} from '$lib/ui';
+	import ArchivosAdjuntos from '$lib/modulos/adjuntos/componentes/ArchivosAdjuntos.svelte';
+	import { toast } from '$lib/ui/toast.svelte';
 	import { goto, invalidateAll } from '$app/navigation';
 	import { page } from '$app/state';
 	import { resolve } from '$app/paths';
 	import { calcularPrecioVenta, formatearMoneda, redondearPrecio } from '$lib/utils/precios';
 	import type { PageProps } from './$types';
-	import { CATEGORIAS_PRODUCTO, TIPOS_USO_PRODUCTO } from '$lib/types/catalogos';
+	import { CATEGORIAS_PRODUCTO, TIPOS_USO_PRODUCTO } from '$lib/modulos/productos/tipos';
 
 	let { data }: PageProps = $props();
 
@@ -81,6 +83,10 @@
 	);
 	let categoriaSeleccionada = $derived(
 		categorias.find((categoria) => String(categoria.id) === categoriaActual)
+	);
+	let valoresAtributos = $derived({ ...data.producto.atributos });
+	const definiciones = $derived(
+		categoriaActual ? await getAtributosCategoria(Number(categoriaActual)) : []
 	);
 	let tipoUsoSeleccionado = $derived(
 		tiposUso.find((tipoUso) => String(tipoUso.id) === tipoUsoActual)
@@ -180,7 +186,6 @@
 		}}
 	/>
 
-	<!-- Ficha: portada + datos clave -->
 	<section class="flex flex-col gap-5 seccion sm:flex-row">
 		<div
 			class="group relative aspect-square w-full shrink-0 overflow-hidden rounded-box border border-base-300 bg-base-200 sm:w-48"
@@ -382,88 +387,11 @@
 						{/if}
 					</div>
 				</Seccion>
+			{/if}
 
-				<Seccion titulo="Medidas" descripcion="En milímetros.">
-					<div class="grid gap-6 md:grid-cols-3">
-						{#snippet grupoMedidas(titulo: string, campos: import('svelte').Snippet)}
-							<div class="flex flex-col gap-3">
-								<h3 class="text-sm font-semibold">{titulo}</h3>
-								{@render campos()}
-							</div>
-						{/snippet}
-						{#snippet primario()}
-							<div class="grid grid-cols-2 gap-4">
-								<FormFieldWrapper label="Diámetro" id="medidas_primario_diametro">
-									<input
-										class="input"
-										{...form.fields.medidas_primario_diametro.as(
-											'number',
-											data.producto.medidas_primario_diametro ?? 0
-										)}
-									/>
-								</FormFieldWrapper>
-								<FormFieldWrapper label="Largo" id="medidas_primario_largo">
-									<input
-										class="input"
-										{...form.fields.medidas_primario_largo.as(
-											'number',
-											data.producto.medidas_primario_largo ?? 0
-										)}
-									/>
-								</FormFieldWrapper>
-							</div>
-						{/snippet}
-						{#snippet secundario()}
-							<div class="grid grid-cols-2 gap-4">
-								<FormFieldWrapper label="Diámetro" id="medidas_secundario_diametro">
-									<input
-										class="input"
-										{...form.fields.medidas_secundario_diametro.as(
-											'number',
-											data.producto.medidas_secundario_diametro ?? 0
-										)}
-									/>
-								</FormFieldWrapper>
-								<FormFieldWrapper label="Largo" id="medidas_secundario_largo">
-									<input
-										class="input"
-										{...form.fields.medidas_secundario_largo.as(
-											'number',
-											data.producto.medidas_secundario_largo ?? 0
-										)}
-									/>
-								</FormFieldWrapper>
-							</div>
-						{/snippet}
-						{#snippet trombon()}
-							<div class="grid grid-cols-2 gap-4">
-								<FormFieldWrapper label="Diámetro Inicial" id="trombon_diametro_inicial">
-									<input
-										class="input"
-										{...form.fields.trombon_diametro_inicial.as(
-											'number',
-											data.producto.trombon_diametro_inicial ?? 0
-										)}
-									/>
-								</FormFieldWrapper>
-								<FormFieldWrapper label="Diámetro Final" id="trombon_diametro_final">
-									<input
-										class="input"
-										{...form.fields.trombon_diametro_final.as(
-											'number',
-											data.producto.trombon_diametro_final ?? 0
-										)}
-									/>
-								</FormFieldWrapper>
-								<FormFieldWrapper label="Largo" id="trombon_largo">
-									<input class="input" {...form.fields.trombon_largo.as('number')} />
-								</FormFieldWrapper>
-							</div>
-						{/snippet}
-						{@render grupoMedidas('Primario', primario)}
-						{@render grupoMedidas('Secundario', secundario)}
-						{@render grupoMedidas('Trombón', trombon)}
-					</div>
+			{#if definiciones.length}
+				<Seccion titulo="Medidas">
+					<AtributosCampos {definiciones} bind:valores={valoresAtributos} />
 				</Seccion>
 			{/if}
 
@@ -547,13 +475,10 @@
 
 			<Seccion titulo="Notas de fabricación">
 				<textarea
-					id="trombon_observaciones"
+					id="notas_fabricacion"
 					class="textarea w-full"
 					rows={3}
-					{...form.fields.trombon_observaciones.as(
-						'text',
-						data.producto.trombon_observaciones ?? ''
-					)}
+					{...form.fields.notas_fabricacion.as('text', data.producto.notas_fabricacion ?? '')}
 				></textarea>
 			</Seccion>
 

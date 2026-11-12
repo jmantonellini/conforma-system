@@ -1,9 +1,9 @@
 <script lang="ts">
 	import { goto } from '$app/navigation';
 	import { resolve } from '$app/paths';
-	import { FormErrors, FormFieldWrapper } from '$lib/components/ui';
-	import { login } from '$lib/remote/auth.remote';
-	import { toast } from '$lib/stores/toast.svelte';
+	import { FormErrors, FormFieldWrapper } from '$lib/ui';
+	import { login } from '$lib/modulos/auth/auth.remote';
+	import { toast } from '$lib/ui/toast.svelte';
 	import Logo from '$lib/assets/Logo.png';
 
 	const form = login;

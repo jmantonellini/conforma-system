@@ -3,32 +3,25 @@
 	import { goto } from '$app/navigation';
 	import { resolve } from '$app/paths';
 	import { page } from '$app/state';
-	import {
-		Can,
-		EncabezadoDetalle,
-		Historial,
-		PageLayout,
-		Seccion,
-		Table
-	} from '$lib/components/ui';
-	import type { Transicion } from '$lib/components/ui/EncabezadoDetalle.svelte';
+	import { Can, EncabezadoDetalle, Historial, PageLayout, Seccion, Table } from '$lib/ui';
+	import type { Transicion } from '$lib/ui/EncabezadoDetalle.svelte';
 	import {
 		cambiarEstadoPedido,
 		eliminarPedido,
 		getEstadosPedido,
 		getHistorialPedido,
 		getPedidoById
-	} from '$lib/remote/pedidos.remote';
-	import { confirmar as confirmarCambio } from '$lib/stores/confirmacion.svelte';
-	import { toast } from '$lib/stores/toast.svelte';
-	import { PEDIDO_SLUG } from '$lib/types';
-	import { ESTADO_RESERVA } from '$lib/types/dominio';
+	} from '$lib/modulos/pedidos/pedidos.remote';
+	import { confirmar as confirmarCambio } from '$lib/ui/confirmar.svelte';
+	import { toast } from '$lib/ui/toast.svelte';
+	import { PEDIDO_SLUG } from '$lib/modulos/pedidos/tipos';
+	import { ESTADO_RESERVA } from '$lib/modulos/stock/tipos';
 	import { formatearFecha } from '$lib/utils/fechas';
 	import { formatearMoneda } from '$lib/utils/precios';
 	import { can } from '$lib/utils/permissions';
 	import PedidoEnvios from './PedidoEnvios.svelte';
 	import PedidoPagos from './PedidoPagos.svelte';
-	import ArchivosAdjuntos from '$lib/components/ArchivosAdjuntos.svelte';
+	import ArchivosAdjuntos from '$lib/modulos/adjuntos/componentes/ArchivosAdjuntos.svelte';
 
 	const id = $derived(Number(page.params.id));
 	const { pedido, lineas, insumosAdicionales, adjuntos } = $derived(await getPedidoById(id));

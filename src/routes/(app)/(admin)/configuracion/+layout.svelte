@@ -5,5 +5,3 @@
 </script>
 
 {@render children()}
-
-<!-- SUB LAYOUT CON TABS -->

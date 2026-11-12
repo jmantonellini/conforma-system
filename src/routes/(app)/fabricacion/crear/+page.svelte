@@ -1,17 +1,17 @@
 <script lang="ts">
 	import { page } from '$app/state';
-	import { crearOrdenFabricacion } from '$lib/remote/fabricacion.remote';
-	import { getEmpleados } from '$lib/remote/empleados.remote';
-	import { getProductos } from '$lib/remote/productos.remote';
-	import { getLineasPedidoSinOrden } from '$lib/remote/pedidos.remote';
-	import { PageLayout, FormErrors, FormFieldWrapper, FormActions } from '$lib/components/ui';
-	import { toast } from '$lib/stores/toast.svelte';
+	import { crearOrdenFabricacion } from '$lib/modulos/fabricacion/fabricacion.remote';
+	import { getEmpleadosOpciones } from '$lib/modulos/configuracion/empleados.remote';
+	import { getProductos } from '$lib/modulos/productos/productos.remote';
+	import { getLineasPedidoSinOrden } from '$lib/modulos/pedidos/pedidos.remote';
+	import { PageLayout, FormErrors, FormFieldWrapper, FormActions } from '$lib/ui';
+	import { toast } from '$lib/ui/toast.svelte';
 	import { goto } from '$app/navigation';
 	import { resolve } from '$app/paths';
 
 	const origenStock = $derived(page.url.searchParams.get('origen') === 'stock');
 	const form = $derived(crearOrdenFabricacion.for(origenStock ? 'stock' : 'pedido'));
-	const empleados = $derived(await getEmpleados());
+	const empleados = $derived(await getEmpleadosOpciones());
 	const lineasPendientes = $derived(await getLineasPedidoSinOrden({ limit: 100 }));
 	const productos = $derived(await getProductos({ limit: 100 }));
 
@@ -106,7 +106,6 @@
 						</select>
 					</FormFieldWrapper>
 
-					<!-- Cantidad: bloqueada si hay línea preseleccionada -->
 					<FormFieldWrapper id="cantidad_total" label="Cantidad total" required>
 						<input
 							class="input {bloqueado ? 'bg-base-300' : ''}"

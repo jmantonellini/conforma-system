@@ -7,11 +7,12 @@
 		Highlight,
 		Icono,
 		Listado,
+		TarjetaImagen,
 		filtrar,
 		parametro
-	} from '$lib/components/ui';
-	import { eliminarInsumo } from '$lib/remote/insumos.remote';
-	import { confirmarYEjecutar } from '$lib/stores/confirmacion.svelte';
+	} from '$lib/ui';
+	import { eliminarInsumo } from '$lib/modulos/insumos/insumos.remote';
+	import { confirmarYEjecutar } from '$lib/ui/confirmar.svelte';
 	import { can } from '$lib/utils/permissions';
 	import { formatearMoneda } from '$lib/utils/precios';
 	import type { PageProps } from './$types';
@@ -70,7 +71,7 @@
 		<ExcelMenu
 			importHref={resolve('/insumos/importar')}
 			exportHref={resolve('/insumos/exportar')}
-			canImport={can(data.user, data.permisos, 'insumos', 'import')}
+			canImport={can(data.user, data.permisos, 'insumos', 'create')}
 			canExport={can(data.user, data.permisos, 'insumos', 'view')}
 		/>
 	{/snippet}
@@ -132,5 +133,20 @@
 				</button>
 			</Can>
 		</td>
+	{/snippet}
+	{#snippet tarjeta(insumo: (typeof data.insumos.data)[number])}
+		<TarjetaImagen
+			href={`/insumos/${insumo.id}`}
+			imagen={insumo.imagen_key ? resolve(`/insumos/${insumo.id}/imagen`) : null}
+			titulo={insumo.nombre}
+			subtitulo={insumo.codigo}
+		>
+			<div class="flex items-baseline justify-between gap-2">
+				<span class={['tabular-nums', insumo.stock <= 0 && 'text-error']}>
+					{formatearCantidad(insumo.stock)} <span class="secundario">{insumo.unidad}</span>
+				</span>
+				<span class="font-semibold tabular-nums">{formatearMoneda(insumo.costo_unitario)}</span>
+			</div>
+		</TarjetaImagen>
 	{/snippet}
 </Listado>

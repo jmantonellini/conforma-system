@@ -1,17 +1,20 @@
 <script lang="ts">
 	import { mensajeError } from '$lib/utils/errores';
 	import { resolve } from '$app/paths';
-	import { Can, FormFieldWrapper, Modal, PageLayout } from '$lib/components/ui';
-	import { Stock } from '$lib/components/ui/icons';
-	import { toast } from '$lib/stores/toast.svelte';
-	import { getStockDisponibilidad, registrarMovimientoStock } from '$lib/remote/stock.remote';
+	import { Can, FormFieldWrapper, Modal, PageLayout } from '$lib/ui';
+	import { Stock } from '$lib/ui/icons';
+	import { toast } from '$lib/ui/toast.svelte';
+	import {
+		getStockDisponibilidad,
+		registrarMovimientoStock
+	} from '$lib/modulos/stock/stock.remote';
 	import {
 		ETIQUETAS_MOVIMIENTO_STOCK,
 		TIPOS_MOVIMIENTO_STOCK,
 		type TipoMovimientoStock,
 		type TipoUbicacionStock,
 		UBICACIONES_STOCK
-	} from '$lib/types/stock';
+	} from '$lib/modulos/stock/tipos';
 	import { formatearFecha } from '$lib/utils/fechas';
 
 	let filtroUbicacion = $state<'todas' | TipoUbicacionStock>('todas');

@@ -1,15 +1,7 @@
 <script lang="ts">
 	import { resolve } from '$app/paths';
 	import { page } from '$app/state';
-	import {
-		Can,
-		EstadoBadge,
-		Highlight,
-		Icono,
-		Listado,
-		filtrar,
-		parametro
-	} from '$lib/components/ui';
+	import { Can, EstadoBadge, Highlight, Icono, Listado, filtrar, parametro } from '$lib/ui';
 	import { diasHasta, fechaRelativa, formatearFecha } from '$lib/utils/fechas';
 	import { formatearMoneda } from '$lib/utils/precios';
 	import { can } from '$lib/utils/permissions';
@@ -21,7 +13,6 @@
 
 	type Pedido = (typeof data.pedidos)[number];
 
-	/** Entrega: vencida en rojo, próxima (≤ 3 días) en amarillo; los pedidos cerrados no alertan. */
 	function entrega(pedido: Pedido) {
 		if (pedido.fecha_entrega_real) return { texto: 'Entregado', clase: 'text-success' };
 		if (!pedido.fecha_entrega || pedido.estado_final) return null;

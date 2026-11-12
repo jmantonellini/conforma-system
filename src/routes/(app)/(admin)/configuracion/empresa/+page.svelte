@@ -1,11 +1,11 @@
 <script lang="ts">
 	import { invalidateAll } from '$app/navigation';
-	import { FormFieldWrapper, PageLayout } from '$lib/components/ui';
+	import { FormFieldWrapper, PageLayout } from '$lib/ui';
 	import {
 		actualizarConfiguracionEmpresa,
 		getConfiguracionEmpresa
-	} from '$lib/remote/configuracion.remote';
-	import { toast } from '$lib/stores/toast.svelte';
+	} from '$lib/modulos/configuracion/configuracion.remote';
+	import { toast } from '$lib/ui/toast.svelte';
 
 	let config = $derived(await getConfiguracionEmpresa());
 	let logoInput: HTMLInputElement;

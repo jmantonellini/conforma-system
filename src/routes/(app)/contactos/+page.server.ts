@@ -1,4 +1,4 @@
-import { obtenerContactos } from '$lib/remote/contactos.remote';
+import { obtenerContactos } from '$lib/modulos/contactos/contactos.remote';
 import type { PageServerLoad } from './$types';
 
 export const load: PageServerLoad = async ({ url }) => {

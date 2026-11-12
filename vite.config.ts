@@ -4,6 +4,7 @@ import tailwindcss from '@tailwindcss/vite';
 import { sveltekit } from '@sveltejs/kit/vite';
 
 export default defineConfig({
+	cacheDir: process.env.VITE_CACHE_DIR ?? 'node_modules/.vite',
 	plugins: [tailwindcss(), sveltekit()],
 	test: {
 		expect: { requireAssertions: true },

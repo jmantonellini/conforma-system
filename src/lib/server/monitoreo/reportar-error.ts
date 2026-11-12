@@ -1,13 +1,3 @@
-/**
- * Alertas de errores de producción como issues de GitHub.
- *
- * - Cada error se identifica por una huella (mensaje + primera línea propia del stack):
- *   el mismo error no abre issues duplicados, se comenta en el issue abierto.
- * - Se limita a un aviso por huella cada `ESPERA_MS` para no inundar el repo ante una cascada.
- * - Solo actúa si están `GITHUB_ISSUES_TOKEN` y `GITHUB_ISSUES_REPO` (en dev no hace nada).
- *
- * GitHub notifica por email/app móvil a quien vigila el repo: alcanza para un equipo chico.
- */
 import { createHash } from 'node:crypto';
 import { env } from '$env/dynamic/private';
 
@@ -30,7 +20,6 @@ function huella(error: unknown) {
 		(error instanceof Error ? error.stack : '')
 			?.split('\n')
 			.find((linea) => linea.includes('/src/') || linea.includes('/build/')) ?? '';
-	// Quitar números de línea/columna variables entre builds y valores dinámicos del mensaje.
 	const normalizado = `${mensaje.replace(/\d+/g, '#')}|${marco.replace(/:\d+:\d+/g, '')}`;
 	return createHash('sha1').update(normalizado).digest('hex').slice(0, 12);
 }
@@ -64,7 +53,6 @@ function cuerpo(error: unknown, contexto: ContextoError, id: string) {
 	].join('\n');
 }
 
-/** Reporta el error sin bloquear ni romper la respuesta (fire-and-forget). */
 export function reportarError(error: unknown, contexto: ContextoError = {}) {
 	if (!configurado()) return;
 	const id = huella(error);

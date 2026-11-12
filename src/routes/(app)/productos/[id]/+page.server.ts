@@ -6,8 +6,8 @@ import {
 	getProductos,
 	getTiposUso,
 	getTiposVehiculo
-} from '$lib/remote/productos.remote';
-import { getInsumos } from '$lib/remote/insumos.remote';
+} from '$lib/modulos/productos/productos.remote';
+import { getInsumos } from '$lib/modulos/insumos/insumos.remote';
 import type { PageServerLoad } from './$types';
 
 export const load: PageServerLoad = async ({ params }) => {

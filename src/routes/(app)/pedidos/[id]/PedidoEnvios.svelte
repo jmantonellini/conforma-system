@@ -1,20 +1,13 @@
 <script lang="ts">
-	import {
-		Can,
-		EstadoBadge,
-		FormErrors,
-		Modal,
-		FormFieldWrapper,
-		Seccion
-	} from '$lib/components/ui';
+	import { Can, EstadoBadge, FormErrors, Modal, FormFieldWrapper, Seccion } from '$lib/ui';
 	import {
 		crearEnvio,
 		marcarEntregado,
 		getTransportistas,
 		getEnviosByPedido
-	} from '$lib/remote/envios.remote';
-	import { toast } from '$lib/stores/toast.svelte';
-	import { ESTADO_ENVIO } from '$lib/types/dominio';
+	} from '$lib/modulos/pedidos/envios.remote';
+	import { toast } from '$lib/ui/toast.svelte';
+	import { ESTADO_ENVIO } from '$lib/modulos/pedidos/tipos';
 
 	let { pedidoId }: { pedidoId: number } = $props();
 

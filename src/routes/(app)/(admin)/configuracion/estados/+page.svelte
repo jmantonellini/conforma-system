@@ -1,8 +1,8 @@
 <script lang="ts">
-	import { confirmarYEjecutar } from '$lib/stores/confirmacion.svelte';
-	import { Can, FormFieldWrapper, Modal, PageLayout, Table } from '$lib/components/ui';
-	import { Edit, Delete } from '$lib/components/ui/icons';
-	import { OPCIONES_COLOR, claseBadge } from '$lib/components/ui/colores';
+	import { confirmarYEjecutar } from '$lib/ui/confirmar.svelte';
+	import { Can, FormFieldWrapper, Modal, PageLayout, Table } from '$lib/ui';
+	import { Edit, Delete } from '$lib/ui/icons';
+	import { OPCIONES_COLOR, claseBadge } from '$lib/ui/colores';
 	import {
 		actualizarCategoriaProducto,
 		crearCategoriaProducto,
@@ -14,8 +14,8 @@
 		getEstadosAdmin,
 		getTransicionesEstadoAdmin,
 		guardarEstado
-	} from '$lib/remote/configuracion.remote';
-	import { toast } from '$lib/stores/toast.svelte';
+	} from '$lib/modulos/configuracion/configuracion.remote';
+	import { toast } from '$lib/ui/toast.svelte';
 	import { mensajeError } from '$lib/utils/errores';
 	import { page } from '$app/state';
 

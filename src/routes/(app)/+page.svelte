@@ -1,306 +1,208 @@
 <script lang="ts">
-	import { confirmarYEjecutar } from '$lib/stores/confirmacion.svelte';
-	import { ETIQUETA_PRIORIDAD } from '$lib/types/dominio';
-	import {
-		getTareas,
-		crearTarea,
-		actualizarEstadoTarea,
-		actualizarTarea,
-		archivarTarea,
-		eliminarTarea,
-		reordenarTareas
-	} from '$lib/remote/tareas.remote';
-	import { getEmpleados } from '$lib/remote/empleados.remote';
-	import {
-		EstadoBadge,
-		FormErrors,
-		FormFieldWrapper,
-		KanBanBoard,
-		Modal,
-		PageLayout,
-		Table
-	} from '$lib/components/ui';
-	import { toast } from '$lib/stores/toast.svelte';
-	import { mensajeError } from '$lib/utils/errores';
-	import type { EstadosTarea } from '$lib/types';
 	import { resolve } from '$app/paths';
-	import { estaVencido, formatearFecha } from '$lib/utils/fechas';
-	import { getOrdenesFabricacion } from '$lib/remote/fabricacion-consultas.remote';
+	import { page } from '$app/state';
+	import type { Pathname } from '$app/types';
+	import { EstadoBadge, Icono, PageLayout, Persona, Seccion } from '$lib/ui';
+	import { toast } from '$lib/ui/toast.svelte';
+	import { can } from '$lib/utils/permissions';
+	import { avisoVencimiento, formatearFecha } from '$lib/utils/fechas';
+	import { getOrdenesFabricacion } from '$lib/modulos/fabricacion/fabricacion-consultas.remote';
+	import { ETIQUETA_PRIORIDAD } from '$lib/modulos/fabricacion/tipos';
+	import { getResumenInicio } from '$lib/modulos/inicio/inicio.remote';
+	import { getTareas, moverTarea } from '$lib/modulos/tareas/tareas.remote';
+	import { EstadosTarea, prioridadTarea } from '$lib/modulos/tareas/tipos';
 
-	let tareas = $derived(await getTareas());
-	let empleados = $derived(await getEmpleados());
-	let { ordenes: ordenesActivas } = $derived(await getOrdenesFabricacion({ soloActivas: true }));
-	let showModal = $state(false);
-	let modalMode = $state<'create' | 'edit'>('create');
-	let tareaEditandoId = $state<number | null>(null);
-	let tareaForm = $state({
-		titulo: '',
-		descripcion: '',
-		fecha_entrega: '',
-		asignado_a: ''
+	const usuario = $derived(page.data.user);
+	const verFabricacion = can(page.data.user, page.data.permisos, 'fabricacion', 'view');
+
+	const resumen = $derived(await getResumenInicio());
+	const ordenes = $derived(
+		verFabricacion ? (await getOrdenesFabricacion({ soloActivas: true, limit: 8 })).ordenes : []
+	);
+	const tareas = $derived(await getTareas({}));
+
+	const misTareas = $derived(
+		tareas
+			.filter(
+				(t) =>
+					t.estado !== EstadosTarea.COMPLETADA &&
+					(!usuario?.empleado_id || t.asignado_a === usuario.empleado_id)
+			)
+			.toSorted(
+				(a, b) =>
+					(a.fecha_entrega ? +new Date(a.fecha_entrega) : Infinity) -
+					(b.fecha_entrega ? +new Date(b.fecha_entrega) : Infinity)
+			)
+			.slice(0, 6)
+	);
+
+	const indicadores = $derived(
+		[
+			{
+				etiqueta: 'Cotizaciones abiertas',
+				valor: resumen.cotizacionesAbiertas,
+				href: '/cotizaciones'
+			},
+			{ etiqueta: 'Pedidos en curso', valor: resumen.pedidosEnCurso, href: '/pedidos' },
+			{
+				etiqueta: 'Entregas vencidas',
+				valor: resumen.entregasVencidas,
+				href: '/pedidos',
+				alerta: !!resumen.entregasVencidas,
+				detalle: resumen.entregasSemana ? `${resumen.entregasSemana} esta semana` : undefined
+			},
+			{ etiqueta: 'Unidades en producción', valor: resumen.enProduccion, href: '/fabricacion' }
+		].filter((indicador) => indicador.valor !== null)
+	);
+
+	const saludo = $derived.by(() => {
+		const hora = new Date().getHours();
+		return hora < 12 ? 'Buen día' : hora < 20 ? 'Buenas tardes' : 'Buenas noches';
 	});
-	const form = crearTarea;
-	let esModoCreacion = $derived(modalMode !== 'edit');
+	const hoy = new Date().toLocaleDateString('es-AR', {
+		weekday: 'long',
+		day: 'numeric',
+		month: 'long'
+	});
 
-	function formatearFechaInput(value: Date | string | null | undefined) {
-		if (!value) return '';
-		const fecha = new Date(value);
-		if (Number.isNaN(fecha.getTime())) return '';
-		const offset = fecha.getTimezoneOffset();
-		return new Date(fecha.getTime() - offset * 60000).toISOString().slice(0, 10);
-	}
-
-	function resetTareaForm() {
-		tareaForm = {
-			titulo: '',
-			descripcion: '',
-			fecha_entrega: '',
-			asignado_a: ''
-		};
-	}
-
-	function abrirNuevaTarea() {
-		modalMode = 'create';
-		tareaEditandoId = null;
-		resetTareaForm();
-		showModal = true;
-	}
-
-	function abrirEditarTarea(tarea: (typeof tareas)[number]) {
-		modalMode = 'edit';
-		tareaEditandoId = tarea.id;
-		tareaForm = {
-			titulo: tarea.titulo,
-			descripcion: tarea.descripcion ?? '',
-			fecha_entrega: formatearFechaInput(tarea.fecha_entrega),
-			asignado_a: tarea.asignado_a ? String(tarea.asignado_a) : ''
-		};
-		showModal = true;
-	}
-
-	async function handleEstadoChange(id: number, nuevoEstado: EstadosTarea) {
-		tareas = tareas.map((t) => (t.id === id ? { ...t, estado: nuevoEstado } : t));
-		await actualizarEstadoTarea({ id: String(id), estado: nuevoEstado });
-	}
-
-	async function handleReorder(updates: { id: number; orden: number }[]) {
-		const ordenPorId = new Map(updates.map((update) => [update.id, update.orden]));
-		tareas = tareas.map((t) => (ordenPorId.has(t.id) ? { ...t, orden: ordenPorId.get(t.id)! } : t));
-		await reordenarTareas({ tareas: updates });
-	}
-
-	const handleEliminar = (id: number) =>
-		confirmarYEjecutar({
-			mensaje: '¿Eliminar esta tarea?',
-			ejecutar: async () => {
-				await eliminarTarea(String(id));
-				tareas = tareas.filter((t) => t.id !== id);
-			},
-			exito: 'Tarea eliminada'
-		});
-
-	const handleArchivar = (id: number) =>
-		confirmarYEjecutar({
-			titulo: 'Archivar',
-			accion: 'Archivar',
-			peligro: false,
-			mensaje: '¿Archivar esta tarea?',
-			ejecutar: async () => {
-				await archivarTarea({ id: String(id), archivada: true });
-				tareas = tareas.filter((t) => t.id !== id);
-			},
-			exito: 'Tarea archivada'
-		});
-
-	async function handleGuardarEdicion(event: SubmitEvent) {
-		event.preventDefault();
-		if (!tareaEditandoId) return;
-		if (!tareaForm.titulo.trim()) {
-			toast.error('El título es requerido');
-			return;
+	async function completar(id: number) {
+		try {
+			await moverTarea({ id, estado: EstadosTarea.COMPLETADA });
+			toast.success('Tarea completada');
+		} catch {
+			toast.error('No se pudo completar la tarea');
 		}
-
-		await actualizarTarea({
-			id: String(tareaEditandoId),
-			titulo: tareaForm.titulo.trim(),
-			descripcion: tareaForm.descripcion.trim() || undefined,
-			fecha_entrega: tareaForm.fecha_entrega || undefined,
-			asignado_a: tareaForm.asignado_a || undefined
-		});
-		tareas = await getTareas();
-		showModal = false;
-		resetTareaForm();
-		tareaEditandoId = null;
-		toast.success('Tarea actualizada');
 	}
 </script>
 
 <PageLayout>
-	<div class="flex flex-col gap-4">
-		<!-- PEDIDOS ACTIVOS: Contexto de negocio -->
-		<div class="card">
-			<div class="card-body">
-				<div class="mb-4 flex items-center justify-between">
-					<h2 class="card-title">Órdenes activas</h2>
-					<span class="text-sm text-base-content/60">
-						{ordenesActivas.length} orden{ordenesActivas.length <= 1 ? '' : 'es'} en curso
-					</span>
-				</div>
+	<header>
+		<p class="text-sm text-base-content/60 first-letter:uppercase">{hoy}</p>
+		<h1 class="text-2xl font-semibold tracking-tight">
+			{saludo}, {usuario?.empleado?.nombre ?? usuario?.username}
+		</h1>
+	</header>
 
-				{#snippet headerOrdenes()}
-					<th>Prioridad</th>
-					<th>Estado</th>
-					<th>Trabajo</th>
-					<th>Cliente</th>
-					<th>Asignado</th>
-					<th>Entrega</th>
-					<th>Progreso</th>
-				{/snippet}
-
-				{#snippet rowOrden(o: (typeof ordenesActivas)[number])}
-					<td>
-						<EstadoBadge class="badge-sm" estado={ETIQUETA_PRIORIDAD[o.prioridad ?? 0]} />
-					</td>
-					<td>
-						<EstadoBadge class="badge-sm" estado={o.estado} />
-					</td>
-					<td>
-						<a class="link link-primary" href={resolve(`/fabricacion/${o.id}`)}>
-							{o.nombre_trabajo}
-						</a>
-						<div class="text-xs text-base-content/50">Pedido {o.pedido?.numero || '-'}</div>
-					</td>
-					<td>{o.cliente_nombre || '-'}</td>
-					<td
-						>{o.empleado?.nombre
-							? `${o.empleado.nombre} ${o.empleado.apellido || ''}`
-							: 'Sin asignar'}</td
+	{#if indicadores.length}
+		<section class="grid grid-cols-2 gap-3 lg:grid-cols-4">
+			{#each indicadores as indicador (indicador.etiqueta)}
+				<a
+					href={resolve(indicador.href as Pathname as '/')}
+					class="flex flex-col gap-1 seccion transition-colors hover:border-primary"
+				>
+					<span class="text-sm text-base-content/60">{indicador.etiqueta}</span>
+					<span class={['text-3xl font-semibold tabular-nums', indicador.alerta && 'text-error']}
+						>{indicador.valor}</span
 					>
-					<td>
-						{#if o.fecha_fin_estimada}
-							{@const vencido = estaVencido(o.fecha_fin_estimada)}
-							<span class:text-error={vencido} class:font-bold={vencido}>
-								{formatearFecha(new Date(o.fecha_fin_estimada))}
-							</span>
-						{:else}
-							-
-						{/if}
-					</td>
-					<td class="whitespace-nowrap">
-						<progress class="progress w-20" value={o.cantidad_producida} max={o.cantidad_total}
-						></progress>
-						<span class="ml-2 text-xs">{o.cantidad_producida}/{o.cantidad_total}</span>
-					</td>
+					{#if indicador.detalle}<span class="secundario">{indicador.detalle}</span>{/if}
+				</a>
+			{/each}
+		</section>
+	{/if}
+
+	<div class="grid items-start gap-4 sm:gap-6 lg:grid-cols-3">
+		{#if verFabricacion}
+			<Seccion
+				titulo="Producción en curso"
+				descripcion="Órdenes activas, de mayor a menor prioridad."
+				class="lg:col-span-2"
+			>
+				{#snippet acciones()}
+					<a class="link text-sm link-primary" href={resolve('/fabricacion')}>Ver todas</a>
 				{/snippet}
+				{#if ordenes.length}
+					<ul class="-my-2 divide-y divide-base-300">
+						{#each ordenes as orden (orden.id)}
+							{@const prioridad = ETIQUETA_PRIORIDAD[orden.prioridad ?? 0]}
+							{@const aviso = avisoVencimiento(orden.fecha_fin_estimada)}
+							<li
+								class="grid grid-cols-[1fr_auto] items-center gap-x-4 gap-y-1 py-3 sm:grid-cols-[1fr_8rem_9rem]"
+							>
+								<div class="min-w-0">
+									<a
+										class="flex items-center gap-2 font-medium hover:text-primary"
+										href={resolve(`/fabricacion/${orden.id}`)}
+									>
+										<span class="font-mono text-xs whitespace-nowrap text-base-content/50"
+											>OF-{orden.id}</span
+										>
+										<span class="truncate">{orden.nombre_trabajo}</span>
+										{#if orden.prioridad}
+											<EstadoBadge class="badge-xs" estado={prioridad} />
+										{/if}
+									</a>
+									<p class="secundario truncate">
+										{orden.es_para_stock
+											? 'Para stock'
+											: [orden.cliente_nombre, orden.pedido?.numero].filter(Boolean).join(' · ')}
+									</p>
+								</div>
+								<div class="hidden text-sm sm:block">
+									{formatearFecha(orden.fecha_fin_estimada)}
+									{#if aviso}<p class={['text-xs font-medium', aviso.clase]}>{aviso.texto}</p>{/if}
+								</div>
+								<div class="flex flex-col items-end gap-1">
+									<EstadoBadge class="badge-sm" estado={orden.estado} />
+									<div class="flex items-center gap-2">
+										<progress
+											class="progress w-16 progress-primary"
+											value={orden.cantidad_producida}
+											max={orden.cantidad_total}
+										></progress>
+										<span class="text-xs text-base-content/70 tabular-nums">
+											{orden.cantidad_producida}/{orden.cantidad_total}
+										</span>
+									</div>
+								</div>
+							</li>
+						{/each}
+					</ul>
+				{:else}
+					<p class="text-sm text-base-content/60">No hay órdenes en producción.</p>
+				{/if}
+			</Seccion>
+		{/if}
 
-				<Table
-					data={ordenesActivas}
-					header={headerOrdenes}
-					row={rowOrden}
-					emptyMessage="No hay órdenes activas"
-				/>
-			</div>
-		</div>
-
-		<div class="flex items-center justify-end">
-			<button class="btn btn-primary btn-sm" onclick={abrirNuevaTarea}> + Nueva Tarea </button>
-		</div>
-
-		<!-- KANBAN: Tareas accionables -->
-		<KanBanBoard
-			{tareas}
-			onEstadoChange={handleEstadoChange}
-			onReorder={handleReorder}
-			onEliminar={handleEliminar}
-			onEditar={abrirEditarTarea}
-			onArchivar={handleArchivar}
-		/>
+		<Seccion titulo={usuario?.empleado_id ? 'Mis tareas' : 'Tareas pendientes'}>
+			{#snippet acciones()}
+				<a class="link text-sm link-primary" href={resolve('/tareas')}>Ver todas</a>
+			{/snippet}
+			{#if misTareas.length}
+				<ul class="-my-2 divide-y divide-base-300">
+					{#each misTareas as tarea (tarea.id)}
+						{@const aviso = avisoVencimiento(tarea.fecha_entrega)}
+						{@const prioridad = prioridadTarea(tarea.prioridad)}
+						<li class="flex items-start gap-3 py-2.5">
+							<input
+								type="checkbox"
+								class="checkbox mt-0.5 checkbox-sm"
+								aria-label="Completar {tarea.titulo}"
+								onchange={() => completar(tarea.id)}
+							/>
+							<div class="min-w-0 flex-1">
+								<p class="flex items-center gap-2 text-sm font-medium">
+									<span class={['status', `status-${prioridad.color}`]}></span>
+									<span class="truncate">{tarea.titulo}</span>
+								</p>
+								<div class="mt-0.5 flex flex-wrap items-center gap-x-3 text-xs">
+									{#if aviso}<span class={aviso.clase}>{aviso.texto}</span>{/if}
+									{#if !usuario?.empleado_id}
+										<Persona
+											nombre={tarea.empleado?.nombre}
+											apellido={tarea.empleado?.apellido}
+											vacio="Sin asignar"
+										/>
+									{/if}
+								</div>
+							</div>
+						</li>
+					{/each}
+				</ul>
+			{:else}
+				<p class="flex items-center gap-2 text-sm text-base-content/60">
+					<Icono nombre="check" class="size-4 text-success" /> No tenés tareas pendientes.
+				</p>
+			{/if}
+		</Seccion>
 	</div>
 </PageLayout>
-
-<Modal
-	bind:open={showModal}
-	titulo={esModoCreacion ? 'Nueva tarea' : 'Editar tarea'}
-	alCerrar={() => {
-		if (!esModoCreacion) {
-			resetTareaForm();
-			tareaEditandoId = null;
-		}
-	}}
-	accion={esModoCreacion
-		? { etiqueta: 'Crear tarea', form: 'tarea-form', pendiente: !!form.pending }
-		: { etiqueta: 'Guardar cambios', form: 'editar-tarea-form' }}
->
-	{#if esModoCreacion}
-		<form
-			{...form.enhance(async (formInstance) => {
-				try {
-					if (await formInstance.submit()) {
-						toast.success('Tarea creada');
-						tareas = await getTareas();
-						showModal = false;
-						formInstance.element.reset();
-					} else {
-						toast.error('Revisá los datos de la tarea');
-					}
-				} catch (error) {
-					toast.error(mensajeError(error, 'No se pudo crear la tarea'));
-				}
-			})}
-			id="tarea-form"
-		>
-			<div class="flex flex-col gap-4">
-				<FormFieldWrapper id="titulo" label="Título" required>
-					<input class="input" {...form.fields.titulo.as('text')} />
-				</FormFieldWrapper>
-
-				<FormFieldWrapper id="descripcion" label="Descripción">
-					<textarea class="textarea" rows="3" {...form.fields.descripcion.as('text')}> </textarea>
-				</FormFieldWrapper>
-
-				<div class="grid gap-4 sm:grid-cols-2">
-					<FormFieldWrapper id="fecha_entrega" label="Fecha de entrega">
-						<input class="input" {...form.fields.fecha_entrega.as('date')} />
-					</FormFieldWrapper>
-
-					<FormFieldWrapper id="asignado_a" label="Asignar a">
-						<select class="select" {...form.fields.asignado_a.as('select')}>
-							<option value="">Sin asignar</option>
-							{#each empleados as emp (emp.id)}
-								<option value={String(emp.id)}>{emp.nombre} {emp.apellido}</option>
-							{/each}
-						</select>
-					</FormFieldWrapper>
-				</div>
-			</div>
-			<FormErrors {form} />
-		</form>
-	{:else}
-		<form id="editar-tarea-form" onsubmit={handleGuardarEdicion}>
-			<div class="flex flex-col gap-4">
-				<FormFieldWrapper id="titulo-editar" label="Título" required>
-					<input class="input" bind:value={tareaForm.titulo} placeholder="Título de la tarea" />
-				</FormFieldWrapper>
-
-				<FormFieldWrapper id="descripcion-editar" label="Descripción">
-					<textarea class="textarea" rows="3" bind:value={tareaForm.descripcion}></textarea>
-				</FormFieldWrapper>
-
-				<div class="grid gap-4 sm:grid-cols-2">
-					<FormFieldWrapper id="fecha-entrega-editar" label="Fecha de entrega">
-						<input class="input" type="date" bind:value={tareaForm.fecha_entrega} />
-					</FormFieldWrapper>
-
-					<FormFieldWrapper id="asignado-editar" label="Asignar a">
-						<select class="select" bind:value={tareaForm.asignado_a}>
-							<option value="">Sin asignar</option>
-							{#each empleados as emp (emp.id)}
-								<option value={String(emp.id)}>{emp.nombre} {emp.apellido}</option>
-							{/each}
-						</select>
-					</FormFieldWrapper>
-				</div>
-			</div>
-		</form>
-	{/if}
-</Modal>

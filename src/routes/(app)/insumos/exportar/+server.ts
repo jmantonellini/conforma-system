@@ -3,7 +3,14 @@ import { asc, eq } from 'drizzle-orm';
 import * as XLSX from 'xlsx';
 import { requirePermission } from '$lib/server/auth/permissions';
 import { db } from '$lib/server/db';
-import { categorias_insumos, contactos, insumos, proveedores } from '$lib/server/db/schema';
+import {
+	categorias_insumos,
+	contactos,
+	insumos,
+	proveedores,
+	unidadInsumo,
+	tipoInsumo
+} from '$lib/server/db/schema';
 
 export async function GET() {
 	try {
@@ -22,9 +29,9 @@ export async function GET() {
 		.select({
 			codigo: insumos.codigo,
 			nombre: insumos.nombre,
-			tipo: insumos.tipo,
+			tipo: tipoInsumo,
 			tipo_id: insumos.tipo_id,
-			unidad: insumos.unidad,
+			unidad: unidadInsumo,
 			unidad_id: insumos.unidad_id,
 			costo_unitario: insumos.costo_unitario,
 			flete_porcentaje: insumos.flete_porcentaje,

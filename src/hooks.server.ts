@@ -1,12 +1,16 @@
-import { db } from '$lib/server/db';
+import { calentarMotorPdf } from '$lib/server/pdf/base';
+import { precargarCotizacionDolarBNA } from '$lib/server/integraciones/tipo-cambio-bna';
+import { programarLimpiezaNotificaciones } from '$lib/modulos/notificaciones/notificaciones.server';
 import { reportarError } from '$lib/server/monitoreo/reportar-error';
 import { usuarioDeSesion } from '$lib/server/auth/permissions';
 import type { HandleServerError, HandleValidationError } from '@sveltejs/kit';
 
 import type { Handle, ServerInit } from '@sveltejs/kit';
 
-/** Errores fuera de una request (promesas sin catch, timers): se registran y se reportan. */
 export const init: ServerInit = () => {
+	programarLimpiezaNotificaciones();
+	void calentarMotorPdf();
+	precargarCotizacionDolarBNA();
 	process.on('unhandledRejection', (motivo) => {
 		console.error('[unhandledRejection]', motivo);
 		reportarError(motivo, { ruta: 'unhandledRejection' });
@@ -14,7 +18,6 @@ export const init: ServerInit = () => {
 	process.on('uncaughtException', (error) => {
 		console.error('[uncaughtException]', error);
 		reportarError(error, { ruta: 'uncaughtException' });
-		// El proceso queda en estado incierto: se da tiempo al reporte y Docker lo reinicia.
 		setTimeout(() => process.exit(1), 3000).unref();
 	});
 };
@@ -59,10 +62,8 @@ function parsePgError(err: any): { message: string; field?: string } {
 	return { message: 'Error del servidor' };
 }
 
-/** Remote functions que se pueden llamar sin sesión. */
 const REMOTAS_PUBLICAS = new Set(['login']);
 
-/** `hash/nombre` de la remote function que invoca la request, si es una. */
 function remotaInvocada(url: URL) {
 	const prefijo = '/_app/remote/';
 	if (url.pathname.startsWith(prefijo)) return url.pathname.slice(prefijo.length);
@@ -70,10 +71,7 @@ function remotaInvocada(url: URL) {
 }
 
 export const handle: Handle = async ({ event, resolve }) => {
-	event.locals.db = db;
-
-	// Las remote functions son endpoints HTTP: sin sesión válida no se ejecuta ninguna (salvo login).
-	const remota = remotaInvocada(new URL(event.request.url)); // event.url apunta a la página de origen
+	const remota = remotaInvocada(new URL(event.request.url));
 	if (
 		remota &&
 		!REMOTAS_PUBLICAS.has(remota.split('/').pop() ?? '') &&
@@ -159,7 +157,6 @@ export const handleError: HandleServerError = ({ error, event, status, message }
 	return { message: 'Error interno del servidor' };
 };
 
-/** Datos rechazados por un schema de remote function: se registran para poder diagnosticarlos en producción. */
 export const handleValidationError: HandleValidationError = ({ issues, event }) => {
 	console.warn(
 		`[validación] ${event.request.method} ${event.url.pathname}`,

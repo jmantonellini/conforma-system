@@ -16,7 +16,6 @@ COPY --from=build /app/build ./build
 COPY --from=build /app/drizzle.config.ts ./
 COPY --from=build /app/src/lib/server/db/migrations ./src/lib/server/db/migrations
 COPY --from=build /app/src/lib/server/db/seed.sql ./src/lib/server/db/seed.sql
-COPY --from=build /app/src/lib/server/db/seed-cotizaciones.sql ./src/lib/server/db/seed-cotizaciones.sql
 COPY --from=build /app/scripts/seed.ts ./scripts/seed.ts
 EXPOSE 3000
 CMD ["node", "build/index.js"]

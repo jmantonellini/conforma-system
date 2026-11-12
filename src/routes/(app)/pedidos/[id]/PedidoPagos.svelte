@@ -1,17 +1,10 @@
 <script lang="ts">
-	import {
-		Can,
-		EstadoBadge,
-		FormErrors,
-		Modal,
-		FormFieldWrapper,
-		Seccion
-	} from '$lib/components/ui';
-	import { getPagosByPedido, registrarPago } from '$lib/remote/facturacion.remote';
-	import { toast } from '$lib/stores/toast.svelte';
+	import { Can, EstadoBadge, FormErrors, Modal, FormFieldWrapper, Seccion } from '$lib/ui';
+	import { getPagosByPedido, registrarPago } from '$lib/modulos/pedidos/facturacion.remote';
+	import { toast } from '$lib/ui/toast.svelte';
 	import { formatearFecha } from '$lib/utils/fechas';
 	import { formatearMoneda, redondearPrecio } from '$lib/utils/precios';
-	import { ESTADO_PAGO, METODO_PAGO } from '$lib/types/dominio';
+	import { ESTADO_PAGO, METODO_PAGO } from '$lib/modulos/pedidos/tipos';
 
 	let { pedidoId }: { pedidoId: number } = $props();
 

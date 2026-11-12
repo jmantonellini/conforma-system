@@ -1,5 +1,5 @@
-import { generarPDFCotizacion } from '$lib/server/pdf/cotizacion';
-import { CotizacionBNAError } from '$lib/server/services/tipo-cambio-bna.service';
+import { generarPDFCotizacion } from '$lib/modulos/cotizaciones/pdf.server';
+import { CotizacionBNAError } from '$lib/server/integraciones/tipo-cambio-bna';
 import { requirePermission, tienePermiso } from '$lib/server/auth/permissions';
 import { error } from '@sveltejs/kit';
 
@@ -30,7 +30,6 @@ export async function GET({ params, url }) {
 		const fechaArchivo = fechaCotizacion.toISOString().slice(0, 10);
 		const nombreArchivo = `cotizacion-${clienteArchivo}-${fechaArchivo}-${moneda.toLowerCase()}.pdf`;
 
-		// pdf es Uint8Array, y Response acepta directamente ArrayBufferView
 		return new Response(pdf.buffer as ArrayBuffer, {
 			headers: {
 				'Content-Type': 'application/pdf',

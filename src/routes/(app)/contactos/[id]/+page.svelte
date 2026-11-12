@@ -9,10 +9,10 @@
 		FormFieldWrapper,
 		PageLayout,
 		Seccion
-	} from '$lib/components/ui';
-	import FormDireccion from '$lib/components/ui/FormDireccion.svelte';
-	import { actualizarContacto, eliminarContacto } from '$lib/remote/contactos.remote';
-	import { toast } from '$lib/stores/toast.svelte';
+	} from '$lib/ui';
+	import FormDireccion from '$lib/ui/FormDireccion.svelte';
+	import { actualizarContacto, eliminarContacto } from '$lib/modulos/contactos/contactos.remote';
+	import { toast } from '$lib/ui/toast.svelte';
 	import { formatearMoneda } from '$lib/utils/precios';
 	import type { PageProps } from './$types';
 

@@ -1,138 +1,62 @@
--- ============================================================
--- SEED COMPLETO — Migrado desde SQLite (backup-ULTIMO.sql)
--- ============================================================
--- Nota: Las columnas created_at/updated_at se convierten de INTEGER (epoch)
--- a TIMESTAMP. Los NULLs se mantienen.
-
--- ============================================================
--- ROLES (ya existentes en backup, diferentes IDs)
--- ============================================================
-
-INSERT INTO roles (nombre, descripcion) VALUES
-('operario', 'Consulta fabricación'),
-('ventas', 'Crea pedidos y gestiona clientes'),
-('tecnico', 'Gestiona productos y pedidos'),
-('admin', 'Acceso total'),
-('jefe_planta', 'Gestiona fabricación y pedidos'),
-('oficina_admin', 'Administración de oficina'),
-('oficina_tecnica', 'Acceso técnico a cotizaciones y pedidos sin importes ni contactos')
-ON CONFLICT (nombre) DO UPDATE SET descripcion = EXCLUDED.descripcion;
-
 INSERT INTO permisos (accion, modulo)
-SELECT acciones.accion, 'stock'
-FROM (VALUES ('view'), ('edit')) AS acciones(accion)
-WHERE NOT EXISTS (
-	SELECT 1 FROM permisos p WHERE p.modulo = 'stock' AND p.accion = acciones.accion
-);
-
-INSERT INTO permisos (accion, modulo)
-SELECT acciones.accion, 'envios'
-FROM (VALUES ('view'), ('edit'), ('create'), ('delete')) AS acciones(accion)
-WHERE NOT EXISTS (
-	SELECT 1 FROM permisos p WHERE p.modulo = 'envios' AND p.accion = acciones.accion
-);
-
-
--- ============================================================
--- PERMISOS
--- ============================================================
-
-DELETE FROM roles_permisos rp
-USING permisos p
-WHERE rp.permiso_id = p.id AND p.modulo = 'clientes';
-
-DELETE FROM permisos WHERE modulo = 'clientes';
-
-INSERT INTO permisos (accion, modulo)
-SELECT accion, modulo
+SELECT datos.accion, datos.modulo
 FROM (VALUES
-('view','contactos'), ('create','contactos'), ('edit','contactos'), ('delete','contactos'),
-('view','productos'), ('create','productos'), ('edit','productos'), ('delete','productos'),
-('view','pedidos'), ('create','pedidos'), ('edit','pedidos'), ('delete','pedidos'),
-('view','fabricacion'), ('create','fabricacion'), ('edit','fabricacion'), ('delete','fabricacion'),
-('view','usuarios'), ('create','usuarios'), ('edit','usuarios'), ('delete','usuarios'),
-('view','configuracion'), ('edit','configuracion'),
-('view','envios'), ('create','envios'), ('edit','envios'), ('delete','envios'),
-('view','importes')
+('view', 'cotizaciones'), ('create', 'cotizaciones'), ('edit', 'cotizaciones'), ('delete', 'cotizaciones'),
+('view', 'pedidos'), ('create', 'pedidos'), ('edit', 'pedidos'), ('delete', 'pedidos'),
+('view', 'fabricacion'), ('create', 'fabricacion'), ('edit', 'fabricacion'), ('delete', 'fabricacion'),
+('view', 'envios'), ('create', 'envios'), ('edit', 'envios'), ('delete', 'envios'),
+('view', 'contactos'), ('create', 'contactos'), ('edit', 'contactos'), ('delete', 'contactos'),
+('view', 'productos'), ('create', 'productos'), ('edit', 'productos'), ('delete', 'productos'),
+('view', 'insumos'), ('create', 'insumos'), ('edit', 'insumos'), ('delete', 'insumos'),
+('view', 'stock'), ('edit', 'stock'),
+('view', 'importes'),
+('view', 'reportes'),
+('view', 'configuracion'), ('edit', 'configuracion')
 ) AS datos(accion, modulo)
 WHERE NOT EXISTS (
- SELECT 1 FROM permisos p WHERE p.modulo = datos.modulo AND p.accion = datos.accion
+	SELECT 1 FROM permisos p WHERE p.modulo = datos.modulo AND p.accion = datos.accion
 );
 
+INSERT INTO roles (nombre, descripcion)
+VALUES ('admin', 'Acceso total')
+ON CONFLICT (empresa_id, nombre) DO NOTHING;
 
--- El módulo 'taller' se unificó en 'fabricacion': se migran sus asignaciones y se elimina.
-INSERT INTO roles_permisos (rol_id, permiso_id)
-SELECT rp.rol_id, fabricacion.id
-FROM roles_permisos rp
-JOIN permisos taller ON taller.id = rp.permiso_id AND taller.modulo = 'taller'
-JOIN permisos fabricacion ON fabricacion.modulo = 'fabricacion' AND fabricacion.accion = taller.accion
-ON CONFLICT DO NOTHING;
-DELETE FROM permisos WHERE modulo = 'taller';
-
--- ============================================================
--- ROLES_PERMISOS
--- ============================================================
-
-INSERT INTO roles_permisos (rol_id, permiso_id)
-SELECT r.id, p.id FROM roles r CROSS JOIN permisos p
-WHERE r.nombre = 'operario' AND p.modulo = 'fabricacion' AND p.accion IN ('view', 'edit')
-ON CONFLICT DO NOTHING;
+INSERT INTO roles (nombre, descripcion)
+SELECT nombre, descripcion
+FROM (VALUES
+	('ventas', 'Atención al cliente: cotizaciones, pedidos y contactos'),
+	('produccion', 'Oficina técnica y taller: productos, insumos y fabricación'),
+	('administracion', 'Cobros, envíos y reportes')
+) AS d(nombre, descripcion)
+WHERE (SELECT count(*) FROM roles) = 1;
 
 INSERT INTO roles_permisos (rol_id, permiso_id)
-SELECT r.id, p.id FROM roles r CROSS JOIN permisos p
-WHERE r.nombre = 'ventas'
-	AND ((p.modulo IN ('contactos','productos','pedidos','cotizaciones','envios') AND p.accion IN ('view','create','edit','delete'))
-    OR (p.modulo IN ('fabricacion','stock') AND p.accion IN ('view','edit')))
-ON CONFLICT DO NOTHING;
-
-INSERT INTO roles_permisos (rol_id, permiso_id)
-SELECT r.id, p.id FROM roles r CROSS JOIN permisos p
-WHERE r.nombre = 'tecnico'
-	AND p.modulo IN ('contactos','productos','pedidos','fabricacion','stock') AND p.accion IN ('view','create','edit','delete')
-ON CONFLICT DO NOTHING;
-
-INSERT INTO roles_permisos (rol_id, permiso_id)
-SELECT r.id, p.id FROM roles r CROSS JOIN permisos p
-WHERE r.nombre = 'jefe_planta'
-	AND ((p.modulo IN ('productos','pedidos','fabricacion','stock') AND p.accion IN ('view','create','edit','delete'))
-    OR (p.modulo = 'contactos' AND p.accion = 'view'))
-ON CONFLICT DO NOTHING;
-
-INSERT INTO roles_permisos (rol_id, permiso_id)
-SELECT oficina.id, permiso.id
-FROM roles oficina
-CROSS JOIN permisos permiso
-WHERE oficina.nombre = 'oficina_admin'
-	AND permiso.modulo NOT IN ('configuracion', 'clientes', 'importes')
-ON CONFLICT DO NOTHING;
-
-INSERT INTO roles_permisos (rol_id, permiso_id)
-SELECT oficina.id, permiso.id
-FROM roles oficina
-CROSS JOIN permisos permiso
-WHERE oficina.nombre = 'oficina_tecnica'
-  AND permiso.modulo IN ('cotizaciones', 'pedidos')
-  AND permiso.accion = 'view'
-ON CONFLICT DO NOTHING;
-
-INSERT INTO roles_permisos (rol_id, permiso_id, created_at)
-SELECT existentes.rol_id, stock_permiso.id, NOW()
-FROM roles_permisos existentes
-INNER JOIN permisos permiso_producto ON permiso_producto.id = existentes.permiso_id
-INNER JOIN permisos stock_permiso
-	ON stock_permiso.modulo = 'stock' AND stock_permiso.accion = permiso_producto.accion
-WHERE permiso_producto.modulo = 'productos'
-	AND permiso_producto.accion IN ('view', 'edit')
+SELECT r.id, p.id
+FROM roles r
+JOIN (VALUES
+	('ventas', 'cotizaciones', 'view'), ('ventas', 'cotizaciones', 'create'), ('ventas', 'cotizaciones', 'edit'),
+	('ventas', 'pedidos', 'view'), ('ventas', 'pedidos', 'create'), ('ventas', 'pedidos', 'edit'),
+	('ventas', 'contactos', 'view'), ('ventas', 'contactos', 'create'), ('ventas', 'contactos', 'edit'),
+	('ventas', 'productos', 'view'), ('ventas', 'fabricacion', 'view'), ('ventas', 'envios', 'view'),
+	('ventas', 'stock', 'view'), ('ventas', 'importes', 'view'),
+	('produccion', 'cotizaciones', 'view'), ('produccion', 'cotizaciones', 'edit'),
+	('produccion', 'pedidos', 'view'),
+	('produccion', 'fabricacion', 'view'), ('produccion', 'fabricacion', 'create'), ('produccion', 'fabricacion', 'edit'), ('produccion', 'fabricacion', 'delete'),
+	('produccion', 'productos', 'view'), ('produccion', 'productos', 'create'), ('produccion', 'productos', 'edit'),
+	('produccion', 'insumos', 'view'), ('produccion', 'insumos', 'create'), ('produccion', 'insumos', 'edit'),
+	('produccion', 'stock', 'view'), ('produccion', 'stock', 'edit'),
+	('administracion', 'cotizaciones', 'view'), ('administracion', 'pedidos', 'view'), ('administracion', 'pedidos', 'edit'),
+	('administracion', 'envios', 'view'), ('administracion', 'envios', 'create'), ('administracion', 'envios', 'edit'),
+	('administracion', 'contactos', 'view'), ('administracion', 'contactos', 'create'), ('administracion', 'contactos', 'edit'),
+	('administracion', 'importes', 'view'), ('administracion', 'reportes', 'view')
+) AS d(rol, modulo, accion) ON d.rol = r.nombre
+JOIN permisos p ON p.modulo = d.modulo AND p.accion = d.accion
+WHERE NOT EXISTS (SELECT 1 FROM roles_permisos x WHERE x.rol_id = r.id)
 ON CONFLICT DO NOTHING;
 
 INSERT INTO ubicaciones_stock (tipo, nombre)
 VALUES ('deposito', 'Depósito central')
 ON CONFLICT DO NOTHING;
-
-
--- ============================================================
--- EMPLEADOS
--- ============================================================
 
 INSERT INTO empleados (id, nombre, apellido, email, telefono, dni, direccion, fecha_ingreso, activo, created_at) VALUES
 (1, 'Juan Manuel', 'Antonellini', NULL, '342423', '432424234', NULL, to_timestamp(1782432000), true, to_timestamp(1781806535)),
@@ -142,19 +66,10 @@ INSERT INTO empleados (id, nombre, apellido, email, telefono, dni, direccion, fe
 (5, 'Alejandro Mario', 'Antonellini', NULL, NULL, NULL, NULL, NULL, true, to_timestamp(1781964888))
 ON CONFLICT (id) DO NOTHING;
 
-
--- ============================================================
--- USUARIOS
--- ============================================================
-
-INSERT INTO usuarios (id, username, password_hash, rol_id, empleado_id, activo, ultimo_acceso, created_at) VALUES
-(1, 'admin', '$2b$10$ZagFSe7xLEFVmWyZrmNeTe3WVwVeckKiwNyedjht0hmvOUryGf7M6', 4, 1, true, NULL, to_timestamp(1781022983))
+INSERT INTO usuarios (id, username, password_hash, rol_id, empleado_id, activo, created_at)
+SELECT 1, 'admin', '$2b$10$ZagFSe7xLEFVmWyZrmNeTe3WVwVeckKiwNyedjht0hmvOUryGf7M6', r.id, 1, true, to_timestamp(1781022983)
+FROM roles r WHERE r.nombre = 'admin'
 ON CONFLICT (id) DO NOTHING;
-
-
--- ============================================================
--- CATEGORÍAS DE PRODUCTOS
--- ============================================================
 
 INSERT INTO categorias_productos (id, nombre, slug, descripcion, created_at) VALUES
 (1, 'Escapes', 'escapes', 'Escapes', NULL),
@@ -163,10 +78,19 @@ INSERT INTO categorias_productos (id, nombre, slug, descripcion, created_at) VAL
 (4, 'Otros', 'otros', 'Otros', NULL)
 ON CONFLICT (id) DO NOTHING;
 
-
--- ============================================================
--- TIPOS DE VEHÍCULO
--- ============================================================
+INSERT INTO atributos_categoria (categoria_id, clave, etiqueta, grupo, tipo, unidad, orden)
+SELECT c.id, d.clave, d.etiqueta, d.grupo, 'numero', 'mm', d.orden
+FROM categorias_productos c
+CROSS JOIN (VALUES
+	('primario_diametro', 'Diámetro', 'Primario', 1),
+	('primario_largo', 'Largo', 'Primario', 2),
+	('secundario_diametro', 'Diámetro', 'Secundario', 3),
+	('secundario_largo', 'Largo', 'Secundario', 4),
+	('trombon_diametro_inicial', 'Diámetro inicial', 'Trombón', 5),
+	('trombon_diametro_final', 'Diámetro final', 'Trombón', 6),
+	('trombon_largo', 'Largo', 'Trombón', 7)
+) AS d(clave, etiqueta, grupo, orden)
+WHERE c.slug = 'escapes' AND NOT EXISTS (SELECT 1 FROM atributos_categoria);
 
 INSERT INTO tipos_vehiculo (id, nombre, slug, activo) VALUES
 (1, 'Auto', 'auto', true),
@@ -175,22 +99,12 @@ INSERT INTO tipos_vehiculo (id, nombre, slug, activo) VALUES
 (4, 'Avión', 'avion', true)
 ON CONFLICT (id) DO NOTHING;
 
-
--- ============================================================
--- TIPOS DE USO
--- ============================================================
-
 INSERT INTO tipos_uso (id, nombre, slug) VALUES
 (1, 'Calle', 'calle'),
 (2, 'Competición', 'competencia'),
 (3, 'Colección', 'coleccion'),
 (4, 'Otro', 'otro')
 ON CONFLICT (id) DO NOTHING;
-
-
--- ============================================================
--- MARCAS (90 registros)
--- ============================================================
 
 INSERT INTO marcas (id, nombre, logo_url, activo) VALUES
 (1, 'Ford', 'https://cdn.simpleicons.org/ford', true),
@@ -284,11 +198,6 @@ INSERT INTO marcas (id, nombre, logo_url, activo) VALUES
 (89, 'Mack', NULL, true),
 (90, 'Western Star', NULL, true)
 ON CONFLICT (id) DO NOTHING;
-
-
--- ============================================================
--- MODELOS (322 registros)
--- ============================================================
 
 INSERT INTO modelos (id, marca_id, tipo_vehiculo_id, nombre, anio_desde, anio_hasta, activo) VALUES
 (1, 1, 1, 'Fiesta', NULL, NULL, true),
@@ -615,36 +524,21 @@ INSERT INTO modelos (id, marca_id, tipo_vehiculo_id, nombre, anio_desde, anio_ha
 (322, 74, 2, 'CL-X 700', NULL, NULL, true)
 ON CONFLICT (id) DO NOTHING;
 
-
--- ============================================================
--- CATEGORÍAS COMPETENCIA
--- ============================================================
-
 INSERT INTO categorias_competencia (id, nombre, descripcion, tipo_vehiculo_id, activa_desde, activa_hasta, vigente) VALUES
 (1, 'TC 2000', 'TC 2000', 1, NULL, NULL, true),
 (2, 'TC', 'Turismo Carretera', 1, NULL, NULL, true),
 (3, 'GP', 'Moto GP', 2, NULL, NULL, true)
 ON CONFLICT (id) DO NOTHING;
 
-
--- ============================================================
--- PRODUCTOS
--- ============================================================
-
-INSERT INTO productos (id, codigo, nombre, categoria_id, medidas_primario_diametro, medidas_primario_largo, medidas_secundario_diametro, medidas_secundario_largo, trombon_diametro_inicial, trombon_largo, trombon_observaciones, tipo_vehiculo_id, marca_id, modelo_id, tipo_uso_id, categoria_competencia_id, es_personalizable, activo, created_at, updated_at) VALUES
-(14, 'TC001', 'Escape completo Ford Mustang', 1, 44, 600, 63, 350, 65, 750, 'Completo', 1, 1, 1, 2, 2, false, true, to_timestamp(1782143562), to_timestamp(1782143562)),
-(15, 'TC002', 'Escape completo Chevrolet Camaro TC', 1, 48, 600, 63, 500, 68, 750, '', 1, 2, 34, 2, NULL, false, true, to_timestamp(1782734277), to_timestamp(1783475361)),
-(16, '4214', 'Escape Ford Mustang 2026', 1, 23, 42, 12, 42, 12, 53, '', 1, 1, 13, 3, NULL, false, true, to_timestamp(1783522037), to_timestamp(1783522037)),
-(17, '2422', 'Escape Completo Amarok', 1, 20, 32, 42, 54, 23, 42, '', 1, 7, 51, 1, NULL, false, true, to_timestamp(1783943308), to_timestamp(1783943308)),
-(18, '5353', 'Parrilla 40x60', 4, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, false, true, to_timestamp(1783943871), to_timestamp(1783943871)),
-(19, '5545', 'Bicicletero 4 lugares', 3, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, false, true, to_timestamp(1783943952), to_timestamp(1783943952)),
-(20, '234234', 'Escape completo Mustang', 1, 23, 43, 23, 43, 12, 32, '', 1, 7, 51, 2, 1, false, true, to_timestamp(1783945058), to_timestamp(1783945058))
+INSERT INTO productos (id, codigo, nombre, categoria_id, atributos, tipo_vehiculo_id, marca_id, modelo_id, tipo_uso_id, categoria_competencia_id, es_personalizable, activo, created_at, updated_at) VALUES
+(14, 'TC001', 'Escape completo Ford Mustang', 1, '{"primario_diametro": 44, "primario_largo": 600, "secundario_diametro": 63, "secundario_largo": 350, "trombon_diametro_inicial": 65, "trombon_largo": 750}', 1, 1, 1, 2, 2, false, true, to_timestamp(1782143562), to_timestamp(1782143562)),
+(15, 'TC002', 'Escape completo Chevrolet Camaro TC', 1, '{"primario_diametro": 48, "primario_largo": 600, "secundario_diametro": 63, "secundario_largo": 500, "trombon_diametro_inicial": 68, "trombon_largo": 750}', 1, 2, 34, 2, NULL, false, true, to_timestamp(1782734277), to_timestamp(1783475361)),
+(16, '4214', 'Escape Ford Mustang 2026', 1, '{"primario_diametro": 23, "primario_largo": 42, "secundario_diametro": 12, "secundario_largo": 42, "trombon_diametro_inicial": 12, "trombon_largo": 53}', 1, 1, 13, 3, NULL, false, true, to_timestamp(1783522037), to_timestamp(1783522037)),
+(17, '2422', 'Escape Completo Amarok', 1, '{"primario_diametro": 20, "primario_largo": 32, "secundario_diametro": 42, "secundario_largo": 54, "trombon_diametro_inicial": 23, "trombon_largo": 42}', 1, 7, 51, 1, NULL, false, true, to_timestamp(1783943308), to_timestamp(1783943308)),
+(18, '5353', 'Parrilla 40x60', 4, '{}', NULL, NULL, NULL, NULL, NULL, false, true, to_timestamp(1783943871), to_timestamp(1783943871)),
+(19, '5545', 'Bicicletero 4 lugares', 3, '{}', NULL, NULL, NULL, NULL, NULL, false, true, to_timestamp(1783943952), to_timestamp(1783943952)),
+(20, '234234', 'Escape completo Mustang', 1, '{"primario_diametro": 23, "primario_largo": 43, "secundario_diametro": 23, "secundario_largo": 43, "trombon_diametro_inicial": 12, "trombon_largo": 32}', 1, 7, 51, 2, 1, false, true, to_timestamp(1783945058), to_timestamp(1783945058))
 ON CONFLICT (id) DO NOTHING;
-
-
--- ============================================================
--- CONTACTOS DE MUESTRA
--- ============================================================
 
 INSERT INTO contactos (
 	id, razon_social, nombre, apellido, cuit, email, telefono, pais, provincia, ciudad,
@@ -656,11 +550,6 @@ INSERT INTO contactos (
 	(10, 'Collino SRL', 'Collino', NULL, '42342424', 'collino@gmail.com', '', 'Argentina', '', '', '', '', '', '', '', true, true, to_timestamp(1784312464), to_timestamp(1784312464)),
 	(11, 'PEty laboratorios', 'Peyte', NULL, '4234234', 'asdas@gmail.com', '34234234', 'Argentina', '', '', '', '', '', '', '', true, true, to_timestamp(1784312954), to_timestamp(1784312954))
 ON CONFLICT DO NOTHING;
-
-
--- ============================================================
--- FEEDBACK
--- ============================================================
 
 INSERT INTO feedback (id, mensaje, created_at) VALUES
 (1, 'Priemr feedback!', to_timestamp(1782145161)),
@@ -677,11 +566,6 @@ SELECT setval(
 	MAX(id) IS NOT NULL
 )
 FROM public.feedback;
-
-
--- ============================================================
--- TAREAS
--- ============================================================
 
 INSERT INTO tareas (id, titulo, descripcion, estado, orden, prioridad, fecha_entrega, asignado_a, created_at, updated_at) VALUES
 (4, 'Compra de insumos', E'- Bridas para Amarok

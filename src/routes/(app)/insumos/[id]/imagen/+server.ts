@@ -5,11 +5,7 @@ import { eq } from 'drizzle-orm';
 import { db } from '$lib/server/db';
 import { insumos } from '$lib/server/db/schema';
 import { requirePermission } from '$lib/server/auth/permissions';
-import {
-	eliminarObjeto,
-	guardarObjeto,
-	leerObjeto
-} from '$lib/server/services/object-storage.service';
+import { eliminarObjeto, guardarObjeto, leerObjeto } from '$lib/server/almacenamiento';
 
 const MAX_IMAGEN_BYTES = 5 * 1024 * 1024;
 const MIME_IMAGENES = new Set(['image/jpeg', 'image/png', 'image/webp']);

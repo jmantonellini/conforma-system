@@ -6,11 +6,12 @@
 		Highlight,
 		Icono,
 		Listado,
+		TarjetaImagen,
 		filtrar,
 		parametro
-	} from '$lib/components/ui';
-	import { eliminarProducto } from '$lib/remote/productos.remote';
-	import { confirmarYEjecutar } from '$lib/stores/confirmacion.svelte';
+	} from '$lib/ui';
+	import { eliminarProducto } from '$lib/modulos/productos/productos.remote';
+	import { confirmarYEjecutar } from '$lib/ui/confirmar.svelte';
 	import { formatearMoneda } from '$lib/utils/precios';
 	import type { PageProps } from './$types';
 
@@ -87,5 +88,17 @@
 				</button>
 			</Can>
 		</td>
+	{/snippet}
+	{#snippet tarjeta(producto: (typeof data.productos)[number])}
+		<TarjetaImagen
+			href={`/productos/${producto.id}`}
+			imagen={producto.portada_id ? resolve(`/adjuntos/${producto.portada_id}`) : null}
+			titulo={producto.nombre}
+			subtitulo={[producto.codigo, categorias.get(producto.categoria_id ?? 0)]
+				.filter(Boolean)
+				.join(' · ')}
+		>
+			<span class="font-semibold tabular-nums">{formatearMoneda(producto.precio_venta)}</span>
+		</TarjetaImagen>
 	{/snippet}
 </Listado>

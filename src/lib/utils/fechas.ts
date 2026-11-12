@@ -37,7 +37,6 @@ export function formatearFechaHora(fecha: string | Date | null): string {
 	});
 }
 
-/** Días calendario desde hoy hasta `fecha` (negativo si ya pasó). */
 export function diasHasta(fecha: string | Date): number {
 	const hoy = new Date();
 	hoy.setHours(0, 0, 0, 0);
@@ -46,7 +45,6 @@ export function diasHasta(fecha: string | Date): number {
 	return Math.round((destino.getTime() - hoy.getTime()) / 86_400_000);
 }
 
-/** "Hoy", "Mañana", "En 5 días", "Ayer", "Hace 3 días". */
 export function fechaRelativa(fecha: string | Date | null): string {
 	if (!fecha) return '';
 	const dias = diasHasta(fecha);
@@ -54,4 +52,26 @@ export function fechaRelativa(fecha: string | Date | null): string {
 	if (dias === 1) return 'Mañana';
 	if (dias === -1) return 'Ayer';
 	return dias > 0 ? `En ${dias} días` : `Hace ${-dias} días`;
+}
+
+export function avisoVencimiento(fecha: string | Date | null, diasAviso = 3) {
+	if (!fecha) return null;
+	const dias = diasHasta(fecha);
+	return {
+		texto: dias < 0 ? `Vencida · ${fechaRelativa(fecha)}` : fechaRelativa(fecha),
+		clase: dias < 0 ? 'text-error' : dias <= diasAviso ? 'text-warning' : 'secundario'
+	};
+}
+
+export function haceCuanto(fecha: string | Date | null, ahora = new Date()) {
+	if (!fecha) return '';
+	const minutos = Math.floor((ahora.getTime() - new Date(fecha).getTime()) / 60_000);
+	if (minutos < 1) return 'Recién';
+	if (minutos < 60) return `Hace ${minutos} min`;
+	const horas = Math.floor(minutos / 60);
+	if (horas < 24) return `Hace ${horas} h`;
+	const dias = diasHasta(fecha);
+	if (dias === -1) return 'Ayer';
+	if (dias > -7) return `Hace ${-dias} días`;
+	return formatearFecha(fecha);
 }

@@ -10,10 +10,10 @@
 		Persona,
 		filtrar,
 		parametro
-	} from '$lib/components/ui';
-	import { eliminarCotizacion } from '$lib/remote/cotizaciones.remote';
-	import { confirmarYEjecutar } from '$lib/stores/confirmacion.svelte';
-	import { CANALES_COTIZACION } from '$lib/utils/canales-cotizacion';
+	} from '$lib/ui';
+	import { eliminarCotizacion } from '$lib/modulos/cotizaciones/cotizaciones.remote';
+	import { confirmarYEjecutar } from '$lib/ui/confirmar.svelte';
+	import { CANALES_COTIZACION } from '$lib/modulos/cotizaciones/canales';
 	import { formatearFecha } from '$lib/utils/fechas';
 	import { formatearMoneda } from '$lib/utils/precios';
 	import { can } from '$lib/utils/permissions';

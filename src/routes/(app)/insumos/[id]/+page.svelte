@@ -9,7 +9,7 @@
 		FormFieldWrapper,
 		PageLayout,
 		Seccion
-	} from '$lib/components/ui';
+	} from '$lib/ui';
 	import {
 		actualizarInsumo,
 		eliminarInsumo,
@@ -17,9 +17,9 @@
 		obtenerProveedores,
 		getTiposInsumo,
 		getUnidadesInsumo
-	} from '$lib/remote/insumos.remote';
-	import { toast } from '$lib/stores/toast.svelte';
-	import { ETIQUETAS_MOVIMIENTO_INSUMO } from '$lib/types/stock';
+	} from '$lib/modulos/insumos/insumos.remote';
+	import { toast } from '$lib/ui/toast.svelte';
+	import { ETIQUETAS_MOVIMIENTO_INSUMO } from '$lib/modulos/insumos/tipos';
 	import { formatearFecha } from '$lib/utils/fechas';
 	import { formatearMoneda } from '$lib/utils/precios';
 	import type { PageProps } from './$types';
@@ -33,7 +33,6 @@
 	const cantidad = (valor: number) =>
 		new Intl.NumberFormat('es-AR', { maximumFractionDigits: 3 }).format(valor);
 
-	// Costo final en vivo: base + flete.
 	const costoBase = $derived(Number(form.fields.costo_unitario.value()) || 0);
 	const flete = $derived(Number(form.fields.flete_porcentaje.value()) || 0);
 	const costoFinal = $derived(costoBase * (1 + flete / 100));
@@ -77,7 +76,6 @@
 		}}
 	/>
 
-	<!-- Resumen: imagen + indicadores -->
 	<section class="flex flex-col gap-5 seccion sm:flex-row sm:items-center">
 		<div class="group relative size-28 shrink-0 overflow-hidden rounded-box border border-base-300">
 			{#if insumo.imagen_key}

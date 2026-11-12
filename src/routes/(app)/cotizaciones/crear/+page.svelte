@@ -4,7 +4,7 @@
 	import { goto } from '$app/navigation';
 	import { resolve } from '$app/paths';
 	import { page } from '$app/state';
-	import ContactoRapido from '$lib/components/contactos/ContactoRapido.svelte';
+	import ContactoRapido from '$lib/modulos/contactos/componentes/ContactoRapido.svelte';
 	import {
 		Can,
 		EncabezadoDetalle,
@@ -15,13 +15,13 @@
 		PageLayout,
 		SearchSelect,
 		Seccion
-	} from '$lib/components/ui';
-	import type { Option } from '$lib/components/ui/SearchSelect.svelte';
-	import { obtenerContactosCliente } from '$lib/remote/contactos.remote';
-	import { crearCotizacion } from '$lib/remote/cotizaciones.remote';
-	import { getEmpleados } from '$lib/remote/empleados.remote';
-	import { toast } from '$lib/stores/toast.svelte';
-	import { CANALES_COTIZACION } from '$lib/utils/canales-cotizacion';
+	} from '$lib/ui';
+	import type { Option } from '$lib/ui/SearchSelect.svelte';
+	import { obtenerContactosCliente } from '$lib/modulos/contactos/contactos.remote';
+	import { crearCotizacion } from '$lib/modulos/cotizaciones/cotizaciones.remote';
+	import { getEmpleadosOpciones } from '$lib/modulos/configuracion/empleados.remote';
+	import { toast } from '$lib/ui/toast.svelte';
+	import { CANALES_COTIZACION } from '$lib/modulos/cotizaciones/canales';
 	import { formatearCuit } from '$lib/utils/cuit';
 	import { can } from '$lib/utils/permissions';
 
@@ -38,14 +38,13 @@
 	const LIMITE = 50;
 	const ARCHIVOS_ACEPTADOS =
 		'image/jpeg,image/png,image/webp,audio/ogg,audio/mpeg,audio/mp4,audio/x-m4a,audio/wav,audio/x-wav,video/mp4,application/pdf';
-	const puedeAsignar = can(page.data.user, page.data.permisos, 'cotizaciones', 'asignar');
+	const puedeAsignar = can(page.data.user, page.data.permisos, 'cotizaciones', 'edit');
 
 	const [iniciales, empleados] = await Promise.all([
 		obtenerContactosCliente({ limit: LIMITE }),
-		puedeAsignar ? getEmpleados() : Promise.resolve([])
+		puedeAsignar ? getEmpleadosOpciones() : Promise.resolve([])
 	]);
 
-	// Contactos vistos en búsquedas o creados: permiten mostrar la ficha del seleccionado.
 	const conocidos = new SvelteMap<string, Contacto>();
 	const recordar = (lista: Contacto[]) => {
 		for (const contacto of lista) conocidos.set(String(contacto.id), contacto);
@@ -86,7 +85,6 @@
 		form.fields.contacto_id.set(nueva.value);
 	}
 
-	// ---------- Adjuntos ----------
 	type Adjunto = { archivo: File; vista: string };
 	let adjuntos = $state<Adjunto[]>([]);
 	let subiendo = $state(false);
@@ -153,7 +151,6 @@
 			})}
 			class="grid items-start gap-4 sm:gap-6 lg:grid-cols-3"
 		>
-			<!-- Lateral (primero en mobile): quién consulta y quién la atiende -->
 			<aside class="flex min-w-0 flex-col gap-4 sm:gap-6 lg:col-start-3 lg:row-start-1">
 				<Seccion titulo="Cliente">
 					<SearchSelect
@@ -207,7 +204,6 @@
 				{/if}
 			</aside>
 
-			<!-- Principal: la consulta -->
 			<div class="flex min-w-0 flex-col gap-4 sm:gap-6 lg:col-span-2 lg:row-start-1">
 				<Seccion titulo="Consulta">
 					<div class="campo">

@@ -1,15 +1,27 @@
 <script lang="ts">
-	import { FormErrors, FormFieldWrapper, Modal, PageLayout, Table } from '$lib/components/ui';
-	import FormDireccion from '$lib/components/ui/FormDireccion.svelte';
-	import { Delete, Edit } from '$lib/components/ui/icons';
+	import {
+		FormErrors,
+		FormFieldWrapper,
+		Icono,
+		MenuDesplegable,
+		Modal,
+		PageLayout,
+		Persona,
+		Table
+	} from '$lib/ui';
+	import FormDireccion from '$lib/ui/FormDireccion.svelte';
 	import {
 		getEmpleados,
 		crearEmpleado,
 		actualizarEmpleado,
 		eliminarEmpleado
-	} from '$lib/remote/empleados.remote';
-	import { confirmarYEjecutar } from '$lib/stores/confirmacion.svelte';
-	import { toast } from '$lib/stores/toast.svelte';
+	} from '$lib/modulos/configuracion/empleados.remote';
+	import {
+		getUsuariosSinEmpleado,
+		vincularUsuarioEmpleado
+	} from '$lib/modulos/configuracion/usuarios.remote';
+	import { confirmarYEjecutar } from '$lib/ui/confirmar.svelte';
+	import { toast } from '$lib/ui/toast.svelte';
 
 	type Empleado = Awaited<ReturnType<typeof getEmpleados>>[number];
 
@@ -23,55 +35,92 @@
 		abierto = true;
 	}
 
+	const usuariosLibres = $derived(await getUsuariosSinEmpleado());
+
+	async function vincular(empleado: Empleado, valor: string) {
+		try {
+			await vincularUsuarioEmpleado({
+				empleado_id: empleado.id,
+				usuario_id: valor ? Number(valor) : null
+			});
+			toast.success(valor ? 'Usuario vinculado' : 'Usuario desvinculado');
+		} catch {
+			toast.error('No se pudo vincular el usuario');
+		}
+	}
+
 	function cerrarModal() {
 		abierto = false;
 		editando = null;
 	}
 </script>
 
+{#snippet header()}
+	<th>Empleado</th>
+	<th class="hidden md:table-cell">Contacto</th>
+	<th>Acceso al sistema</th>
+	<th class="w-0"></th>
+{/snippet}
+
+{#snippet row(empleado: Empleado)}
+	<td>
+		<button class="enlace-fila" onclick={() => abrir(empleado)}>
+			<Persona nombre={empleado.nombre} apellido={empleado.apellido} />
+		</button>
+	</td>
+	<td class="hidden text-base-content/70 md:table-cell">
+		{[empleado.telefono, empleado.email].filter(Boolean).join(' · ') || '-'}
+	</td>
+	<td>
+		<select
+			class="select w-44 select-sm"
+			aria-label="Usuario de {empleado.nombre}"
+			value={empleado.usuario?.id ? String(empleado.usuario.id) : ''}
+			onchange={(e) => vincular(empleado, e.currentTarget.value)}
+		>
+			<option value="">Sin usuario</option>
+			{#if empleado.usuario?.id}
+				<option value={String(empleado.usuario.id)}>{empleado.usuario.username}</option>
+			{/if}
+			{#each usuariosLibres as usuario (usuario.id)}
+				<option value={String(usuario.id)}>{usuario.username}</option>
+			{/each}
+		</select>
+	</td>
+	<td>
+		<MenuDesplegable alFinal class="btn btn-square btn-ghost btn-sm" titulo="Acciones">
+			{#snippet etiqueta()}<Icono nombre="mas" />{/snippet}
+			<li><button onclick={() => abrir(empleado)}>Editar</button></li>
+			<li>
+				<button
+					class="text-error"
+					onclick={() =>
+						confirmarYEjecutar({
+							mensaje: `¿Eliminar a ${empleado.nombre} ${empleado.apellido}?`,
+							ejecutar: () => eliminarEmpleado(String(empleado.id)),
+							exito: 'Empleado eliminado'
+						})}>Eliminar</button
+				>
+			</li>
+		</MenuDesplegable>
+	</td>
+{/snippet}
+
 <PageLayout>
-	<div class="flex justify-end">
-		<button class="btn btn-primary btn-sm" onclick={() => abrir(null)}>+ Nuevo empleado</button>
-	</div>
+	<header class="encabezado-fijo flex flex-wrap items-end justify-between gap-3">
+		<div>
+			<h1 class="text-2xl font-semibold tracking-tight">Empleados</h1>
+			<p class="text-sm text-base-content/60">
+				El equipo de la empresa. Vinculá un usuario para que pueda ingresar al sistema.
+			</p>
+		</div>
+		<button class="btn btn-primary btn-sm" onclick={() => abrir(null)}>
+			<Icono nombre="mas_simple" /> Nuevo empleado
+		</button>
+	</header>
 
-	<div>
-		{#snippet header()}
-			<th>Nombre</th>
-			<th>Apellido</th>
-			<th>Teléfono</th>
-			<th class="text-center">Acciones</th>
-		{/snippet}
-
-		{#snippet row(empleado: Awaited<typeof empleados>[number])}
-			<td class="font-medium">{empleado.nombre}</td>
-			<td>{empleado.apellido}</td>
-			<td>{empleado.telefono || '-'}</td>
-			<td class="text-center">
-				<div class="flex justify-center gap-2">
-					<button
-						class="btn btn-circle btn-ghost btn-sm"
-						title="Editar"
-						onclick={() => abrir(empleado)}
-					>
-						<Edit />
-					</button>
-					<button
-						class="btn btn-circle btn-ghost text-error btn-sm"
-						title="Eliminar"
-						onclick={() =>
-							confirmarYEjecutar({
-								mensaje: `¿Eliminar a ${empleado.nombre} ${empleado.apellido}?`,
-								ejecutar: () => eliminarEmpleado(String(empleado.id)),
-								exito: 'Empleado eliminado'
-							})}
-					>
-						<Delete />
-					</button>
-				</div>
-			</td>
-		{/snippet}
-
-		<Table data={await empleados} {header} {row} />
+	<div class="card overflow-hidden">
+		<Table data={await empleados} {header} {row} emptyMessage="No hay empleados" />
 	</div>
 </PageLayout>
 

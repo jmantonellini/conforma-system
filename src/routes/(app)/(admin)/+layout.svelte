@@ -1,6 +1,6 @@
 <script lang="ts">
-	import { Can } from '$lib/components/ui';
-	import { Modulos } from '$lib/types';
+	import { Can } from '$lib/ui';
+	import { Modulos } from '$lib/tipos';
 	import type { LayoutProps } from './$types';
 
 	let { children }: LayoutProps = $props();

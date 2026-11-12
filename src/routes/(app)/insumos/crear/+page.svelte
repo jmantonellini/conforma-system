@@ -9,15 +9,15 @@
 		FormErrors,
 		FormFieldWrapper,
 		PageLayout
-	} from '$lib/components/ui';
+	} from '$lib/ui';
 	import {
 		crearInsumo,
 		getCategoriasInsumo,
 		obtenerProveedores,
 		getTiposInsumo,
 		getUnidadesInsumo
-	} from '$lib/remote/insumos.remote';
-	import { toast } from '$lib/stores/toast.svelte';
+	} from '$lib/modulos/insumos/insumos.remote';
+	import { toast } from '$lib/ui/toast.svelte';
 
 	const form = crearInsumo;
 	let imagen = $state<File | null>(null);

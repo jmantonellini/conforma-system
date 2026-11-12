@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
 	normalizarCabecera,
 	mapearFilaContactoExcel
-} from '../src/lib/server/utils/contactos-importar-excel';
+} from '../src/lib/modulos/contactos/importar-excel.server';
 
 describe('contactos excel import', () => {
 	it('maps address and postal headers used in the contact spreadsheet', () => {

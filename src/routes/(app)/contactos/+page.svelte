@@ -9,9 +9,9 @@
 		Listado,
 		filtrar,
 		parametro
-	} from '$lib/components/ui';
-	import { eliminarContacto } from '$lib/remote/contactos.remote';
-	import { confirmarYEjecutar } from '$lib/stores/confirmacion.svelte';
+	} from '$lib/ui';
+	import { eliminarContacto } from '$lib/modulos/contactos/contactos.remote';
+	import { confirmarYEjecutar } from '$lib/ui/confirmar.svelte';
 	import { can } from '$lib/utils/permissions';
 	import type { PageProps } from './$types';
 

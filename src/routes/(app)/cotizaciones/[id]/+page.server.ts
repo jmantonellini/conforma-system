@@ -4,29 +4,29 @@ import {
 	getEstadosCotizacion,
 	getHistorialCotizacion,
 	getNotasCotizacion
-} from '$lib/remote/cotizaciones-consultas.remote';
-import { getProductos } from '$lib/remote/productos.remote';
+} from '$lib/modulos/cotizaciones/cotizaciones-consultas.remote';
+import { getProductos } from '$lib/modulos/productos/productos.remote';
 import {
 	getCategoriasInsumo,
 	getInsumos,
 	getTiposInsumo,
 	getUnidadesInsumo
-} from '$lib/remote/insumos.remote';
-import { getEmpleados } from '$lib/remote/empleados.remote';
+} from '$lib/modulos/insumos/insumos.remote';
+import { getEmpleadosOpciones } from '$lib/modulos/configuracion/empleados.remote';
 import { can } from '$lib/utils/permissions';
 import type { PageServerLoad } from './$types';
 
 export const load: PageServerLoad = async ({ params, parent }) => {
 	const { user, permisos } = await parent();
 	const puedeEditarCotizacion =
-		can(user, permisos, 'cotizaciones', 'cotizar') && can(user, permisos, 'importes', 'view');
+		can(user, permisos, 'cotizaciones', 'edit') && can(user, permisos, 'importes', 'view');
 	const id = Number(params.id);
 	if (!Number.isSafeInteger(id) || id < 1) error(404, 'Cotización no encontrada');
 	const { cotizacion, lineas, adjuntos } = await getCotizacionById(id);
 	const [historial, notas, empleados, estados] = await Promise.all([
 		getHistorialCotizacion(id),
 		getNotasCotizacion(id),
-		getEmpleados(),
+		getEmpleadosOpciones(),
 		getEstadosCotizacion()
 	]);
 	const catalogos = puedeEditarCotizacion

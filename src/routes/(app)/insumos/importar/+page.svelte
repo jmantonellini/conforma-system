@@ -2,9 +2,9 @@
 	import { mensajeError } from '$lib/utils/errores';
 	import { goto } from '$app/navigation';
 	import { resolve } from '$app/paths';
-	import { Can, EncabezadoDetalle, PageLayout } from '$lib/components/ui';
-	import { importarInsumos } from '$lib/remote/insumos.remote';
-	import { toast } from '$lib/stores/toast.svelte';
+	import { Can, EncabezadoDetalle, PageLayout } from '$lib/ui';
+	import { importarInsumos } from '$lib/modulos/insumos/insumos.remote';
+	import { toast } from '$lib/ui/toast.svelte';
 	import { formatearDosDecimales, formatearMoneda } from '$lib/utils/precios';
 
 	type ImportacionFila = {
@@ -66,7 +66,7 @@
 
 <PageLayout>
 	<EncabezadoDetalle titulo="Importar insumos" volver={{ href: '/insumos', etiqueta: 'Insumos' }} />
-	<Can modulo="insumos" accion="import">
+	<Can modulo="insumos" accion="create">
 		<div class="card">
 			<div class="card-body gap-4">
 				<p class="text-sm text-base-content/70">

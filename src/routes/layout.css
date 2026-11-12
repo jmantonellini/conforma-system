@@ -5,10 +5,6 @@
 	themes: light --default;
 }
 
-/* ============================================================
-   Tema (la app fija data-theme="light" en app.html): superficies neutras,
-   un solo color de marca y bordes en lugar de sombras.
-   ============================================================ */
 @plugin 'daisyui/theme' {
 	name: 'light';
 	default: true;
@@ -24,7 +20,6 @@
 	--depth: 0;
 }
 
-/* Inter: tipografía de interfaz con cifras tabulares, pensada para pantallas de datos. */
 @theme {
 	--font-sans: 'Inter Variable', ui-sans-serif, system-ui, sans-serif;
 }
@@ -33,7 +28,6 @@ html {
 	font-feature-settings: 'cv11', 'ss01';
 }
 
-/* Caja contenedora estándar (tarjetas, grupos de formulario, secciones de detalle). */
 @utility seccion {
 	@apply rounded-box border border-base-300 bg-base-100 p-4 sm:p-5;
 }
@@ -47,17 +41,14 @@ html {
 		@apply font-medium whitespace-nowrap;
 	}
 
-	/* En una sección, la leyenda deja de "cortar" el borde y se comporta como título de la caja. */
 	.seccion > legend {
 		@apply float-left w-full pb-1 text-base font-semibold text-base-content;
 	}
 
-	/* Un fieldset por defecto no se achica por debajo de su contenido y rompe layouts responsive. */
 	fieldset {
 		@apply min-w-0;
 	}
 
-	/* ---------- Tablas ---------- */
 	.table {
 		@apply tabular-nums;
 	}
@@ -71,10 +62,6 @@ html {
 		@apply py-2.5 align-middle;
 	}
 
-	/*
-	 * Fila clickeable: un <a class="enlace-fila"> en cualquier celda se estira sobre toda la fila
-	 * (patrón "stretched link"); los demás controles de la fila quedan por encima.
-	 */
 	.table tr:has(.enlace-fila) {
 		@apply relative cursor-pointer;
 	}
@@ -85,12 +72,10 @@ html {
 		@apply relative z-10;
 	}
 
-	/* Texto secundario bajo un valor de celda o dato. */
 	.secundario {
 		@apply text-xs text-base-content/60;
 	}
 
-	/* Pares etiqueta/valor de solo lectura: <dl class="datos"><div><dt/><dd/></div></dl> */
 	.datos {
 		@apply grid grid-cols-[repeat(auto-fill,minmax(9rem,1fr))] gap-x-6 gap-y-4;
 	}
@@ -101,13 +86,13 @@ html {
 		@apply mt-1 break-words;
 	}
 
-	/* Montos y cantidades alineados. */
 	.numero {
 		@apply text-right whitespace-nowrap tabular-nums;
 	}
 
-	/* ---------- Formularios ---------- */
-	/* Campo = etiqueta + control a todo el ancho + ayuda/error (ver FormFieldWrapper). */
+	.encabezado-fijo {
+		@apply z-30 -mx-4 -mt-4 bg-base-200/95 px-4 pt-4 pb-3 sm:-mx-6 sm:-mt-6 sm:px-6 sm:pt-6 md:sticky md:top-16 md:border-b md:border-base-300 md:pt-4 md:backdrop-blur;
+	}
 	.campo {
 		@apply flex min-w-0 flex-col gap-1.5;
 	}
@@ -115,7 +100,6 @@ html {
 		@apply text-sm font-medium text-base-content/80;
 	}
 
-	/* Cuerpo de Modal: bloques y formularios con el mismo espaciado. */
 	.modal-cuerpo {
 		@apply flex flex-col gap-4 overflow-y-auto px-5 pt-3 pb-5;
 	}
@@ -124,25 +108,21 @@ html {
 	}
 }
 
-/* Controles a todo el ancho dentro de un campo (en `utilities` para ganarle al ancho fijo de daisyUI). */
 @layer utilities {
 	.campo :is(.input, .select, .textarea, .file-input) {
 		width: 100%;
 	}
 }
 
-/* Dentro de un modal las secciones no llevan caja propia: el modal ya es la caja. */
 .modal-cuerpo .seccion {
 	@apply border-0 p-0;
 }
 
-/* Ítem activo de menús en un tono suave de marca (fuera de capas para ganarle al default de daisyUI). */
 .menu {
 	--menu-active-bg: color-mix(in oklab, var(--color-primary) 10%, transparent);
 	--menu-active-fg: var(--color-primary);
 }
 
-/* Los campos numéricos de un ERP se cargan con teclado: sin flechas de incremento. */
 input[type='number'] {
 	-moz-appearance: textfield;
 	&::-webkit-inner-spin-button,

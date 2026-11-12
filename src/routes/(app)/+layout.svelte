@@ -1,9 +1,10 @@
 <script lang="ts">
 	import type { LayoutProps } from './$types';
-	import Header from '$lib/components/ui/Header.svelte';
-	import { SideBar } from '$lib/components/ui';
+	import Header from '$lib/ui/Header.svelte';
+	import { SideBar } from '$lib/ui';
 	import {
 		Fabricacion,
+		Document,
 		Graph,
 		Price,
 		Producto,
@@ -13,14 +14,13 @@
 		Stock,
 		Truck,
 		Users
-	} from '$lib/components/ui/icons';
-	import Pedido from '$lib/components/ui/icons/Pedido.svelte';
-	import { Modulos, Paths } from '$lib/types';
+	} from '$lib/ui/icons';
+	import Pedido from '$lib/ui/icons/Pedido.svelte';
+	import { Modulos, Paths } from '$lib/tipos';
 	import { can } from '$lib/utils/permissions';
 
 	let { children, data }: LayoutProps = $props();
 
-	// === Tabs calculados desde data (única fuente de verdad) ===
 	const tabs = $derived([
 		{ href: Paths.INICIO, label: 'Inicio', icon: Graph },
 		{ href: Paths.TAREAS, label: 'Tareas', icon: Rocket },
@@ -48,6 +48,9 @@
 		...(can(data.user, data.permisos, Modulos.ENVIOS)
 			? [{ href: Paths.ENVIOS, label: 'Envíos', icon: Truck }]
 			: []),
+		...(can(data.user, data.permisos, Modulos.REPORTES)
+			? [{ href: Paths.REPORTES, label: 'Reportes', icon: Document }]
+			: []),
 		...(can(data.user, data.permisos, Modulos.CONFIGURACION)
 			? [
 					{
@@ -60,7 +63,6 @@
 							{ href: Paths.CONFIGURACION_EMPLEADOS, label: 'Empleados' },
 							{ href: Paths.CONFIGURACION_ROLES, label: 'Roles' },
 							{ href: Paths.CONFIGURACION_ESTADOS, label: 'Catálogos y estados' }
-							// { href: Paths.CONFIGURACION_TIPOS_MATERIA_PRIMA, label: 'Tipos de Materiales' }
 						]
 					}
 				]
@@ -69,7 +71,7 @@
 </script>
 
 <div class="flex min-h-screen flex-col bg-base-200">
-	<Header session={data.session} />
+	<Header usuario={data.user} permisos={data.permisos} empresa={data.empresa} />
 	<SideBar {tabs}>
 		{@render children()}
 	</SideBar>

@@ -1,10 +1,6 @@
 import { error } from '@sveltejs/kit';
-import { and, eq, or } from 'drizzle-orm';
-import { db } from '$lib/server/db';
-import { adjuntos } from '$lib/server/db/schema';
 import { requirePermission } from '$lib/server/auth/permissions';
-import { generarPDFFabricacion } from '$lib/server/pdf/fabricacion';
-import { getOrdenFabricacion } from '$lib/remote/fabricacion-consultas.remote';
+import { generarPDFFabricacion } from '$lib/modulos/fabricacion/pdf.server';
 
 export async function GET({ params }) {
 	await requirePermission('fabricacion', 'view');
@@ -12,28 +8,8 @@ export async function GET({ params }) {
 	if (!Number.isSafeInteger(ordenId) || ordenId < 1) error(404, 'Orden no encontrada');
 
 	try {
-		const orden = await getOrdenFabricacion(ordenId);
-		const condicionesPlanos = [
-			and(eq(adjuntos.orden_fabricacion_id, ordenId), eq(adjuntos.categoria, 'plano'))!
-		];
-		if (orden.producto?.id) {
-			condicionesPlanos.push(
-				and(eq(adjuntos.producto_id, orden.producto.id), eq(adjuntos.categoria, 'plano'))!
-			);
-		}
-		const planos = await db
-			.select({
-				id: adjuntos.id,
-				archivo_key: adjuntos.archivo_key,
-				nombre_original: adjuntos.nombre_original,
-				mime_type: adjuntos.mime_type
-			})
-			.from(adjuntos)
-			.where(or(...condicionesPlanos))
-			.orderBy(adjuntos.id);
-
-		const pdf = await generarPDFFabricacion(orden, planos);
-		return new Response(pdf, {
+		const pdf = await generarPDFFabricacion(ordenId);
+		return new Response(pdf.buffer as ArrayBuffer, {
 			headers: {
 				'Content-Type': 'application/pdf',
 				'Content-Disposition': `inline; filename="orden-fabricacion-${ordenId}.pdf"`,
@@ -43,6 +19,6 @@ export async function GET({ params }) {
 		});
 	} catch (cause) {
 		console.error('Error al generar PDF de Orden de Fabricación:', cause);
-		throw error(500, 'No se pudo generar el PDF de fabricación');
+		error(500, 'No se pudo generar el PDF de fabricación');
 	}
 }

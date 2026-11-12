@@ -30,6 +30,17 @@ You MUST use this tool whenever writing Svelte code before sending it to the use
 Generates a Svelte Playground link with the provided code.
 After completing the code, ask the user if they want a playground link. Only call this tool after user confirmation and NEVER if code was written to files in their project.
 
+## Estructura
+
+- `src/lib/modulos/<modulo>/`: un módulo de negocio (contactos, cotizaciones, pedidos, fabricacion, productos, insumos, stock, tareas, configuracion, auth, adjuntos, ventas, inicio, notificaciones, reportes). Contiene sus `*.remote.ts`, esquemas valibot (`*.schema.ts`), lógica de servidor (`*.server.ts`), tipos (`tipos.ts`) y `componentes/`.
+- `src/lib/ui/`: sistema de diseño compartido (componentes, iconos, toasts, confirmaciones). No importa módulos de negocio.
+- `src/lib/server/`: plataforma (`db` con el esquema dividido por módulo en `db/schema/`, `auth`, `monitoreo`, `almacenamiento`, `integraciones`, `empresa`, `estados`).
+- `src/lib/utils/`: utilidades puras compartidas.
+- Multiempresa: toda tabla de negocio tiene `empresa_id` con default `empresa_actual()` y política RLS `aislamiento_empresa`. Las tablas nuevas usan `empresa()` y `aislamiento()` de `db/schema/base.ts`; los únicos de negocio se definen como `(empresa_id, campo)`.
+- Importes en `numeric` (`importe`, `precioUnitario`, `porcentaje`, `cantidad` de `base.ts`) y fechas `timestamptz` (`fecha`).
+- Migraciones: `0000_base` reemplaza el historial anterior (su `when` coincide con la última migración ya aplicada en producción, por eso producción la saltea). Las siguientes se generan con `pnpm db:generate`.
+- Sin comentarios en el código.
+
 ## daisyUI
 
 UI is built with **daisyUI 5** on **Tailwind CSS 4** (CSS-first config in `src/routes/layout.css`, no `tailwind.config.js`). Themes: `light` (default) and `dark` (prefers-dark).

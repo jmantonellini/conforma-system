@@ -2,9 +2,9 @@
 	import { mensajeError } from '$lib/utils/errores';
 	import { goto } from '$app/navigation';
 	import { resolve } from '$app/paths';
-	import { Can, EncabezadoDetalle, PageLayout } from '$lib/components/ui';
-	import { importarContactos } from '$lib/remote/contactos.remote';
-	import { toast } from '$lib/stores/toast.svelte';
+	import { Can, EncabezadoDetalle, PageLayout } from '$lib/ui';
+	import { importarContactos } from '$lib/modulos/contactos/contactos.remote';
+	import { toast } from '$lib/ui/toast.svelte';
 	import { formatearMoneda } from '$lib/utils/precios';
 
 	type FilaContacto = {
