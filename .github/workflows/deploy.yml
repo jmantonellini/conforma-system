@@ -1,51 +1,112 @@
-name: Deploy to VPS
+name: Deploy
 
 on:
   push:
     branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-produccion
+  cancel-in-progress: false
+
+env:
+  IMAGEN: ghcr.io/${{ github.repository }}
 
 jobs:
-  deploy:
+  verificar:
+    name: Verificar
     runs-on: ubuntu-latest
     steps:
-      - name: Deploy over SSH
-        uses: appleboy/ssh-action@v1.0.3
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.13.1
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm check
+      - run: pnpm exec vitest run --project server
+
+  construir:
+    name: Construir imagen
+    needs: verificar
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: true
+          platforms: linux/amd64
+          tags: |
+            ${{ env.IMAGEN }}:latest
+            ${{ env.IMAGEN }}:${{ github.sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  desplegar:
+    name: Desplegar
+    needs: construir
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: read
+    steps:
+      - uses: appleboy/ssh-action@v1.0.3
+        env:
+          GHCR_USUARIO: ${{ github.actor }}
+          GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          IMAGEN: ${{ env.IMAGEN }}
         with:
           host: ${{ secrets.VPS_HOST }}
           username: ${{ secrets.VPS_USER }}
           key: ${{ secrets.VPS_SSH_KEY }}
           port: 22
-          command_timeout: 20m
+          command_timeout: 15m
+          envs: GHCR_USUARIO,GHCR_TOKEN,IMAGEN
           script: |
             set -e
             cd /var/www/conforma-system
 
-            echo ">>> Backup DB"
-            docker compose exec -T postgres pg_dump -U postgres -d conforma_db > /tmp/backup_$(date +%F_%H%M).sql || true
-            ls -lh /tmp/backup_* | tail -1
+            echo ">>> Backup de la base"
+            mkdir -p ~/backups
+            docker compose exec -T postgres pg_dump -U postgres -d conforma_db | gzip > ~/backups/conforma_$(date +%F_%H%M).sql.gz
+            ls -1t ~/backups/conforma_*.sql.gz | tail -n +15 | xargs -r rm --
+            ls -lh ~/backups | tail -1
 
-            echo ">>> Git pull"
-            git pull origin main
+            echo ">>> Código (compose y configuración)"
+            git pull --ff-only origin main
 
-            echo ">>> Build"
-            docker compose build app
+            echo ">>> Imagen"
+            echo "$GHCR_TOKEN" | docker login ghcr.io -u "$GHCR_USUARIO" --password-stdin
+            docker compose pull app
+            docker logout ghcr.io
 
-            echo ">>> Migraciones y seeds"
-            docker compose run --rm --no-deps app sh -c 'pnpm db:migrate && pnpm db:seed'
+            echo ">>> Migraciones y datos base"
+            docker compose run --rm --no-deps app sh -c 'node scripts/migrar.mjs && node scripts/seed.mjs'
 
             echo ">>> Iniciar aplicación"
             docker compose up -d --no-build app
-
-            echo ">>> Esperando arranque..."
-            sleep 8
-
-            echo ">>> Logs (últimas 30 líneas)"
-            docker compose logs app --no-color | tail -30
-
-            echo ">>> Estado"
-            docker compose ps
+            docker image prune -f
 
             echo ">>> Healthcheck"
-            curl -sS -o /dev/null -w "HTTP %{http_code}\n" http://localhost:3000 || exit 1
-
-            echo ">>> Deploy OK"
+            for intento in $(seq 1 20); do
+              if curl -fsS -o /dev/null http://localhost:3000/login; then
+                echo ">>> Deploy OK"
+                exit 0
+              fi
+              sleep 3
+            done
+            docker compose logs app --no-color | tail -40
+            exit 1

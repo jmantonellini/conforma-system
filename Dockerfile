@@ -11,12 +11,10 @@ WORKDIR /app
 ENV NODE_ENV=production
 RUN corepack enable && corepack prepare pnpm@10.13.1 --activate
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
-RUN pnpm install --frozen-lockfile
+RUN pnpm install --frozen-lockfile --prod
 COPY --from=build /app/build ./build
-COPY --from=build /app/drizzle.config.ts ./
-COPY --from=build /app/src/lib/server/db/migrations ./src/lib/server/db/migrations
-COPY --from=build /app/src/lib/server/db/seed.sql ./src/lib/server/db/seed.sql
-COPY --from=build /app/scripts/seed.ts ./scripts/seed.ts
-COPY --from=build /app/scripts/migrar.ts ./scripts/migrar.ts
+COPY src/lib/server/db/migrations ./src/lib/server/db/migrations
+COPY src/lib/server/db/seed.sql ./src/lib/server/db/seed.sql
+COPY scripts/migrar.mjs scripts/seed.mjs ./scripts/
 EXPOSE 3000
 CMD ["node", "build/index.js"]
