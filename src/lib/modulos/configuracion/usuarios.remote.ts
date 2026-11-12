@@ -1,6 +1,6 @@
 import { error } from '@sveltejs/kit';
 import bcrypt from 'bcryptjs';
-import { and, asc, eq, isNull, ne, or } from 'drizzle-orm';
+import { and, asc, eq, isNull, ne, or, sql } from 'drizzle-orm';
 import * as v from 'valibot';
 import { command, form, query } from '$app/server';
 import { db } from '$lib/server/db';
@@ -46,7 +46,10 @@ async function asegurarUsernameLibre(username: string, usuarioId?: number) {
 		.select({ id: usuarios.id })
 		.from(usuarios)
 		.where(
-			and(eq(usuarios.username, username), usuarioId ? ne(usuarios.id, usuarioId) : undefined)
+			and(
+				sql`lower(${usuarios.username}) = ${username}`,
+				usuarioId ? ne(usuarios.id, usuarioId) : undefined
+			)
 		);
 	if (existente) error(400, 'Ese nombre de usuario ya existe');
 }

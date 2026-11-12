@@ -3,7 +3,7 @@ import * as v from 'valibot';
 import { query, form, command } from '$app/server';
 import { db } from '$lib/server/db';
 import { envios, transportistas, pedidos, contactos } from '$lib/server/db/schema';
-import { eq, desc, count } from 'drizzle-orm';
+import { eq, desc, count, sql } from 'drizzle-orm';
 import { requirePermission } from '$lib/server/auth/permissions';
 import { getHistorialPedido } from './pedidos.remote';
 
@@ -72,11 +72,34 @@ export const getEnviosByPedido = query(v.number(), async (pedidoId) => {
 
 const EnvioSchema = v.object({
 	pedido_id: v.pipe(v.string(), v.transform(Number), v.number()),
-	transportista_id: v.pipe(v.string(), v.transform(Number), v.number()),
-	numero_guia: v.optional(v.string()),
+	transportista: v.pipe(v.string(), v.trim(), v.nonEmpty('Indicá el transportista')),
+	numero_guia: v.optional(v.pipe(v.string(), v.trim())),
 	cantidad_bultos: v.optional(v.number(), 1),
-	observaciones: v.optional(v.string())
+	observaciones: v.optional(v.pipe(v.string(), v.trim()))
 });
+
+async function transportistaPorNombre(nombre: string) {
+	const [existente] = await db
+		.select({ id: transportistas.id, activo: transportistas.activo })
+		.from(transportistas)
+		.where(sql`lower(${transportistas.nombre}) = lower(${nombre})`)
+		.limit(1);
+	if (existente) {
+		if (!existente.activo) {
+			await db
+				.update(transportistas)
+				.set({ activo: true })
+				.where(eq(transportistas.id, existente.id));
+		}
+		return existente.id;
+	}
+	const [nuevo] = await db
+		.insert(transportistas)
+		.values({ nombre })
+		.returning({ id: transportistas.id });
+	getTransportistas().refresh();
+	return nuevo.id;
+}
 
 const refrescarCachesEnvio = async (pedidoId?: number) => {
 	await Promise.all([
@@ -89,9 +112,10 @@ export const crearEnvio = form(EnvioSchema, async (data) => {
 	const user = await requirePermission('envios', 'edit');
 	await db.insert(envios).values({
 		pedido_id: data.pedido_id,
-		transportista_id: data.transportista_id,
+		transportista_id: await transportistaPorNombre(data.transportista),
 		numero_guia: data.numero_guia || null,
 		cantidad_bultos: data.cantidad_bultos,
+		observaciones: data.observaciones || null,
 		fecha_envio: new Date(),
 		estado: 'despachado'
 	});

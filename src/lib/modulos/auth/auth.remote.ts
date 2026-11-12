@@ -1,7 +1,7 @@
 import { command, form, getRequestEvent } from '$app/server';
 import { db } from '$lib/server/db';
 import { usuarios, sesiones, feedback } from '$lib/server/db/schema';
-import { eq } from 'drizzle-orm';
+import { eq, sql } from 'drizzle-orm';
 import bcrypt from 'bcryptjs';
 import { error } from '@sveltejs/kit';
 import { LoginSchema } from './auth.schema';
@@ -13,10 +13,20 @@ export const login = form(LoginSchema, async (data) => {
 	const [user] = await db
 		.select()
 		.from(usuarios)
-		.where(eq(usuarios.username, data.username))
+		.where(sql`lower(${usuarios.username}) = ${data.username}`)
 		.limit(1);
 
-	if (!user || !user.activo || !(await bcrypt.compare(data.password, user.password_hash))) {
+	const motivo = !user
+		? 'usuario inexistente'
+		: !user.activo
+			? 'usuario inactivo'
+			: !(await bcrypt.compare(data.password, user.password_hash))
+				? 'contraseña incorrecta'
+				: null;
+	if (motivo) {
+		console.warn(
+			`[login] Rechazado "${data.username}": ${motivo} (ip ${event.getClientAddress()})`
+		);
 		error(400, 'Credenciales inválidas');
 	}
 
@@ -36,6 +46,7 @@ export const login = form(LoginSchema, async (data) => {
 		maxAge: 60 * 60 * 24 * 30
 	});
 
+	console.info(`[login] Ingresó "${user.username}"`);
 	return { success: true, message: 'Inicio de sesión exitoso' };
 });
 

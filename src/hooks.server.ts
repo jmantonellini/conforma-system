@@ -132,7 +132,12 @@ function getRootCause(error: unknown): Record<string, unknown> {
 }
 
 export const handleError: HandleServerError = ({ error, event, status, message }) => {
-	if (status < 500) return { message };
+	if (status < 500) {
+		if (status !== 404) {
+			console.warn(`HTTP ${status} ${event.request.method} ${event.url.pathname}: ${message}`);
+		}
+		return { message };
+	}
 
 	const cause = getRootCause(error);
 	const causeMessage = typeof cause.message === 'string' ? cause.message : message;

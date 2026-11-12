@@ -34,27 +34,32 @@
 			{#each envios as envio (envio.id)}
 				{@const entregado = envio.estado === ESTADO_ENVIO.ENTREGADO}
 				<li class="list-row items-center">
-					<div>
-						<p class="font-medium">{envio.transportista}</p>
+					<div class="list-col-grow min-w-0">
+						<p class="truncate font-medium">{envio.transportista}</p>
 						<p class="text-xs text-base-content/60">
 							Guía {envio.numero_guia || '-'} · {envio.cantidad_bultos} bultos
 						</p>
+						{#if envio.observaciones}
+							<p class="text-xs text-base-content/60">{envio.observaciones}</p>
+						{/if}
 					</div>
-					<EstadoBadge
-						class="badge-sm capitalize"
-						estado={{ nombre: envio.estado, color: entregado ? 'success' : 'warning' }}
-					/>
-					{#if !entregado}
-						<Can modulo="pedidos" accion="edit">
-							<button
-								class="btn btn-xs"
-								onclick={async () => {
-									await marcarEntregado(String(envio.id));
-									toast.success('Envío marcado como entregado');
-								}}>Entregado</button
-							>
-						</Can>
-					{/if}
+					<div class="list-col-wrap flex items-center gap-2">
+						<EstadoBadge
+							class="badge-sm capitalize"
+							estado={{ nombre: envio.estado, color: entregado ? 'success' : 'warning' }}
+						/>
+						{#if !entregado}
+							<Can modulo="pedidos" accion="edit">
+								<button
+									class="btn btn-xs"
+									onclick={async () => {
+										await marcarEntregado(String(envio.id));
+										toast.success('Envío marcado como entregado');
+									}}>Entregado</button
+								>
+							</Can>
+						{/if}
+					</div>
 				</li>
 			{/each}
 		</ul>
@@ -79,13 +84,24 @@
 		id="envio-form"
 	>
 		<input type="hidden" name="pedido_id" value={pedidoId} />
-		<FormFieldWrapper label="Transportista" id="transportista_id" required>
-			<select class="select" {...form.fields.transportista_id.as('select')}>
-				<option value="">Seleccionar...</option>
+		<FormFieldWrapper
+			label="Transportista"
+			id="transportista"
+			required
+			ayuda="Elegí uno existente o escribí uno nuevo."
+		>
+			<input
+				id="transportista"
+				class="input"
+				list="transportistas-lista"
+				autocomplete="off"
+				{...form.fields.transportista.as('text')}
+			/>
+			<datalist id="transportistas-lista">
 				{#each transportistas as t (t.id)}
-					<option value={String(t.id)}>{t.nombre}</option>
+					<option value={t.nombre}></option>
 				{/each}
-			</select>
+			</datalist>
 		</FormFieldWrapper>
 		<div class="grid gap-4 sm:grid-cols-2">
 			<FormFieldWrapper label="N° de guía" id="numero_guia">
