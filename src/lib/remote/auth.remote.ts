@@ -3,10 +3,9 @@ import { db } from '$lib/server/db';
 import { usuarios, sesiones, feedback } from '$lib/server/db/schema';
 import { eq } from 'drizzle-orm';
 import bcrypt from 'bcryptjs';
-import { redirect, error } from '@sveltejs/kit';
+import { error } from '@sveltejs/kit';
 import { LoginSchema } from './auth.schema';
 import * as v from 'valibot';
-import { Paths } from '$lib/types';
 
 export const login = form(LoginSchema, async (data) => {
 	const event = getRequestEvent();
@@ -39,34 +38,6 @@ export const login = form(LoginSchema, async (data) => {
 	});
 
 	return { success: true, message: 'Inicio de sesión exitoso' };
-});
-
-export const register = form(LoginSchema, async (data) => {
-	// Verificar si el usuario ya existe
-	const [existingUser] = await db
-		.select()
-		.from(usuarios)
-		.where(eq(usuarios.username, data.username))
-		.limit(1);
-
-	if (existingUser) {
-		error(400, 'El usuario ya existe');
-	}
-
-	// Generar hash de la contraseña
-	const hash = await bcrypt.hash(data.password, 10);
-
-	try {
-		await db.insert(usuarios).values({
-			username: data.username,
-			password_hash: hash
-		});
-	} catch (error) {
-		console.error('Error al crear usuario:', error);
-		return { success: false, message: 'Error al crear usuario' };
-	}
-
-	redirect(303, Paths.LOGIN);
 });
 
 export const logout = command(async () => {

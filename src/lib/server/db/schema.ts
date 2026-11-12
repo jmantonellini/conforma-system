@@ -567,6 +567,8 @@ export const ordenes_fabricacion = pgTable(
 	]
 );
 
+export const CATEGORIAS_ADJUNTO = ['general', 'plano', 'portada'] as const;
+
 export const adjuntos = pgTable(
 	'adjuntos',
 	{
@@ -582,7 +584,8 @@ export const adjuntos = pgTable(
 		nombre_original: text('nombre_original').notNull(),
 		archivo_key: text('archivo_key').notNull(),
 		mime_type: text('mime_type'),
-		es_plano: boolean('es_plano').notNull().default(false),
+		/** `portada`: imagen principal del producto (una sola); `plano`: se imprime en la orden de fabricación. */
+		categoria: text('categoria', { enum: CATEGORIAS_ADJUNTO }).notNull().default('general'),
 		tamano_bytes: integer('tamano_bytes'),
 		created_at: timestamp('created_at').defaultNow()
 	},
@@ -591,6 +594,9 @@ export const adjuntos = pgTable(
 		index('idx_adjuntos_owner_pedido').on(table.pedido_id),
 		index('idx_adjuntos_owner_fabricacion').on(table.orden_fabricacion_id),
 		index('idx_adjuntos_owner_producto').on(table.producto_id),
+		uniqueIndex('idx_adjuntos_portada_producto')
+			.on(table.producto_id)
+			.where(sql`${table.categoria} = 'portada'`),
 		check(
 			'adjuntos_un_solo_propietario',
 			sql`num_nonnulls(cotizacion_id, pedido_id, orden_fabricacion_id, producto_id) = 1`

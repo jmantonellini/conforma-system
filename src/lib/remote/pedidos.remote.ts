@@ -41,7 +41,10 @@ export const getPedidos = query(
 		const user = await requirePermission('pedidos', 'view');
 		const resultado = await getPedidosListado(filtros);
 		if (await puedeVerImportes(user)) return resultado;
-		return { ...resultado, data: resultado.data.map((pedido) => ocultar(pedido, ['total'])) };
+		return {
+			...resultado,
+			data: resultado.data.map((pedido) => ocultar(pedido, ['total', 'pagado']))
+		};
 	}
 );
 

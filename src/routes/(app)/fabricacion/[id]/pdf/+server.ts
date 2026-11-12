@@ -14,11 +14,11 @@ export async function GET({ params }) {
 	try {
 		const orden = await getOrdenFabricacion(ordenId);
 		const condicionesPlanos = [
-			and(eq(adjuntos.orden_fabricacion_id, ordenId), eq(adjuntos.es_plano, true))!
+			and(eq(adjuntos.orden_fabricacion_id, ordenId), eq(adjuntos.categoria, 'plano'))!
 		];
 		if (orden.producto?.id) {
 			condicionesPlanos.push(
-				and(eq(adjuntos.producto_id, orden.producto.id), eq(adjuntos.es_plano, true))!
+				and(eq(adjuntos.producto_id, orden.producto.id), eq(adjuntos.categoria, 'plano'))!
 			);
 		}
 		const planos = await db

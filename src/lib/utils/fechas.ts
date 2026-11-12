@@ -36,3 +36,22 @@ export function formatearFechaHora(fecha: string | Date | null): string {
 		timeStyle: 'short'
 	});
 }
+
+/** Días calendario desde hoy hasta `fecha` (negativo si ya pasó). */
+export function diasHasta(fecha: string | Date): number {
+	const hoy = new Date();
+	hoy.setHours(0, 0, 0, 0);
+	const destino = new Date(fecha);
+	destino.setHours(0, 0, 0, 0);
+	return Math.round((destino.getTime() - hoy.getTime()) / 86_400_000);
+}
+
+/** "Hoy", "Mañana", "En 5 días", "Ayer", "Hace 3 días". */
+export function fechaRelativa(fecha: string | Date | null): string {
+	if (!fecha) return '';
+	const dias = diasHasta(fecha);
+	if (dias === 0) return 'Hoy';
+	if (dias === 1) return 'Mañana';
+	if (dias === -1) return 'Ayer';
+	return dias > 0 ? `En ${dias} días` : `Hace ${-dias} días`;
+}

@@ -83,7 +83,7 @@
 		formData.set('tipo', 'producto');
 		formData.set('entidad_id', String(productoId));
 		formData.set('accion', 'create');
-		formData.set('es_plano', String(esPlano));
+		formData.set('categoria', esPlano ? 'plano' : 'general');
 		for (const archivo of archivos) formData.append('archivos', archivo);
 
 		const response = await fetch(resolve('/adjuntos'), { method: 'POST', body: formData });

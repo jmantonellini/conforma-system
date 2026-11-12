@@ -37,6 +37,12 @@ services:
       postgres:
         condition: service_healthy
     networks: [erp_network]
+    # Logs: `docker compose logs -f app` (rotados para no llenar el disco).
+    logging:
+      driver: json-file
+      options:
+        max-size: '10m'
+        max-file: '5'
 
 volumes:
   postgres_data:

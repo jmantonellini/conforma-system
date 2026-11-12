@@ -47,6 +47,14 @@ export const obtenerDatosCuitARCA = query(
 	}
 );
 
+const resumenContacto = {
+	id: contactos.id,
+	razon_social: contactos.razon_social,
+	telefono: contactos.telefono,
+	email: contactos.email,
+	cuit: contactos.cuit
+};
+
 export const crearContactoRapido = command(
 	v.object({
 		razon_social: v.pipe(v.string(), v.trim(), v.nonEmpty('Ingresá nombre o razón social')),
@@ -62,7 +70,7 @@ export const crearContactoRapido = command(
 		if (cuit?.trim()) condiciones.push(eq(contactos.cuit, cuit.trim()));
 
 		const [existente] = await db
-			.select({ id: contactos.id, razon_social: contactos.razon_social })
+			.select(resumenContacto)
 			.from(contactos)
 			.where(and(eq(contactos.activo, true), or(...condiciones)))
 			.limit(1);
@@ -79,7 +87,7 @@ export const crearContactoRapido = command(
 				es_cliente: true,
 				activo: true
 			})
-			.returning({ id: contactos.id, razon_social: contactos.razon_social });
+			.returning(resumenContacto);
 		obtenerContactos({}).refresh();
 		obtenerContactosCliente({}).refresh();
 		return { ...nuevo, reutilizado: false };

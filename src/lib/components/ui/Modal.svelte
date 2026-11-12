@@ -12,7 +12,7 @@
 
 <script lang="ts">
 	import type { Snippet } from 'svelte';
-	import { scale } from 'svelte/transition';
+	import { fly, scale } from 'svelte/transition';
 	import Icono from './Icono.svelte';
 
 	let {
@@ -20,6 +20,7 @@
 		titulo,
 		descripcion,
 		ancho = 'md',
+		lateral = false,
 		accion,
 		acciones,
 		alCerrar,
@@ -29,6 +30,8 @@
 		titulo: string;
 		descripcion?: string;
 		ancho?: 'sm' | 'md' | 'lg';
+		/** Panel que entra desde la derecha a pantalla completa de alto (alta rápida sin salir del formulario). */
+		lateral?: boolean;
 		/** Botón principal del pie; junto a él se muestra siempre "Cancelar". */
 		accion?: AccionModal;
 		/** Pie a medida (reemplaza Cancelar + acción). */
@@ -38,6 +41,9 @@
 	} = $props();
 
 	const ANCHOS = { sm: 'sm:max-w-md', md: 'sm:max-w-lg', lg: 'sm:max-w-3xl' };
+
+	const animacion = (nodo: Element) =>
+		lateral ? fly(nodo, { x: 320, duration: 200 }) : scale(nodo, { start: 0.97, duration: 150 });
 
 	function mostrar(dialogo: HTMLDialogElement) {
 		if (!dialogo.open) dialogo.showModal();
@@ -51,10 +57,17 @@
 </script>
 
 {#if open}
-	<dialog {@attach mostrar} class="modal modal-bottom sm:modal-middle" onclose={cerrar}>
+	<dialog
+		{@attach mostrar}
+		class={['modal', lateral ? 'modal-end' : 'modal-bottom sm:modal-middle']}
+		onclose={cerrar}
+	>
 		<div
-			class={['modal-box flex max-h-[90vh] w-full flex-col p-0 shadow-xl', ANCHOS[ancho]]}
-			transition:scale={{ start: 0.97, duration: 150 }}
+			class={[
+				'modal-box flex w-full flex-col p-0 shadow-xl',
+				lateral ? 'h-full max-h-none rounded-none sm:max-w-md' : ['max-h-[90vh]', ANCHOS[ancho]]
+			]}
+			transition:animacion
 		>
 			<header class="flex items-start justify-between gap-4 px-5 pt-4 pb-1">
 				<div>
@@ -71,7 +84,7 @@
 				</button>
 			</header>
 
-			<div class="modal-cuerpo">{@render children()}</div>
+			<div class={['modal-cuerpo', lateral && 'flex-1']}>{@render children()}</div>
 
 			<footer class="flex justify-end gap-2 border-t border-base-300 bg-base-200/50 px-5 py-3">
 				{#if acciones}

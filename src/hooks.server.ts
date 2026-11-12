@@ -1,7 +1,23 @@
 import { db } from '$lib/server/db';
+import { reportarError } from '$lib/server/monitoreo/reportar-error';
+import { usuarioDeSesion } from '$lib/server/auth/permissions';
 import type { HandleServerError, HandleValidationError } from '@sveltejs/kit';
 
-import type { Handle } from '@sveltejs/kit';
+import type { Handle, ServerInit } from '@sveltejs/kit';
+
+/** Errores fuera de una request (promesas sin catch, timers): se registran y se reportan. */
+export const init: ServerInit = () => {
+	process.on('unhandledRejection', (motivo) => {
+		console.error('[unhandledRejection]', motivo);
+		reportarError(motivo, { ruta: 'unhandledRejection' });
+	});
+	process.on('uncaughtException', (error) => {
+		console.error('[uncaughtException]', error);
+		reportarError(error, { ruta: 'uncaughtException' });
+		// El proceso queda en estado incierto: se da tiempo al reporte y Docker lo reinicia.
+		setTimeout(() => process.exit(1), 3000).unref();
+	});
+};
 
 const PG_ERROR_CODES: Record<string, string> = {
 	'23503': 'foreign key',
@@ -43,8 +59,34 @@ function parsePgError(err: any): { message: string; field?: string } {
 	return { message: 'Error del servidor' };
 }
 
+/** Remote functions que se pueden llamar sin sesión. */
+const REMOTAS_PUBLICAS = new Set(['login']);
+
+/** `hash/nombre` de la remote function que invoca la request, si es una. */
+function remotaInvocada(url: URL) {
+	const prefijo = '/_app/remote/';
+	if (url.pathname.startsWith(prefijo)) return url.pathname.slice(prefijo.length);
+	return url.searchParams.get('/remote');
+}
+
 export const handle: Handle = async ({ event, resolve }) => {
 	event.locals.db = db;
+
+	// Las remote functions son endpoints HTTP: sin sesión válida no se ejecuta ninguna (salvo login).
+	const remota = remotaInvocada(new URL(event.request.url)); // event.url apunta a la página de origen
+	if (
+		remota &&
+		!REMOTAS_PUBLICAS.has(remota.split('/').pop() ?? '') &&
+		!(await usuarioDeSesion())
+	) {
+		return new Response(
+			JSON.stringify({ type: 'error', status: 401, error: { message: 'Sesión vencida' } }),
+			{
+				status: 401,
+				headers: { 'Content-Type': 'application/json' }
+			}
+		);
+	}
 
 	try {
 		return await resolve(event);
@@ -108,11 +150,20 @@ export const handleError: HandleServerError = ({ error, event, status, message }
 		typeof cause.stack === 'string' ? cause.stack : undefined
 	].filter((line): line is string => Boolean(line));
 	console.error(details.join('\n'));
+	reportarError(error, {
+		ruta: event.url.pathname,
+		metodo: event.request.method,
+		estado: status
+	});
 
 	return { message: 'Error interno del servidor' };
 };
 
-export const handleValidationError: HandleValidationError = ({ issues }) => ({
-	message: 'Validation error',
-	issues
-});
+/** Datos rechazados por un schema de remote function: se registran para poder diagnosticarlos en producción. */
+export const handleValidationError: HandleValidationError = ({ issues, event }) => {
+	console.warn(
+		`[validación] ${event.request.method} ${event.url.pathname}`,
+		JSON.stringify(issues.map((issue) => ({ path: issue.path, message: issue.message })))
+	);
+	return { message: 'Datos inválidos', issues };
+};

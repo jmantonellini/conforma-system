@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { json } from '@sveltejs/kit';
-import { eq } from 'drizzle-orm';
+import { and, eq } from 'drizzle-orm';
 import sharp from 'sharp';
 import { db } from '$lib/server/db';
 import {
@@ -83,7 +83,15 @@ export async function POST({ request }) {
 	const archivos = formData
 		.getAll('archivos')
 		.filter((archivo): archivo is File => archivo instanceof File && archivo.size > 0);
-	const esPlano = tipo === ENTIDAD_ADJUNTO.PRODUCTO && formData.get('es_plano') === 'true';
+	const categoriaPedida = formData.get('categoria');
+	const categoria =
+		tipo === ENTIDAD_ADJUNTO.PRODUCTO &&
+		(categoriaPedida === 'plano' || categoriaPedida === 'portada')
+			? categoriaPedida
+			: 'general';
+	if (categoria === 'portada' && archivos.length !== 1) {
+		return json({ error: 'La portada es una sola imagen' }, { status: 400 });
+	}
 	if (!archivos.length) return json({ error: 'No se enviaron archivos' }, { status: 400 });
 	if (archivos.reduce((total, archivo) => total + archivo.size, 0) > MAX_BATCH_SIZE) {
 		return json({ error: 'El total de archivos no puede superar 25 MB' }, { status: 413 });
@@ -100,10 +108,10 @@ export async function POST({ request }) {
 			resultados.push({ nombre: archivo.name, error: 'Archivo muy grande (máx. 25 MB)' });
 			continue;
 		}
-		if (esPlano && !archivo.type.startsWith('image/')) {
+		if (categoria !== 'general' && !archivo.type.startsWith('image/')) {
 			resultados.push({
 				nombre: archivo.name,
-				error: 'Los planos deben ser imágenes JPEG, PNG o WebP'
+				error: 'Planos y portada deben ser imágenes JPEG, PNG o WebP'
 			});
 			continue;
 		}
@@ -122,6 +130,16 @@ export async function POST({ request }) {
 				: original;
 			await guardarObjeto(archivoKey, contenido, mimeType);
 
+			// La portada es única: la nueva reemplaza a la anterior.
+			const anteriores =
+				categoria === 'portada'
+					? await db
+							.delete(adjuntos)
+							.where(and(eq(adjuntos.producto_id, entidadId), eq(adjuntos.categoria, 'portada')))
+							.returning({ archivo_key: adjuntos.archivo_key })
+					: [];
+			await Promise.all(anteriores.map((a) => eliminarObjeto(a.archivo_key).catch(() => {})));
+
 			const [adjunto] = await db
 				.insert(adjuntos)
 				.values({
@@ -129,7 +147,7 @@ export async function POST({ request }) {
 					nombre_original: archivo.name,
 					archivo_key: archivoKey,
 					mime_type: mimeType,
-					es_plano: esPlano,
+					categoria,
 					tamano_bytes: contenido.length
 				})
 				.returning({ id: adjuntos.id });

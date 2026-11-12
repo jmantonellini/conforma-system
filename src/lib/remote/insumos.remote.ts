@@ -1,7 +1,7 @@
 import { error } from '@sveltejs/kit';
 import * as v from 'valibot';
 import { command, form, query, requested } from '$app/server';
-import { and, asc, count, desc, eq, ilike, inArray, or, sql } from 'drizzle-orm';
+import { and, asc, count, desc, eq, ilike, inArray, or } from 'drizzle-orm';
 import { db } from '$lib/server/db';
 import {
 	categorias_insumos,
@@ -10,6 +10,8 @@ import {
 	insumos,
 	movimientos_insumos,
 	ordenes_fabricacion,
+	producto_insumos,
+	productos,
 	proveedores,
 	tipos_insumo,
 	unidades_medida
@@ -18,6 +20,7 @@ import { ImportarInsumosSchema, InsumoSchema, InsumoSchemaUpdate } from './insum
 import { requirePermission, tienePermiso } from '$lib/server/auth/permissions';
 import {
 	obtenerInsumosRequeridosOrdenTx,
+	saldoMovimientos,
 	registrarMovimientoInsumoTx,
 	verificarEmpleadoActivo
 } from '$lib/server/services/insumos-inventario.service';
@@ -290,7 +293,7 @@ export const getInsumos = query(
 			? await db
 					.select({
 						insumo_id: movimientos_insumos.insumo_id,
-						saldo: sql<number>`COALESCE(SUM(CASE WHEN ${movimientos_insumos.tipo} = 'ingreso' THEN ${movimientos_insumos.cantidad} ELSE -${movimientos_insumos.cantidad} END), 0)`
+						saldo: saldoMovimientos
 					})
 					.from(movimientos_insumos)
 					.where(inArray(movimientos_insumos.insumo_id, insumoIds))
@@ -315,9 +318,10 @@ export const getInsumos = query(
 export const getMovimientosInsumos = query(
 	v.object({
 		orden_id: v.optional(v.number()),
+		insumo_id: v.optional(v.number()),
 		limit: v.optional(v.pipe(v.number(), v.minValue(1), v.maxValue(100)), 50)
 	}),
-	async ({ orden_id, limit = 50 }) => {
+	async ({ orden_id, insumo_id, limit = 50 }) => {
 		await requirePermission('insumos', 'view');
 		return db
 			.select({
@@ -339,7 +343,12 @@ export const getMovimientosInsumos = query(
 			.from(movimientos_insumos)
 			.innerJoin(insumos, eq(movimientos_insumos.insumo_id, insumos.id))
 			.innerJoin(empleados, eq(movimientos_insumos.empleado_id, empleados.id))
-			.where(orden_id ? eq(movimientos_insumos.orden_fabricacion_id, orden_id) : undefined)
+			.where(
+				and(
+					orden_id ? eq(movimientos_insumos.orden_fabricacion_id, orden_id) : undefined,
+					insumo_id ? eq(movimientos_insumos.insumo_id, insumo_id) : undefined
+				)
+			)
 			.orderBy(desc(movimientos_insumos.created_at), desc(movimientos_insumos.id))
 			.limit(limit);
 	}
@@ -433,21 +442,13 @@ export const consumirRecetaOrden = command(
 );
 
 export const getInsumoById = query(v.number(), async (id) => {
+	await requirePermission('insumos', 'view');
 	const [resultado] = await db
 		.select({
 			insumo: insumos,
-			tipo: {
-				id: tipos_insumo.id,
-				nombre: tipos_insumo.nombre
-			},
-			categoria: {
-				id: categorias_insumos.id,
-				nombre: categorias_insumos.nombre
-			},
-			proveedor: {
-				id: proveedores.id,
-				nombre: contactos.razon_social
-			}
+			tipo: { id: tipos_insumo.id, nombre: tipos_insumo.nombre },
+			categoria: { id: categorias_insumos.id, nombre: categorias_insumos.nombre },
+			proveedor: { id: proveedores.id, nombre: contactos.razon_social }
 		})
 		.from(insumos)
 		.leftJoin(tipos_insumo, eq(insumos.tipo_id, tipos_insumo.id))
@@ -457,11 +458,32 @@ export const getInsumoById = query(v.number(), async (id) => {
 		.where(eq(insumos.id, id))
 		.limit(1);
 	if (!resultado) error(404, 'Insumo no encontrado');
+
+	const [[{ stock }], usos] = await Promise.all([
+		db
+			.select({ stock: saldoMovimientos })
+			.from(movimientos_insumos)
+			.where(eq(movimientos_insumos.insumo_id, id)),
+		db
+			.select({
+				id: productos.id,
+				codigo: productos.codigo,
+				nombre: productos.nombre,
+				cantidad: producto_insumos.cantidad
+			})
+			.from(producto_insumos)
+			.innerJoin(productos, eq(productos.id, producto_insumos.producto_id))
+			.where(eq(producto_insumos.insumo_id, id))
+			.orderBy(productos.nombre)
+	]);
+
 	return {
 		...resultado.insumo,
 		tipo: resultado.tipo,
 		categoria: resultado.categoria,
-		proveedor: resultado.proveedor
+		proveedor: resultado.proveedor,
+		stock,
+		usos
 	};
 });
 

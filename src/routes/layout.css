@@ -114,9 +114,6 @@ html {
 	.campo > label {
 		@apply text-sm font-medium text-base-content/80;
 	}
-	.campo :is(.input, .select, .textarea, .file-input) {
-		@apply w-full;
-	}
 
 	/* Cuerpo de Modal: bloques y formularios con el mismo espaciado. */
 	.modal-cuerpo {
@@ -124,6 +121,13 @@ html {
 	}
 	.modal-cuerpo > form {
 		@apply flex flex-col gap-4;
+	}
+}
+
+/* Controles a todo el ancho dentro de un campo (en `utilities` para ganarle al ancho fijo de daisyUI). */
+@layer utilities {
+	.campo :is(.input, .select, .textarea, .file-input) {
+		width: 100%;
 	}
 }
 

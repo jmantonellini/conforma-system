@@ -4,6 +4,7 @@ import { db } from '$lib/server/db';
 import { empleados, usuarios } from '$lib/server/db/schema';
 import { eq, isNull } from 'drizzle-orm';
 import { EmpleadoSchema } from './empleados.schema';
+import { requirePermission } from '$lib/server/auth/permissions';
 
 export const getEmpleados = query(async () => {
 	return await db
@@ -36,6 +37,7 @@ export const getEmpleadosSinUsuario = query(async () => {
 });
 
 export const crearEmpleado = form(EmpleadoSchema, async (data) => {
+	await requirePermission('configuracion', 'edit');
 	const [empleado] = await db
 		.insert(empleados)
 		.values({
@@ -59,6 +61,7 @@ export const actualizarEmpleado = form(
 		...EmpleadoSchema.entries
 	}),
 	async (data) => {
+		await requirePermission('configuracion', 'edit');
 		const { id, ...updateData } = data;
 
 		const [empleado] = await db
@@ -83,6 +86,7 @@ export const actualizarEmpleado = form(
 export const eliminarEmpleado = command(
 	v.pipe(v.string(), v.transform(Number), v.number()),
 	async (id) => {
+		await requirePermission('configuracion', 'edit');
 		await db.update(empleados).set({ activo: false }).where(eq(empleados.id, id));
 
 		getEmpleados().refresh();

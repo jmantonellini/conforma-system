@@ -1,375 +1,318 @@
 <script lang="ts">
-	import { mensajeError } from '$lib/utils/errores';
 	import { onDestroy } from 'svelte';
+	import { SvelteMap } from 'svelte/reactivity';
 	import { goto } from '$app/navigation';
 	import { resolve } from '$app/paths';
-	import { crearCotizacion } from '$lib/remote/cotizaciones.remote';
+	import { page } from '$app/state';
+	import ContactoRapido from '$lib/components/contactos/ContactoRapido.svelte';
 	import {
-		crearContactoRapido,
-		obtenerContactosCliente,
-		obtenerDatosCuitARCA
-	} from '$lib/remote/contactos.remote';
-	import SearchSelect from '$lib/components/ui/SearchSelect.svelte';
-	import FormFieldWrapper from '$lib/components/ui/FormFieldWrapper.svelte';
-	import { Can, FormActions, FormErrors, Modal, PageLayout } from '$lib/components/ui';
+		Can,
+		EncabezadoDetalle,
+		FormActions,
+		FormErrors,
+		FormFieldWrapper,
+		Icono,
+		PageLayout,
+		SearchSelect,
+		Seccion
+	} from '$lib/components/ui';
+	import type { Option } from '$lib/components/ui/SearchSelect.svelte';
+	import { obtenerContactosCliente } from '$lib/remote/contactos.remote';
+	import { crearCotizacion } from '$lib/remote/cotizaciones.remote';
+	import { getEmpleados } from '$lib/remote/empleados.remote';
 	import { toast } from '$lib/stores/toast.svelte';
-	import { Paths } from '$lib/types';
 	import { CANALES_COTIZACION } from '$lib/utils/canales-cotizacion';
-	import { esCuitValido, formatearCuit } from '$lib/utils/cuit';
+	import { formatearCuit } from '$lib/utils/cuit';
+	import { can } from '$lib/utils/permissions';
 
-	let form = crearCotizacion;
-	const limiteContactosSelect = 50;
-	let clientes = await obtenerContactosCliente({ limit: limiteContactosSelect });
+	type Contacto = {
+		id: number;
+		razon_social: string;
+		telefono: string | null;
+		email: string | null;
+		cuit: string | null;
+		es_distribuidor?: boolean | null;
+	};
 
-	const CANALES = Object.entries(CANALES_COTIZACION).map(([value, label]) => ({ value, label }));
-	let archivosSeleccionados = $state<File[]>([]);
-	let vistasPrevias = $state<{ archivo: File; url: string }[]>([]);
-	let subiendoArchivos = $state(false);
-	let modalContactoAbierto = $state(false);
-	let nuevoContacto = $state({ razon_social: '', telefono: '', email: '', cuit: '' });
-	let cuitFormateado = $state('');
-	let cuitConsultado = '';
-	let guardandoContacto = $state(false);
+	const form = crearCotizacion;
+	const LIMITE = 50;
+	const ARCHIVOS_ACEPTADOS =
+		'image/jpeg,image/png,image/webp,audio/ogg,audio/mpeg,audio/mp4,audio/x-m4a,audio/wav,audio/x-wav,video/mp4,application/pdf';
+	const puedeAsignar = can(page.data.user, page.data.permisos, 'cotizaciones', 'asignar');
 
-	function seleccionarArchivos(event: Event) {
-		for (const vista of vistasPrevias) if (vista.url) URL.revokeObjectURL(vista.url);
-		const input = event.currentTarget as HTMLInputElement;
-		archivosSeleccionados = Array.from(input.files ?? []);
-		vistasPrevias = archivosSeleccionados.map((archivo) => ({
-			archivo,
-			url: archivo.type.startsWith('image/') ? URL.createObjectURL(archivo) : ''
-		}));
-	}
+	const [iniciales, empleados] = await Promise.all([
+		obtenerContactosCliente({ limit: LIMITE }),
+		puedeAsignar ? getEmpleados() : Promise.resolve([])
+	]);
 
-	function quitarArchivo(archivo: File) {
-		const vista = vistasPrevias.find((item) => item.archivo === archivo);
-		if (vista?.url) URL.revokeObjectURL(vista.url);
-		archivosSeleccionados = archivosSeleccionados.filter((item) => item !== archivo);
-		vistasPrevias = vistasPrevias.filter((item) => item.archivo !== archivo);
-	}
+	// Contactos vistos en búsquedas o creados: permiten mostrar la ficha del seleccionado.
+	const conocidos = new SvelteMap<string, Contacto>();
+	const recordar = (lista: Contacto[]) => {
+		for (const contacto of lista) conocidos.set(String(contacto.id), contacto);
+		return lista;
+	};
+	const opcion = (c: Contacto): Option => ({
+		value: String(c.id),
+		label: c.razon_social,
+		detalle: [c.telefono, c.email, c.cuit && formatearCuit(c.cuit)].filter(Boolean).join(' · ')
+	});
 
-	async function subirArchivos(cotizacionId: number) {
-		if (!archivosSeleccionados.length) return;
-		const archivos = new FormData();
-		for (const archivo of archivosSeleccionados) archivos.append('archivos', archivo);
-		const response = await fetch(`/cotizaciones/${cotizacionId}/adjuntos`, {
-			method: 'POST',
-			body: archivos
+	let clientes = $state(recordar(iniciales.data).map(opcion));
+	let distribuidores = $state(iniciales.data.filter((c) => c.es_distribuidor).map(opcion));
+	const cliente = $derived(conocidos.get(form.fields.contacto_id.value() ?? ''));
+
+	let altaContacto: ContactoRapido;
+
+	if (!form.fields.canal.value()) form.fields.canal.set('whatsapp');
+
+	let ultimaBusqueda = { cliente: 0, distribuidor: 0 };
+	async function buscar(texto: string, tipo: 'cliente' | 'distribuidor') {
+		const solicitud = ++ultimaBusqueda[tipo];
+		const { data } = await obtenerContactosCliente({
+			search: texto || undefined,
+			soloDistribuidores: tipo === 'distribuidor' || undefined,
+			limit: LIMITE
 		});
-		const resultado: { error?: string; resultados?: { error?: string }[] } = await response.json();
-		if (!response.ok || resultado.resultados?.some((item: { error?: string }) => item.error)) {
+		if (solicitud !== ultimaBusqueda[tipo]) return;
+		const opciones = recordar(data).map(opcion);
+		if (tipo === 'cliente') clientes = opciones;
+		else distribuidores = opciones;
+	}
+
+	function contactoCreado(contacto: Contacto) {
+		recordar([contacto]);
+		const nueva = opcion(contacto);
+		clientes = [nueva, ...clientes.filter((item) => item.value !== nueva.value)];
+		form.fields.contacto_id.set(nueva.value);
+	}
+
+	// ---------- Adjuntos ----------
+	type Adjunto = { archivo: File; vista: string };
+	let adjuntos = $state<Adjunto[]>([]);
+	let subiendo = $state(false);
+
+	function agregar(archivos: FileList | null) {
+		for (const archivo of archivos ?? []) {
+			const vista = archivo.type.startsWith('image/') ? URL.createObjectURL(archivo) : '';
+			adjuntos.push({ archivo, vista });
+		}
+	}
+
+	function quitar(adjunto: Adjunto) {
+		if (adjunto.vista) URL.revokeObjectURL(adjunto.vista);
+		adjuntos = adjuntos.filter((item) => item !== adjunto);
+	}
+
+	onDestroy(() => adjuntos.forEach((a) => a.vista && URL.revokeObjectURL(a.vista)));
+
+	async function subirAdjuntos(cotizacionId: number) {
+		if (!adjuntos.length) return;
+		const cuerpo = new FormData();
+		for (const { archivo } of adjuntos) cuerpo.append('archivos', archivo);
+		const respuesta = await fetch(`/cotizaciones/${cotizacionId}/adjuntos`, {
+			method: 'POST',
+			body: cuerpo
+		});
+		const resultado: { error?: string; resultados?: { error?: string }[] } = await respuesta.json();
+		if (!respuesta.ok || resultado.resultados?.some((item) => item.error)) {
 			throw new Error(resultado.error || 'No se pudieron subir todos los archivos');
 		}
 	}
 
-	onDestroy(() => {
-		for (const vista of vistasPrevias) if (vista.url) URL.revokeObjectURL(vista.url);
-	});
-
-	function crearOpcionesClientes(contactos: typeof clientes.data) {
-		return contactos.map((c) => ({
-			value: c.id.toString(),
-			label: c.razon_social
-		}));
-	}
-
-	function crearOpcionesDistribuidores(contactos: typeof clientes.data) {
-		return contactos
-			.filter((c) => c.es_distribuidor)
-			.map((c) => ({
-				value: c.id.toString(),
-				label: `${c.razon_social} (distribuidor)`
-			}));
-	}
-
-	let clientesOptions = $state(crearOpcionesClientes(clientes.data));
-	let distribuidoresOptions = $state(crearOpcionesDistribuidores(clientes.data));
-	let solicitudBusquedaClientes = 0;
-	let solicitudBusquedaDistribuidores = 0;
-
-	function abrirAltaRapida(busqueda = '') {
-		const limpio = busqueda.trim();
-		const digitos = limpio.replace(/\D/g, '');
-		nuevoContacto = {
-			razon_social: limpio && !limpio.includes('@') && digitos !== limpio ? limpio : '',
-			telefono: digitos.length >= 6 && digitos === limpio.replace(/[^0-9]/g, '') ? limpio : '',
-			email: limpio.includes('@') ? limpio : '',
-			cuit: ''
-		};
-		cuitFormateado = '';
-		cuitConsultado = '';
-		modalContactoAbierto = true;
-	}
-
-	function actualizarCuit(event: Event) {
-		const input = event.currentTarget as HTMLInputElement;
-		const cuit = input.value.replace(/\D/g, '').slice(0, 11);
-		const digitosAntes = input.value
-			.slice(0, input.selectionStart ?? input.value.length)
-			.replace(/\D/g, '').length;
-		nuevoContacto.cuit = cuit;
-		cuitFormateado = formatearCuit(cuit);
-		input.value = cuitFormateado;
-		const cursor = digitosAntes + Number(digitosAntes > 2) + Number(digitosAntes > 10);
-		input.setSelectionRange(
-			Math.min(cursor, cuitFormateado.length),
-			Math.min(cursor, cuitFormateado.length)
-		);
-		if (cuit !== cuitConsultado) cuitConsultado = '';
-	}
-
-	async function consultarCuitContacto() {
-		const cuit = nuevoContacto.cuit.trim();
-		if (!cuit) return;
-		if (!esCuitValido(cuit)) {
-			toast.error('Ingresá un CUIT válido de 11 dígitos.');
-			return;
-		}
-		if (cuit === cuitConsultado) return;
-		cuitConsultado = cuit;
-		try {
-			const datos = await obtenerDatosCuitARCA(cuit);
-			if (nuevoContacto.cuit !== cuit) return;
-			if (!datos) {
-				toast.warning('ARCA no encontró datos para ese CUIT.');
-				return;
-			}
-			if (!nuevoContacto.razon_social.trim() && datos.razon_social)
-				nuevoContacto.razon_social = datos.razon_social;
-			if (!nuevoContacto.telefono.trim() && datos.telefono) nuevoContacto.telefono = datos.telefono;
-			if (!nuevoContacto.email.trim() && datos.email) nuevoContacto.email = datos.email;
-			toast.success('Datos de ARCA cargados en los campos vacíos.');
-		} catch {
-			if (nuevoContacto.cuit === cuit) cuitConsultado = '';
-			toast.error('No se pudo consultar ARCA. Revisá la conexión e intentá de nuevo.');
-		}
-	}
-
-	async function guardarContactoRapido() {
-		if (
-			!nuevoContacto.razon_social.trim() &&
-			!nuevoContacto.telefono.trim() &&
-			!nuevoContacto.email.trim()
-		) {
-			toast.error('Ingresá al menos un dato de contacto');
-			return;
-		}
-		guardandoContacto = true;
-		try {
-			const contacto = await crearContactoRapido({
-				razon_social:
-					nuevoContacto.razon_social.trim() ||
-					nuevoContacto.telefono.trim() ||
-					nuevoContacto.email.trim(),
-				telefono: nuevoContacto.telefono || undefined,
-				email: nuevoContacto.email || undefined,
-				cuit: nuevoContacto.cuit || undefined
-			});
-			const option = { value: String(contacto.id), label: contacto.razon_social };
-			clientesOptions = [option, ...clientesOptions.filter((item) => item.value !== option.value)];
-			form.fields.contacto_id.set(option.value);
-			modalContactoAbierto = false;
-			nuevoContacto = { razon_social: '', telefono: '', email: '', cuit: '' };
-			toast.success(
-				contacto.reutilizado ? 'Contacto existente seleccionado' : 'Contacto creado y seleccionado'
-			);
-		} catch (error) {
-			toast.error(mensajeError(error, 'No se pudo guardar el contacto'));
-		} finally {
-			guardandoContacto = false;
-		}
-	}
-
-	async function buscarContactos(search: string, tipo: 'cliente' | 'distribuidor') {
-		const soloDistribuidores = tipo === 'distribuidor';
-		const solicitud = soloDistribuidores
-			? ++solicitudBusquedaDistribuidores
-			: ++solicitudBusquedaClientes;
-		const resultado = await obtenerContactosCliente({
-			search: search || undefined,
-			soloDistribuidores: soloDistribuidores || undefined,
-			limit: limiteContactosSelect
-		});
-		const solicitudActual = soloDistribuidores
-			? solicitudBusquedaDistribuidores
-			: solicitudBusquedaClientes;
-		if (solicitud !== solicitudActual) return;
-		if (soloDistribuidores) {
-			distribuidoresOptions = crearOpcionesDistribuidores(resultado.data);
-		} else {
-			clientesOptions = crearOpcionesClientes(resultado.data);
-		}
-	}
+	const tamaño = (bytes: number) =>
+		bytes > 1_048_576 ? `${(bytes / 1_048_576).toFixed(1)} MB` : `${Math.ceil(bytes / 1024)} KB`;
 </script>
 
 <PageLayout>
+	<EncabezadoDetalle
+		titulo="Nueva cotización"
+		subtitulo="Registrá la consulta; los ítems y precios se cargan después en la cotización."
+		volver={{ href: '/cotizaciones', etiqueta: 'Cotizaciones' }}
+	/>
+
 	<Can modulo="cotizaciones" accion="create">
 		<form
-			{...form.enhance(async (form) => {
+			{...form.enhance(async (instancia) => {
 				try {
-					if (await form.submit()) {
-						const cotizacionId = form.result?.cotizacionId;
-						if (!cotizacionId) throw new Error('No se recibió el número de cotización');
+					if (!(await instancia.submit())) return toast.error('Revisá los datos de la consulta');
+					const id = instancia.result?.cotizacionId;
+					if (!id) throw new Error();
+					subiendo = true;
+					try {
+						await subirAdjuntos(id);
 						toast.success('Cotización creada');
-						subiendoArchivos = true;
-						try {
-							await subirArchivos(cotizacionId);
-						} catch {
-							toast.warning(
-								'La cotización se creó, pero no se pudieron subir todos los archivos. Podés reintentarlo desde el detalle.'
-							);
-						} finally {
-							subiendoArchivos = false;
-						}
-						goto(resolve(`/cotizaciones/${cotizacionId}`));
-					} else {
-						toast.error('Error de validación');
+					} catch {
+						toast.warning('Cotización creada, pero algunos archivos no se subieron.');
+					} finally {
+						subiendo = false;
 					}
-				} catch (error) {
-					console.log(error);
-					toast.error('Error del servidor');
+					goto(resolve(`/cotizaciones/${id}`));
+				} catch {
+					toast.error('No se pudo crear la cotización');
 				}
 			})}
-			class="space-y-4"
+			class="grid items-start gap-4 sm:gap-6 lg:grid-cols-3"
 		>
-			<!-- Contacto -->
-			<fieldset class="fieldset seccion">
-				<legend class="fieldset-legend text-lg">¿Quién consulta?</legend>
-
-				<div class="grid gap-4 md:grid-cols-4">
+			<!-- Lateral (primero en mobile): quién consulta y quién la atiende -->
+			<aside class="flex min-w-0 flex-col gap-4 sm:gap-6 lg:col-start-3 lg:row-start-1">
+				<Seccion titulo="Cliente">
 					<SearchSelect
 						id="contacto_id"
-						label="Razón Social"
-						options={clientesOptions}
-						placeholder="Buscar por nombre, teléfono, email o CUIT..."
+						label="Contacto"
+						options={clientes}
+						placeholder="Nombre, teléfono, email o CUIT..."
 						field={form.fields.contacto_id}
-						onSearch={(search) => buscarContactos(search, 'cliente')}
-						onCreate={abrirAltaRapida}
-						createLabel="Crear nuevo contacto"
+						onSearch={(texto) => buscar(texto, 'cliente')}
+						onCreate={(texto) => altaContacto.abrir(texto)}
+						createLabel="Crear contacto"
 					/>
-
+					{#if cliente}
+						<dl class="grid gap-1 rounded-box bg-base-200/60 p-3 text-sm">
+							{#each [['Teléfono', cliente.telefono], ['Email', cliente.email], ['CUIT', cliente.cuit && formatearCuit(cliente.cuit)]] as [etiqueta, valor] (etiqueta)}
+								<div class="flex justify-between gap-3">
+									<dt class="text-base-content/60">{etiqueta}</dt>
+									<dd class="truncate">{valor || '-'}</dd>
+								</div>
+							{/each}
+						</dl>
+					{/if}
 					<SearchSelect
 						id="contacto_distribuidor_id"
 						label="Distribuidor (opcional)"
-						options={distribuidoresOptions}
-						placeholder="Buscar distribuidor..."
+						options={distribuidores}
+						placeholder="Si llegó por un distribuidor..."
 						field={form.fields.contacto_distribuidor_id}
-						onSearch={(search) => buscarContactos(search, 'distribuidor')}
+						onSearch={(texto) => buscar(texto, 'distribuidor')}
 					/>
-				</div>
-			</fieldset>
+				</Seccion>
 
-			<!-- Consulta -->
-			<fieldset class="fieldset gap-2 rounded-box border border-base-300 bg-base-200 p-4">
-				<legend class="fieldset-legend text-lg">Consulta recibida</legend>
-
-				<div class="grid gap-4 md:grid-cols-4">
-					<FormFieldWrapper label="Canal" id="canal">
-						<select class="select select-sm" {...form.fields.canal.as('select')}>
-							{#each CANALES as c (c.value)}
-								<option value={c.value}>{c.label}</option>
-							{/each}
-						</select>
-					</FormFieldWrapper>
-				</div>
-
-				<FormFieldWrapper label="¿Qué piden?" id="descripcion" required>
-					<textarea
-						id="descripcion"
-						placeholder="Transcripción del audio o resumen del pedido del cliente. Ej: 'Necesita un caño de escape completo para un Gol 2015, pregunta si hacemos ese modelo y cuánto sale.'"
-						rows={4}
-						{...form.fields.descripcion.as('text')}
-						class="textarea w-full resize-none textarea-sm"
-					></textarea>
-				</FormFieldWrapper>
-
-				<FormFieldWrapper label="Observaciones (opcional)" id="observaciones">
-					<textarea
-						placeholder="Notas internas..."
-						rows={2}
-						{...form.fields.observaciones.as('text')}
-						class="textarea w-full resize-none textarea-sm"
-					></textarea>
-				</FormFieldWrapper>
-
-				<FormFieldWrapper label="Archivos adjuntos" id="archivos">
-					<input
-						type="file"
-						multiple
-						accept="image/jpeg,image/png,image/webp,audio/ogg,audio/mpeg,audio/mp4,audio/x-m4a,audio/wav,audio/x-wav,video/mp4,application/pdf"
-						class="file-input w-full file-input-sm"
-						disabled={subiendoArchivos}
-						onchange={seleccionarArchivos}
-					/>
-				</FormFieldWrapper>
-				{#if vistasPrevias.length}
-					<div class="flex flex-wrap gap-3">
-						{#each vistasPrevias as vista (vista.archivo)}
-							<div class="flex items-center gap-2 rounded border border-base-300 p-2">
-								{#if vista.url}
-									<img src={vista.url} alt={vista.archivo.name} class="h-16 w-16 object-cover" />
-								{/if}
-								<span class="max-w-48 truncate text-sm">{vista.archivo.name}</span>
-								<button
-									type="button"
-									class="btn btn-ghost btn-xs"
-									aria-label={`Quitar ${vista.archivo.name}`}
-									disabled={subiendoArchivos}
-									onclick={() => quitarArchivo(vista.archivo)}>✕</button
-								>
-							</div>
-						{/each}
-					</div>
+				{#if puedeAsignar}
+					<Seccion titulo="Responsable">
+						<FormFieldWrapper
+							id="asignada_a"
+							label="Asignar a"
+							ayuda="Si la asignás ahora, pasa directo a «Asignada» y se le avisa."
+						>
+							<select id="asignada_a" class="select" {...form.fields.asignada_a.as('select')}>
+								<option value="">Sin asignar</option>
+								{#each empleados as empleado (empleado.id)}
+									<option value={String(empleado.id)}>
+										{empleado.nombre}
+										{empleado.apellido ?? ''}
+									</option>
+								{/each}
+							</select>
+						</FormFieldWrapper>
+					</Seccion>
 				{/if}
-			</fieldset>
+			</aside>
 
-			<FormErrors {form} />
+			<!-- Principal: la consulta -->
+			<div class="flex min-w-0 flex-col gap-4 sm:gap-6 lg:col-span-2 lg:row-start-1">
+				<Seccion titulo="Consulta">
+					<div class="campo">
+						<span class="text-sm font-medium text-base-content/80">¿Por dónde llegó?</span>
+						<div class="flex flex-wrap gap-2">
+							{#each Object.entries(CANALES_COTIZACION) as [valor, nombre] (valor)}
+								<input
+									class="btn rounded-full btn-sm"
+									aria-label={nombre}
+									{...form.fields.canal.as('radio', valor)}
+								/>
+							{/each}
+						</div>
+					</div>
 
-			<FormActions
-				cancelHref={resolve(Paths.COTIZACIONES)}
-				pending={!!form.pending || subiendoArchivos}
-				pendingText="Creando cotización..."
-				submitText="Crear Cotización"
-			/>
+					<FormFieldWrapper label="¿Qué pide el cliente?" id="descripcion" required>
+						<textarea
+							id="descripcion"
+							class="textarea"
+							rows="5"
+							placeholder="Ej.: caño de escape completo para un Gol 2015; pregunta si lo hacemos y cuánto sale."
+							{...form.fields.descripcion.as('text')}
+						></textarea>
+					</FormFieldWrapper>
+
+					<FormFieldWrapper
+						label="Notas internas"
+						id="observaciones"
+						ayuda="Solo las ve el equipo; no salen en el PDF."
+					>
+						<textarea
+							id="observaciones"
+							class="textarea"
+							rows="2"
+							{...form.fields.observaciones.as('text')}
+						></textarea>
+					</FormFieldWrapper>
+				</Seccion>
+
+				<Seccion
+					titulo="Adjuntos"
+					descripcion="Fotos, audios de WhatsApp, planos o PDF del cliente."
+				>
+					<label
+						class="relative flex cursor-pointer flex-col items-center gap-1 rounded-box border border-dashed border-base-300 px-4 py-6 text-center text-sm transition-colors hover:border-primary hover:bg-base-200/50"
+					>
+						<Icono nombre="clip" class="size-6 text-base-content/50" />
+						<span
+							><span class="font-medium text-primary">Elegí archivos</span> o arrastralos acá</span
+						>
+						<span class="secundario">Imágenes, audio, video o PDF</span>
+						<input
+							type="file"
+							multiple
+							accept={ARCHIVOS_ACEPTADOS}
+							class="absolute inset-0 cursor-pointer opacity-0"
+							disabled={subiendo}
+							onchange={(e) => {
+								agregar(e.currentTarget.files);
+								e.currentTarget.value = '';
+							}}
+						/>
+					</label>
+					{#if adjuntos.length}
+						<ul class="grid gap-2 sm:grid-cols-2">
+							{#each adjuntos as adjunto (adjunto)}
+								<li class="flex items-center gap-3 rounded-box border border-base-300 p-2">
+									{#if adjunto.vista}
+										<img src={adjunto.vista} alt="" class="size-10 rounded object-cover" />
+									{:else}
+										<div
+											class="grid size-10 place-items-center rounded bg-base-200 text-[0.625rem] font-semibold text-base-content/60 uppercase"
+										>
+											{adjunto.archivo.name.split('.').pop()}
+										</div>
+									{/if}
+									<div class="min-w-0 flex-1">
+										<p class="truncate text-sm">{adjunto.archivo.name}</p>
+										<p class="secundario">{tamaño(adjunto.archivo.size)}</p>
+									</div>
+									<button
+										type="button"
+										class="btn btn-square btn-ghost btn-xs"
+										aria-label="Quitar {adjunto.archivo.name}"
+										disabled={subiendo}
+										onclick={() => quitar(adjunto)}
+									>
+										<Icono nombre="cerrar" />
+									</button>
+								</li>
+							{/each}
+						</ul>
+					{/if}
+				</Seccion>
+
+				<FormErrors {form} />
+				<FormActions
+					cancelHref={resolve('/cotizaciones')}
+					pending={!!form.pending || subiendo}
+					pendingText={subiendo ? 'Subiendo archivos...' : 'Creando...'}
+					submitText="Crear cotización"
+				/>
+			</div>
 		</form>
 	</Can>
 </PageLayout>
 
-<Modal
-	bind:open={modalContactoAbierto}
-	titulo="Nuevo contacto"
-	descripcion="Con el CUIT completamos los datos desde ARCA."
-	alCerrar={() => {
-		nuevoContacto = { razon_social: '', telefono: '', email: '', cuit: '' };
-		cuitFormateado = '';
-		cuitConsultado = '';
-	}}
-	accion={{
-		etiqueta: 'Crear y seleccionar',
-		pendiente: guardandoContacto,
-		onclick: guardarContactoRapido
-	}}
->
-	<div class="grid gap-4">
-		<FormFieldWrapper id="nuevo-cuit" label="CUIT (opcional)">
-			<input
-				class="input"
-				inputmode="numeric"
-				maxlength="13"
-				autocomplete="off"
-				value={cuitFormateado}
-				oninput={actualizarCuit}
-				onblur={consultarCuitContacto}
-			/>
-		</FormFieldWrapper>
-		<FormFieldWrapper id="nuevo-razon-social" label="Nombre o razón social" required>
-			<input class="input" bind:value={nuevoContacto.razon_social} />
-		</FormFieldWrapper>
-		<FormFieldWrapper id="nuevo-telefono" label="Teléfono">
-			<input class="input" type="tel" bind:value={nuevoContacto.telefono} />
-		</FormFieldWrapper>
-		<FormFieldWrapper id="nuevo-email" label="Email">
-			<input class="input" type="email" bind:value={nuevoContacto.email} />
-		</FormFieldWrapper>
-	</div>
-</Modal>
+<ContactoRapido bind:this={altaContacto} onCreado={contactoCreado} />

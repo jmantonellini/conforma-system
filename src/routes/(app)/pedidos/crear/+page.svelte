@@ -9,6 +9,7 @@
 	import { getProductosCatalogo } from '$lib/remote/productos.remote';
 	import { obtenerContactosCliente } from '$lib/remote/contactos.remote';
 	import LineasConceptosEditor from '$lib/components/cotizaciones/LineasConceptosEditor.svelte';
+	import ContactoRapido from '$lib/components/contactos/ContactoRapido.svelte';
 	import SearchSelect from '$lib/components/ui/SearchSelect.svelte';
 	import FormFieldWrapper from '$lib/components/ui/FormFieldWrapper.svelte';
 	import { FormActions, FormErrors, PageLayout } from '$lib/components/ui';
@@ -178,6 +179,15 @@
 	let solicitudDistribuidores = 0;
 	let solicitudProductos = 0;
 
+	let altaContacto: ContactoRapido;
+
+	function contactoCreado(contacto: { id: number; razon_social: string }) {
+		const opcion = { value: String(contacto.id), label: contacto.razon_social };
+		clientesOptions = [opcion, ...clientesOptions.filter((item) => item.value !== opcion.value)];
+		form.fields.contacto_id.set(opcion.value);
+		clienteSeleccionadoId = opcion.value;
+	}
+
 	async function buscarClientes(search: string) {
 		const solicitud = ++solicitudClientes;
 		const resultado = await obtenerContactosCliente({ search: search || undefined, limit: 100 });
@@ -317,6 +327,8 @@
 					field={form.fields.contacto_id}
 					onChange={(value) => (clienteSeleccionadoId = value)}
 					onSearch={buscarClientes}
+					onCreate={(texto) => altaContacto.abrir(texto)}
+					createLabel="Crear contacto"
 				/>
 
 				<!-- Distribuidor -->
@@ -494,3 +506,5 @@
 		/>
 	</form>
 </PageLayout>
+
+<ContactoRapido bind:this={altaContacto} onCreado={contactoCreado} />

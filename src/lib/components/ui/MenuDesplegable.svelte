@@ -17,6 +17,15 @@
 	} = $props();
 
 	const id = $props.id();
+
+	/** Elegir una opción (botón o enlace) cierra el menú. */
+	function cerrarAlElegir(menu: HTMLElement) {
+		const cerrar = (evento: Event) => {
+			if ((evento.target as Element).closest('button, a')) menu.hidePopover();
+		};
+		menu.addEventListener('click', cerrar);
+		return () => menu.removeEventListener('click', cerrar);
+	}
 </script>
 
 <button
@@ -37,6 +46,7 @@
 		alFinal && 'dropdown-end'
 	]}
 	style:position-anchor="--{id}"
+	{@attach cerrarAlElegir}
 >
 	{@render children()}
 </ul>

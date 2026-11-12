@@ -1,272 +1,253 @@
+<!--
+	Galería de archivos de una entidad con zona para subir (arrastrar o elegir).
+	En productos, cada archivo puede pasar a plano (se imprime en la OF) o a portada.
+-->
 <script lang="ts">
 	import { mensajeError } from '$lib/utils/errores';
 	import { page } from '$app/state';
 	import { invalidateAll } from '$app/navigation';
 	import { resolve } from '$app/paths';
-	import { Can, Seccion } from '$lib/components/ui';
+	import { Can, Icono, MenuDesplegable, Seccion } from '$lib/components/ui';
+	import { confirmarYEjecutar } from '$lib/stores/confirmacion.svelte';
 	import { toast } from '$lib/stores/toast.svelte';
-	import type { Adjunto, TipoEntidadAdjunto } from '$lib/types/adjuntos';
+	import type { Adjunto, CategoriaAdjunto, TipoEntidadAdjunto } from '$lib/types/adjuntos';
 	import { can } from '$lib/utils/permissions';
 
 	let {
 		tipo,
 		entidadId,
-		adjuntos
+		adjuntos,
+		titulo = 'Archivos adjuntos',
+		descripcion,
+		categoria = 'general',
+		vacio = 'Sin archivos adjuntos.'
 	}: {
 		tipo: TipoEntidadAdjunto;
 		entidadId: number;
 		adjuntos: Adjunto[];
+		titulo?: string;
+		descripcion?: string;
+		/** Categoría con la que se suben los archivos nuevos (solo productos). */
+		categoria?: CategoriaAdjunto;
+		vacio?: string;
 	} = $props();
-	let subiendo = $state(false);
-	let marcarComoPlano = $state(false);
-	let arrastrandoArchivos = $state(false);
-	let imagenSeleccionada = $state<{ src: string; nombre: string } | null>(null);
-	let dialogImagen: HTMLDialogElement | undefined;
 
-	const TIPOS_ARCHIVO =
-		'image/jpeg,image/png,image/webp,audio/ogg,audio/mpeg,audio/mp4,audio/x-m4a,audio/wav,audio/x-wav,video/mp4,application/pdf';
-	const modulosPorTipo: Record<
-		TipoEntidadAdjunto,
-		'cotizaciones' | 'pedidos' | 'productos' | 'fabricacion'
-	> = {
+	let subiendo = $state(false);
+	let arrastrando = $state(false);
+	let ampliada = $state<Adjunto | null>(null);
+
+	const SOLO_IMAGENES = 'image/jpeg,image/png,image/webp';
+	const TIPOS_ARCHIVO = `${SOLO_IMAGENES},audio/ogg,audio/mpeg,audio/mp4,audio/x-m4a,audio/wav,audio/x-wav,video/mp4,application/pdf`;
+	const MODULOS = {
 		cotizacion: 'cotizaciones',
 		pedido: 'pedidos',
 		producto: 'productos',
 		fabricacion: 'fabricacion'
-	};
-	const permisoModulo = (tipoAdjunto: TipoEntidadAdjunto) => modulosPorTipo[tipoAdjunto];
+	} as const;
 	const puedeSubir = $derived(
-		can(page.data.user, page.data.permisos, permisoModulo(tipo), 'edit') ||
-			(modulosPorTipo[tipo] === 'cotizaciones' &&
-				can(page.data.user, page.data.permisos, 'cotizaciones', 'create'))
+		can(page.data.user, page.data.permisos, MODULOS[tipo], 'edit') ||
+			(tipo === 'cotizacion' && can(page.data.user, page.data.permisos, 'cotizaciones', 'create'))
 	);
 
-	async function subirArchivos(files: FileList | null, input?: HTMLInputElement) {
-		if (!files?.length || subiendo) return;
+	const url = (id: number) => resolve(`/adjuntos/${id}`);
+	const esImagen = (adjunto: Adjunto) => adjunto.mime_type?.startsWith('image/') ?? false;
 
+	async function subir(archivos: FileList | null | undefined) {
+		if (!archivos?.length || subiendo) return;
 		subiendo = true;
-		const formData = new FormData();
-		formData.set('tipo', tipo);
-		formData.set('entidad_id', String(entidadId));
-		formData.set('accion', tipo === 'producto' ? 'edit' : 'create');
-		formData.set('es_plano', String(tipo === 'producto' && marcarComoPlano));
-		for (const archivo of Array.from(files)) formData.append('archivos', archivo);
+		const cuerpo = new FormData();
+		cuerpo.set('tipo', tipo);
+		cuerpo.set('entidad_id', String(entidadId));
+		cuerpo.set('accion', tipo === 'producto' ? 'edit' : 'create');
+		cuerpo.set('categoria', categoria);
+		for (const archivo of archivos) cuerpo.append('archivos', archivo);
 
 		try {
-			const response = await fetch(resolve('/adjuntos'), { method: 'POST', body: formData });
-			const resultado = (await response.json().catch(() => null)) as {
+			const respuesta = await fetch(resolve('/adjuntos'), { method: 'POST', body: cuerpo });
+			const resultado = (await respuesta.json().catch(() => null)) as {
 				error?: string;
 				resultados?: { nombre: string; error?: string }[];
 			} | null;
-			if (!response.ok) {
-				toast.error(resultado?.error || 'No se pudieron subir los archivos');
-				return;
-			}
-
+			if (!respuesta.ok)
+				return toast.error(resultado?.error || 'No se pudieron subir los archivos');
 			const fallidos = (resultado?.resultados ?? []).filter((archivo) => archivo.error);
-			if (fallidos.length) {
-				toast.error(fallidos.map((archivo) => `${archivo.nombre}: ${archivo.error}`).join(' · '));
-			} else {
-				toast.success('Archivos adjuntados');
-				if (tipo === 'producto') marcarComoPlano = false;
-			}
+			if (fallidos.length) toast.error(fallidos.map((f) => `${f.nombre}: ${f.error}`).join(' · '));
+			else toast.success(archivos.length === 1 ? 'Archivo subido' : 'Archivos subidos');
 			await invalidateAll();
 		} catch {
 			toast.error('No se pudo conectar para subir los archivos');
 		} finally {
-			if (input) input.value = '';
 			subiendo = false;
 		}
 	}
 
-	function seleccionarArchivos(event: Event) {
-		const input = event.currentTarget as HTMLInputElement;
-		void subirArchivos(input.files, input);
-	}
-
-	function manejarDragSobre(event: DragEvent) {
-		event.preventDefault();
-		if (!subiendo) arrastrandoArchivos = true;
-	}
-
-	function manejarSalidaDrag(event: DragEvent) {
-		const siguiente = event.relatedTarget;
-		if (
-			siguiente instanceof Node &&
-			event.currentTarget instanceof Node &&
-			event.currentTarget.contains(siguiente)
-		) {
-			return;
-		}
-		arrastrandoArchivos = false;
-	}
-
-	function soltarArchivos(event: DragEvent) {
-		event.preventDefault();
-		arrastrandoArchivos = false;
-		void subirArchivos(event.dataTransfer?.files ?? null);
-	}
-
-	function esImagen(mimeType: string | null) {
-		return mimeType?.startsWith('image/') ?? false;
-	}
-
-	function esAudio(mimeType: string | null) {
-		return mimeType?.startsWith('audio/') ?? false;
-	}
-
-	function esVideo(mimeType: string | null) {
-		return mimeType?.startsWith('video/') ?? false;
-	}
-
-	function urlAdjunto(id: number) {
-		return resolve(`/adjuntos/${id}`);
-	}
-
-	function ampliarImagen(adjunto: Adjunto) {
-		imagenSeleccionada = { src: urlAdjunto(adjunto.id), nombre: adjunto.nombre_original };
-		dialogImagen?.showModal();
-	}
-
-	function registrarDialogImagen(element: HTMLDialogElement) {
-		dialogImagen = element;
-		return () => (dialogImagen = undefined);
-	}
-
-	async function borrarAdjunto(id: number) {
+	async function recategorizar(adjunto: Adjunto, nueva: CategoriaAdjunto, exito: string) {
 		try {
-			const response = await fetch(urlAdjunto(id), { method: 'DELETE' });
-			if (!response.ok) throw new Error('No se pudo eliminar el archivo');
+			const respuesta = await fetch(url(adjunto.id), {
+				method: 'PATCH',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({ categoria: nueva })
+			});
+			if (!respuesta.ok) throw new Error((await respuesta.json().catch(() => null))?.message);
 			await invalidateAll();
+			toast.success(exito);
 		} catch (error) {
-			toast.error(mensajeError(error, 'No se pudo eliminar el archivo'));
+			toast.error(mensajeError(error, 'No se pudo actualizar el archivo'));
 		}
 	}
+
+	const eliminar = (adjunto: Adjunto) =>
+		confirmarYEjecutar({
+			mensaje: `¿Eliminar ${adjunto.nombre_original}?`,
+			ejecutar: async () => {
+				const respuesta = await fetch(url(adjunto.id), { method: 'DELETE' });
+				if (!respuesta.ok) throw new Error('No se pudo eliminar el archivo');
+				await invalidateAll();
+			},
+			exito: 'Archivo eliminado'
+		});
 </script>
 
-<Seccion titulo="Archivos adjuntos">
+<Seccion {titulo} {descripcion}>
 	{#if puedeSubir}
-		<div
+		<label
 			class={[
-				'rounded-box border border-dashed border-base-300 p-4 transition-colors',
-				arrastrandoArchivos && 'border-primary bg-primary/5'
+				'relative flex cursor-pointer flex-col items-center gap-1 rounded-box border border-dashed border-base-300 px-4 py-5 text-center text-sm transition-colors hover:border-primary hover:bg-base-200/50',
+				arrastrando && 'border-primary bg-primary/5'
 			]}
-			role="region"
-			aria-label="Zona para adjuntar archivos"
-			ondragenter={manejarDragSobre}
-			ondragover={manejarDragSobre}
-			ondragleave={manejarSalidaDrag}
-			ondrop={soltarArchivos}
+			ondragenter={() => (arrastrando = true)}
+			ondragleave={() => (arrastrando = false)}
+			ondrop={() => (arrastrando = false)}
 		>
-			<p class="mb-3 text-sm text-base-content/70">
-				{arrastrandoArchivos
-					? 'Soltá para adjuntar los archivos'
-					: 'Arrastrá archivos aquí o seleccioná desde tu dispositivo'}
-			</p>
+			<Icono nombre="clip" class="size-5 text-base-content/50" />
+			<span>
+				{#if subiendo}
+					Subiendo...
+				{:else}
+					<span class="font-medium text-primary">Elegí archivos</span> o arrastralos acá
+				{/if}
+			</span>
+			<span class="secundario">
+				{categoria === 'general' ? 'Imágenes, audio, video o PDF' : 'Imágenes JPEG, PNG o WebP'}
+			</span>
 			<input
 				type="file"
 				multiple
-				accept={tipo === 'producto' && marcarComoPlano
-					? 'image/jpeg,image/png,image/webp'
-					: TIPOS_ARCHIVO}
-				class="file-input w-full min-w-0"
+				accept={categoria === 'general' ? TIPOS_ARCHIVO : SOLO_IMAGENES}
+				class="absolute inset-0 cursor-pointer opacity-0"
 				disabled={subiendo}
-				onchange={seleccionarArchivos}
+				onchange={(e) => {
+					void subir(e.currentTarget.files).then(() => (e.currentTarget.value = ''));
+				}}
 			/>
-			{#if tipo === 'producto'}
-				<label class="label mt-2 w-fit cursor-pointer gap-3">
-					<input type="checkbox" class="toggle toggle-sm" bind:checked={marcarComoPlano} />
-					<span>Subir como plano de fabricación</span>
-				</label>
-			{/if}
-		</div>
+		</label>
 	{/if}
-	{#if subiendo}
-		<p class="mt-2 text-sm text-base-content/60">Subiendo archivos...</p>
-	{/if}
-	<div class="grid grid-cols-[repeat(auto-fill,minmax(10rem,1fr))] gap-3">
-		{#each adjuntos as adjunto (adjunto.id)}
-			<div class="card overflow-hidden">
-				{#if esImagen(adjunto.mime_type)}
-					<button
-						type="button"
-						class="block w-full cursor-zoom-in"
-						aria-label={`Ampliar imagen: ${adjunto.nombre_original}`}
-						onclick={() => ampliarImagen(adjunto)}
-					>
-						<img
-							src={urlAdjunto(adjunto.id)}
-							alt={adjunto.nombre_original}
-							class="h-32 w-full object-cover"
-						/>
-					</button>
-				{:else if esAudio(adjunto.mime_type)}
-					<div class="p-3">
-						<audio controls src={urlAdjunto(adjunto.id)} class="w-full"></audio>
+
+	{#if adjuntos.length}
+		<ul class="grid grid-cols-[repeat(auto-fill,minmax(9.5rem,1fr))] gap-3">
+			{#each adjuntos as adjunto (adjunto.id)}
+				{@const propio = !(tipo === 'fabricacion' && adjunto.propietario.tipo === 'producto')}
+				<li class="group overflow-hidden rounded-box border border-base-300 bg-base-100">
+					{#if esImagen(adjunto)}
+						<button
+							type="button"
+							class="block aspect-4/3 w-full cursor-zoom-in bg-base-200"
+							aria-label="Ampliar {adjunto.nombre_original}"
+							onclick={() => (ampliada = adjunto)}
+						>
+							<img src={url(adjunto.id)} alt="" class="size-full object-cover" loading="lazy" />
+						</button>
+					{:else if adjunto.mime_type?.startsWith('audio/')}
+						<div class="grid aspect-4/3 place-items-center bg-base-200 p-2">
+							<audio controls src={url(adjunto.id)} class="w-full"></audio>
+						</div>
+					{:else if adjunto.mime_type?.startsWith('video/')}
+						<video controls preload="none" class="aspect-4/3 w-full bg-neutral object-contain">
+							<source src={url(adjunto.id)} type={adjunto.mime_type} />
+						</video>
+					{:else}
+						<a
+							href={resolve(`/adjuntos/${adjunto.id}`)}
+							target="_blank"
+							rel="noreferrer"
+							class="grid aspect-4/3 place-items-center bg-base-200 text-xs font-semibold text-base-content/60 uppercase hover:text-primary"
+						>
+							{adjunto.nombre_original.split('.').pop()}
+						</a>
+					{/if}
+					<div class="flex items-center gap-1 py-1 pr-1 pl-2.5">
+						<a
+							class="min-w-0 flex-1 truncate text-xs hover:text-primary"
+							href={resolve(`/adjuntos/${adjunto.id}`)}
+							target="_blank"
+							rel="noreferrer"
+							title={adjunto.nombre_original}>{adjunto.nombre_original}</a
+						>
+						{#if adjunto.categoria === 'plano' && categoria !== 'plano'}
+							<span class="badge badge-soft badge-xs badge-info">Plano</span>
+						{/if}
+						{#if propio}
+							<Can modulo={MODULOS[adjunto.propietario.tipo]} accion="edit">
+								<MenuDesplegable
+									alFinal
+									class="btn btn-square btn-ghost btn-xs"
+									titulo="Acciones del archivo"
+								>
+									{#snippet etiqueta()}<Icono nombre="mas" />{/snippet}
+									{#if tipo === 'producto' && esImagen(adjunto)}
+										{#if adjunto.categoria !== 'portada'}
+											<li>
+												<button
+													onclick={() => recategorizar(adjunto, 'portada', 'Portada actualizada')}
+													>Usar como portada</button
+												>
+											</li>
+										{/if}
+										{#if adjunto.categoria !== 'plano'}
+											<li>
+												<button onclick={() => recategorizar(adjunto, 'plano', 'Movido a planos')}
+													>Mover a planos</button
+												>
+											</li>
+										{/if}
+										{#if adjunto.categoria !== 'general'}
+											<li>
+												<button
+													onclick={() => recategorizar(adjunto, 'general', 'Movido a archivos')}
+													>Mover a archivos</button
+												>
+											</li>
+										{/if}
+									{/if}
+									<li>
+										<button class="text-error" onclick={() => eliminar(adjunto)}>Eliminar</button>
+									</li>
+								</MenuDesplegable>
+							</Can>
+						{/if}
 					</div>
-				{:else if esVideo(adjunto.mime_type)}
-					<video
-						controls
-						preload="none"
-						class="h-40 w-full bg-neutral object-contain"
-						aria-label={adjunto.nombre_original}
-					>
-						<source src={urlAdjunto(adjunto.id)} type={adjunto.mime_type ?? 'video/mp4'} />
-					</video>
-				{:else}
-					<a
-						href={urlAdjunto(adjunto.id)}
-						target="_blank"
-						rel="noreferrer"
-						class="flex h-40 items-center justify-center bg-base-200 p-3 text-center text-sm"
-					>
-						{adjunto.nombre_original}
-					</a>
-				{/if}
-				<div class="flex items-center justify-between p-2 text-xs">
-					<span class="truncate underline" title={adjunto.nombre_original}>
-						{adjunto.nombre_original}
-					</span>
-					{#if adjunto.es_plano}
-						<span class="badge badge-sm badge-info">Plano</span>
-					{/if}
-					{#if !(tipo === 'fabricacion' && adjunto.propietario.tipo === 'producto')}
-						<Can modulo={permisoModulo(adjunto.propietario.tipo)} accion="edit">
-							<button
-								type="button"
-								class="btn btn-ghost text-error btn-xs"
-								aria-label={`Eliminar adjunto: ${adjunto.nombre_original}`}
-								onclick={() => borrarAdjunto(adjunto.id)}
-							>
-								✕
-							</button>
-						</Can>
-					{/if}
-				</div>
-			</div>
-		{:else}
-			<p class="col-span-full text-sm text-base-content/60">Sin archivos adjuntos.</p>
-		{/each}
-	</div>
+				</li>
+			{/each}
+		</ul>
+	{:else}
+		<p class="text-sm text-base-content/60">{vacio}</p>
+	{/if}
 </Seccion>
 
-<dialog class="modal" {@attach registrarDialogImagen} aria-labelledby="imagen-ampliada-titulo">
-	<div class="modal-box w-[min(96vw,80rem)] max-w-none p-3">
-		<div class="mb-3 flex items-center justify-between gap-3">
-			<h2 id="imagen-ampliada-titulo" class="truncate font-semibold">
-				{imagenSeleccionada?.nombre}
-			</h2>
-			<form method="dialog">
-				<button class="btn btn-ghost btn-sm" aria-label="Cerrar imagen ampliada">Cerrar</button>
-			</form>
-		</div>
-		{#if imagenSeleccionada}
+{#if ampliada}
+	<dialog
+		class="modal"
+		{@attach (d) => d.showModal()}
+		onclose={() => (ampliada = null)}
+		aria-label={ampliada.nombre_original}
+	>
+		<div class="modal-box w-[min(96vw,80rem)] max-w-none p-2">
 			<img
-				src={imagenSeleccionada.src}
-				alt={imagenSeleccionada.nombre}
-				class="mx-auto max-h-[80vh] max-w-full object-contain"
+				src={url(ampliada.id)}
+				alt={ampliada.nombre_original}
+				class="mx-auto max-h-[85vh] max-w-full object-contain"
 			/>
-		{/if}
-	</div>
-	<form method="dialog" class="modal-backdrop"><button>Cerrar</button></form>
-</dialog>
+		</div>
+		<form method="dialog" class="modal-backdrop bg-base-content/60"><button>Cerrar</button></form>
+	</dialog>
+{/if}

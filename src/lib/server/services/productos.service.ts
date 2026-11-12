@@ -243,7 +243,7 @@ export async function getProductoByIdService(id: number) {
 				id: adjuntos.id,
 				nombre_original: adjuntos.nombre_original,
 				mime_type: adjuntos.mime_type,
-				es_plano: adjuntos.es_plano,
+				categoria: adjuntos.categoria,
 				tamano_bytes: adjuntos.tamano_bytes,
 				created_at: adjuntos.created_at
 			})

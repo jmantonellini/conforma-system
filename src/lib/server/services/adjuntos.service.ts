@@ -38,7 +38,7 @@ export async function listarAdjuntosRelacionados(relacion: {
 		relacion.pedidoId && eq(adjuntos.pedido_id, relacion.pedidoId),
 		relacion.ordenIds?.length && inArray(adjuntos.orden_fabricacion_id, relacion.ordenIds),
 		relacion.productoPlanosId &&
-			and(eq(adjuntos.producto_id, relacion.productoPlanosId), eq(adjuntos.es_plano, true))
+			and(eq(adjuntos.producto_id, relacion.productoPlanosId), eq(adjuntos.categoria, 'plano'))
 	].filter((condicion): condicion is SQL => Boolean(condicion));
 	if (!condiciones.length) return [];
 
@@ -52,7 +52,7 @@ export async function listarAdjuntosRelacionados(relacion: {
 		id: fila.id,
 		nombre_original: fila.nombre_original,
 		mime_type: fila.mime_type,
-		es_plano: fila.es_plano,
+		categoria: fila.categoria,
 		tamano_bytes: fila.tamano_bytes,
 		created_at: fila.created_at,
 		propietario: propietarioAdjunto(fila)!

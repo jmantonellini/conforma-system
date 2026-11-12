@@ -9,6 +9,7 @@ import {
 	productos,
 	insumos,
 	ordenes_fabricacion,
+	unidades_fabricacion,
 	pagos,
 	envios,
 	transportistas,
@@ -17,7 +18,19 @@ import {
 	reservas_stock,
 	ubicaciones_stock
 } from '$lib/server/db/schema';
-import { aliasedTable, and, desc, eq, gte, ilike, isNull, lte, notInArray, sql } from 'drizzle-orm';
+import {
+	aliasedTable,
+	and,
+	desc,
+	eq,
+	gte,
+	ilike,
+	isNull,
+	lte,
+	notInArray,
+	or,
+	sql
+} from 'drizzle-orm';
 import { PEDIDO_SLUG } from '$lib/types';
 import {
 	estadoPorSlug,
@@ -244,8 +257,14 @@ export async function getPedidosListado({
 	page?: number;
 	limit?: number;
 }) {
+	const distribuidor = aliasedTable(contactos, 'distribuidor');
 	const where = and(
-		search ? ilike(pedidos.numero_pedido, `%${search}%`) : undefined,
+		search
+			? or(
+					ilike(pedidos.numero_pedido, `%${search}%`),
+					ilike(contactos.razon_social, `%${search}%`)
+				)
+			: undefined,
 		estadoId ? eq(pedidos.estado_id, estadoId) : undefined
 	);
 	const [data, [{ total }]] = await Promise.all([
@@ -254,15 +273,44 @@ export async function getPedidosListado({
 				id: pedidos.id,
 				numero_pedido: pedidos.numero_pedido,
 				cliente_nombre: contactos.razon_social,
+				distribuidor_nombre: distribuidor.razon_social,
 				fecha_pedido: pedidos.fecha_pedido,
 				fecha_entrega: pedidos.fecha_entrega_prometida,
+				fecha_entrega_real: pedidos.fecha_entrega_real,
 				total: pedidos.precio_total,
+				pagado: sql<number>`coalesce(${pedidos.anticipo}, 0) + coalesce((
+					select sum(${pagos.monto}) from ${pagos} where ${pagos.pedido_id} = ${pedidos.id}
+				), 0)`.mapWith(Number),
+				articulos: sql<number>`(
+					select coalesce(sum(${lineas_pedido.cantidad}), 0) from ${lineas_pedido}
+					where ${lineas_pedido.pedido_id} = ${pedidos.id}
+				)`.mapWith(Number),
+				primer_articulo: sql<string | null>`(
+					select coalesce(${productos.nombre}, ${lineas_pedido.descripcion_personalizada})
+					from ${lineas_pedido} left join ${productos} on ${productos.id} = ${lineas_pedido.producto_id}
+					where ${lineas_pedido.pedido_id} = ${pedidos.id}
+					order by ${lineas_pedido.orden_linea} nulls last, ${lineas_pedido.id} limit 1
+				)`,
+				unidades: sql<{ total: number; terminadas: number }>`(
+					select json_build_object(
+						'total', count(*)::int,
+						'terminadas', (count(*) filter (where ${estados.es_final}))::int
+					)
+					from ${unidades_fabricacion}
+					join ${ordenes_fabricacion} on ${ordenes_fabricacion.id} = ${unidades_fabricacion.orden_fabricacion_id}
+					join ${lineas_pedido} on ${lineas_pedido.id} = ${ordenes_fabricacion.linea_pedido_id}
+					join ${estados} on ${estados.id} = ${unidades_fabricacion.estado_id}
+					where ${lineas_pedido.pedido_id} = ${pedidos.id}
+				)`,
 				estado_id: pedidos.estado_id,
+				estado_slug: estados.slug,
 				estado_nombre: estados.nombre,
-				estado_color: estados.color
+				estado_color: estados.color,
+				estado_final: estados.es_final
 			})
 			.from(pedidos)
 			.leftJoin(contactos, eq(pedidos.contacto_id, contactos.id))
+			.leftJoin(distribuidor, eq(pedidos.contacto_distribuidor_id, distribuidor.id))
 			.leftJoin(estados, eq(pedidos.estado_id, estados.id))
 			.where(where)
 			.orderBy(desc(pedidos.id))
@@ -271,6 +319,7 @@ export async function getPedidosListado({
 		db
 			.select({ total: sql<number>`count(*)::int` })
 			.from(pedidos)
+			.leftJoin(contactos, eq(pedidos.contacto_id, contactos.id))
 			.where(where)
 	]);
 

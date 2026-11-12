@@ -15,10 +15,16 @@ import type { MaterialSnapshot } from '$lib/types/linea-comercial';
 
 export type TipoMovimientoInsumo = 'ingreso' | 'consumo';
 
+/** Saldo de stock (agregado sobre `movimientos_insumos`): entradas suman, salidas restan. */
+export const saldoMovimientos =
+	sql<number>`COALESCE(SUM(CASE WHEN ${movimientos_insumos.tipo} IN ('ingreso', 'ajuste_entrada') THEN ${movimientos_insumos.cantidad} ELSE -${movimientos_insumos.cantidad} END), 0)`.mapWith(
+		Number
+	);
+
 export async function obtenerSaldoInsumoTx(tx: Tx, insumoId: number) {
 	const [resultado] = await tx
 		.select({
-			saldo: sql<number>`COALESCE(SUM(CASE WHEN ${movimientos_insumos.tipo} = 'ingreso' THEN ${movimientos_insumos.cantidad} ELSE -${movimientos_insumos.cantidad} END), 0)`
+			saldo: saldoMovimientos
 		})
 		.from(movimientos_insumos)
 		.where(eq(movimientos_insumos.insumo_id, insumoId));

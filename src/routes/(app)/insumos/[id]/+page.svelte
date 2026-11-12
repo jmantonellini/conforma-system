@@ -1,5 +1,4 @@
 <script lang="ts">
-	import { onDestroy } from 'svelte';
 	import { goto, invalidateAll } from '$app/navigation';
 	import { resolve } from '$app/paths';
 	import {
@@ -8,193 +7,317 @@
 		FormActions,
 		FormErrors,
 		FormFieldWrapper,
-		PageLayout
+		PageLayout,
+		Seccion
 	} from '$lib/components/ui';
 	import {
 		actualizarInsumo,
+		eliminarInsumo,
 		getCategoriasInsumo,
 		obtenerProveedores,
 		getTiposInsumo,
 		getUnidadesInsumo
 	} from '$lib/remote/insumos.remote';
 	import { toast } from '$lib/stores/toast.svelte';
+	import { ETIQUETAS_MOVIMIENTO_INSUMO } from '$lib/types/stock';
+	import { formatearFecha } from '$lib/utils/fechas';
+	import { formatearMoneda } from '$lib/utils/precios';
 	import type { PageProps } from './$types';
 
 	let { data }: PageProps = $props();
-	let form = actualizarInsumo;
-	let imagen = $state<File | null>(null);
-	let imagenPreview = $state('');
+	const insumo = $derived(data.insumo);
+	const form = actualizarInsumo;
+	const urlImagen = $derived(resolve(`/insumos/${insumo.id}/imagen`));
+	let subiendo = $state(false);
 
-	function seleccionarImagen(event: Event) {
-		if (imagenPreview) URL.revokeObjectURL(imagenPreview);
-		imagen = (event.currentTarget as HTMLInputElement).files?.[0] ?? null;
-		imagenPreview = imagen ? URL.createObjectURL(imagen) : '';
-	}
+	const cantidad = (valor: number) =>
+		new Intl.NumberFormat('es-AR', { maximumFractionDigits: 3 }).format(valor);
 
-	async function subirImagen() {
-		if (!imagen) return;
-		const datos = new FormData();
-		datos.set('imagen', imagen);
-		const response = await fetch(resolve(`/insumos/${data.insumo.id}/imagen`), {
-			method: 'POST',
-			body: datos
-		});
-		if (!response.ok) {
-			const resultado: { error?: string } = await response.json();
-			throw new Error(resultado.error || 'No se pudo guardar la imagen');
+	// Costo final en vivo: base + flete.
+	const costoBase = $derived(Number(form.fields.costo_unitario.value()) || 0);
+	const flete = $derived(Number(form.fields.flete_porcentaje.value()) || 0);
+	const costoFinal = $derived(costoBase * (1 + flete / 100));
+
+	async function imagen(metodo: 'POST' | 'DELETE', archivo?: File) {
+		subiendo = true;
+		try {
+			const cuerpo = new FormData();
+			if (archivo) cuerpo.set('imagen', archivo);
+			const respuesta = await fetch(urlImagen, {
+				method: metodo,
+				body: archivo ? cuerpo : undefined
+			});
+			if (!respuesta.ok) {
+				const { error }: { error?: string } = await respuesta.json().catch(() => ({}));
+				throw new Error(error);
+			}
+			await invalidateAll();
+			toast.success(metodo === 'POST' ? 'Imagen actualizada' : 'Imagen quitada');
+		} catch (error) {
+			toast.error((error as Error).message || 'No se pudo actualizar la imagen');
+		} finally {
+			subiendo = false;
 		}
 	}
-
-	onDestroy(() => {
-		if (imagenPreview) URL.revokeObjectURL(imagenPreview);
-	});
 </script>
 
 <PageLayout>
 	<EncabezadoDetalle
-		titulo={data.insumo.nombre}
-		subtitulo={data.insumo.codigo}
+		titulo={insumo.nombre}
+		subtitulo={[insumo.codigo, insumo.tipo?.nombre].filter(Boolean).join(' · ')}
 		volver={{ href: '/insumos', etiqueta: 'Insumos' }}
+		eliminar={{
+			modulo: 'insumos',
+			mensaje: `¿Eliminar el insumo ${insumo.nombre}? Deja de aparecer en el catálogo.`,
+			onConfirmar: async () => {
+				await eliminarInsumo(insumo.id);
+				toast.success('Insumo eliminado');
+				goto(resolve('/insumos'));
+			}
+		}}
 	/>
-	<Can modulo="insumos" accion="edit">
-		<form
-			{...form.enhance(async (formInstance) => {
-				try {
-					if (await formInstance.submit()) {
-						try {
-							await subirImagen();
-							toast.success('Insumo actualizado');
-						} catch (error) {
-							toast.warning(
-								error instanceof Error
-									? `Insumo actualizado, pero no se pudo guardar la imagen: ${error.message}`
-									: 'Insumo actualizado, pero no se pudo guardar la imagen'
-							);
-						}
-						goto(resolve('/insumos'));
-					}
-				} catch {
-					toast.error('No se pudo actualizar el insumo');
-				}
-			})}
-			class="flex flex-col gap-4 seccion"
-		>
-			<div class="contents">
-				<input type="hidden" name="id" value={data.insumo.id} />
-				<div class="grid gap-4 md:grid-cols-5">
-					<FormFieldWrapper label="Código" id="codigo" required
-						><input
-							class="input"
-							{...form.fields.codigo.as('text', data.insumo.codigo)}
-						/></FormFieldWrapper
-					>
-					<FormFieldWrapper label="Descripción" id="nombre" required
-						><input
-							class="input"
-							{...form.fields.nombre.as('text', data.insumo.nombre)}
-						/></FormFieldWrapper
-					>
-					<FormFieldWrapper label="Imagen" id="imagen">
-						<input
-							class="file-input w-full"
-							type="file"
-							accept="image/jpeg,image/png,image/webp"
-							onchange={seleccionarImagen}
-						/>
-						{#if imagenPreview || data.insumo.imagen_key}
-							<img
-								class="mt-2 h-24 w-24 rounded border border-base-300 object-cover"
-								src={imagenPreview || resolve(`/insumos/${data.insumo.id}/imagen`)}
-								alt="Imagen de {data.insumo.nombre}"
-							/>
-						{/if}
-						{#if data.insumo.imagen_key}
-							<button
-								class="btn self-start btn-ghost btn-xs"
-								type="button"
-								onclick={async () => {
-									const response = await fetch(resolve(`/insumos/${data.insumo.id}/imagen`), {
-										method: 'DELETE'
-									});
-									if (!response.ok) {
-										toast.error('No se pudo quitar la imagen');
-										return;
-									}
-									await invalidateAll();
-									toast.success('Imagen quitada');
-								}}
-							>
-								Quitar imagen
-							</button>
-						{/if}
-					</FormFieldWrapper>
-					<FormFieldWrapper label="Tipo" id="tipo"
-						><select
-							class="select"
-							{...form.fields.tipo.as('select', data.insumo.tipo?.id?.toString() ?? '')}
-							>{#each await getTiposInsumo() as tipo (tipo.id)}<option value={String(tipo.id)}
-									>{tipo.nombre}</option
-								>{/each}</select
-						></FormFieldWrapper
-					>
-					<FormFieldWrapper label="Categoría" id="categoria_id"
-						><select
-							class="select"
-							{...form.fields.categoria_id.as('select', data.insumo.categoria_id?.toString() ?? '')}
-							><option value="">Sin categoría</option
-							>{#each await getCategoriasInsumo() as categoria (categoria.id)}<option
-									value={String(categoria.id)}>{categoria.nombre}</option
-								>{/each}</select
-						></FormFieldWrapper
-					>
-					<FormFieldWrapper label="Unidad" id="unidad" required
-						><select
-							class="select"
-							{...form.fields.unidad.as('select', data.insumo.unidad_id?.toString() ?? '')}
-							>{#each await getUnidadesInsumo() as unidad (unidad.id)}<option
-									value={String(unidad.id)}>{unidad.nombre}</option
-								>
-							{/each}</select
-						></FormFieldWrapper
-					>
-					<FormFieldWrapper label="Proveedor" id="proveedor_id">
-						<select
-							class="select"
-							{...form.fields.proveedor_id.as('select', data.insumo.proveedor_id?.toString() ?? '')}
-						>
-							<option value="">Sin proveedor</option>
-							{#each await obtenerProveedores() as proveedor (proveedor.id)}
-								<option value={String(proveedor.id)}>{proveedor.nombre}</option>
-							{/each}
-						</select>
-					</FormFieldWrapper>
-					<FormFieldWrapper label="Costo unitario" id="costo_unitario" required
-						><input
-							class="input"
-							min="0"
-							step="0.01"
-							{...form.fields.costo_unitario.as(
-								'number',
-								data.insumo.costo_unitario / (1 + (data.insumo.flete_porcentaje ?? 0) / 100)
-							)}
-						/></FormFieldWrapper
-					>
-					<FormFieldWrapper label="Flete (%)" id="flete_porcentaje">
-						<input
-							class="input"
-							min="0"
-							step="0.01"
-							{...form.fields.flete_porcentaje.as('number', data.insumo.flete_porcentaje ?? 0)}
-						/>
-					</FormFieldWrapper>
+
+	<!-- Resumen: imagen + indicadores -->
+	<section class="flex flex-col gap-5 seccion sm:flex-row sm:items-center">
+		<div class="group relative size-28 shrink-0 overflow-hidden rounded-box border border-base-300">
+			{#if insumo.imagen_key}
+				<img src={urlImagen} alt="Imagen de {insumo.nombre}" class="size-full object-cover" />
+			{:else}
+				<div class="grid size-full place-items-center bg-base-200 text-xs text-base-content/50">
+					Sin imagen
 				</div>
+			{/if}
+			<Can modulo="insumos" accion="edit">
+				<div
+					class="absolute inset-0 flex flex-col items-center justify-center gap-1 bg-base-content/60 opacity-0 transition-opacity group-focus-within:opacity-100 group-hover:opacity-100"
+				>
+					<label class="btn btn-xs">
+						{subiendo ? 'Subiendo...' : insumo.imagen_key ? 'Cambiar' : 'Subir'}
+						<input
+							type="file"
+							class="hidden"
+							accept="image/jpeg,image/png,image/webp"
+							disabled={subiendo}
+							onchange={(e) => {
+								const archivo = e.currentTarget.files?.[0];
+								if (archivo) void imagen('POST', archivo);
+							}}
+						/>
+					</label>
+					{#if insumo.imagen_key}
+						<button
+							type="button"
+							class="btn btn-ghost text-base-100 btn-xs"
+							onclick={() => imagen('DELETE')}>Quitar</button
+						>
+					{/if}
+				</div>
+			</Can>
+		</div>
+
+		<dl class="datos flex-1">
+			<div>
+				<dt>Stock</dt>
+				<dd class={['text-xl font-semibold tabular-nums', insumo.stock <= 0 && 'text-error']}>
+					{cantidad(insumo.stock)} <span class="text-sm font-normal">{insumo.unidad}</span>
+				</dd>
+			</div>
+			<div>
+				<dt>Costo final</dt>
+				<dd class="text-xl font-semibold tabular-nums">
+					{formatearMoneda(insumo.costo_unitario)}
+					<span class="secundario block font-normal">por {insumo.unidad}</span>
+				</dd>
+			</div>
+			<div>
+				<dt>Proveedor</dt>
+				<dd>{insumo.proveedor?.nombre ?? 'Sin proveedor'}</dd>
+			</div>
+			<div>
+				<dt>Categoría</dt>
+				<dd>{insumo.categoria?.nombre ?? 'Sin categoría'}</dd>
+			</div>
+		</dl>
+	</section>
+
+	<div class="grid items-start gap-4 sm:gap-6 lg:grid-cols-3">
+		<Can modulo="insumos" accion="edit">
+			<form
+				{...form.enhance(async (instancia) => {
+					try {
+						if (await instancia.submit()) {
+							await invalidateAll();
+							toast.success('Insumo actualizado');
+						} else toast.error('Revisá los datos del insumo');
+					} catch {
+						toast.error('No se pudo actualizar el insumo');
+					}
+				})}
+				class="flex min-w-0 flex-col gap-4 sm:gap-6 lg:col-span-2"
+			>
+				<input type="hidden" name="id" value={insumo.id} />
+				<Seccion titulo="Datos del insumo">
+					<div class="grid gap-4 sm:grid-cols-2">
+						<FormFieldWrapper label="Descripción" id="nombre" required class="sm:col-span-2">
+							<input id="nombre" class="input" {...form.fields.nombre.as('text', insumo.nombre)} />
+						</FormFieldWrapper>
+						<FormFieldWrapper label="Código" id="codigo" required>
+							<input
+								id="codigo"
+								class="input font-mono"
+								{...form.fields.codigo.as('text', insumo.codigo)}
+							/>
+						</FormFieldWrapper>
+						<FormFieldWrapper label="Unidad" id="unidad" required>
+							<select
+								id="unidad"
+								class="select"
+								{...form.fields.unidad.as('select', insumo.unidad_id?.toString() ?? '')}
+							>
+								{#each await getUnidadesInsumo() as unidad (unidad.id)}
+									<option value={String(unidad.id)}>{unidad.nombre}</option>
+								{/each}
+							</select>
+						</FormFieldWrapper>
+						<FormFieldWrapper label="Tipo" id="tipo">
+							<select
+								id="tipo"
+								class="select"
+								{...form.fields.tipo.as('select', insumo.tipo?.id?.toString() ?? '')}
+							>
+								{#each await getTiposInsumo() as tipo (tipo.id)}
+									<option value={String(tipo.id)}>{tipo.nombre}</option>
+								{/each}
+							</select>
+						</FormFieldWrapper>
+						<FormFieldWrapper label="Categoría" id="categoria_id">
+							<select
+								id="categoria_id"
+								class="select"
+								{...form.fields.categoria_id.as('select', insumo.categoria_id?.toString() ?? '')}
+							>
+								<option value="">Sin categoría</option>
+								{#each await getCategoriasInsumo() as categoria (categoria.id)}
+									<option value={String(categoria.id)}>{categoria.nombre}</option>
+								{/each}
+							</select>
+						</FormFieldWrapper>
+						<FormFieldWrapper label="Proveedor" id="proveedor_id" class="sm:col-span-2">
+							<select
+								id="proveedor_id"
+								class="select"
+								{...form.fields.proveedor_id.as('select', insumo.proveedor_id?.toString() ?? '')}
+							>
+								<option value="">Sin proveedor</option>
+								{#each await obtenerProveedores() as proveedor (proveedor.id)}
+									<option value={String(proveedor.id)}>{proveedor.nombre}</option>
+								{/each}
+							</select>
+						</FormFieldWrapper>
+					</div>
+				</Seccion>
+
+				<Seccion
+					titulo="Costo"
+					descripcion="El costo final (con flete) es el que usan las recetas."
+				>
+					<div class="grid gap-4 sm:grid-cols-3">
+						<FormFieldWrapper label="Costo base" id="costo_unitario" required>
+							<input
+								id="costo_unitario"
+								class="input"
+								min="0"
+								step="0.01"
+								{...form.fields.costo_unitario.as(
+									'number',
+									insumo.costo_unitario / (1 + (insumo.flete_porcentaje ?? 0) / 100)
+								)}
+							/>
+						</FormFieldWrapper>
+						<FormFieldWrapper label="Flete (%)" id="flete_porcentaje">
+							<input
+								id="flete_porcentaje"
+								class="input"
+								min="0"
+								step="0.01"
+								{...form.fields.flete_porcentaje.as('number', insumo.flete_porcentaje ?? 0)}
+							/>
+						</FormFieldWrapper>
+						<div class="campo">
+							<span class="text-sm font-medium text-base-content/80">Costo final</span>
+							<p class="flex h-10 items-center text-lg font-semibold tabular-nums">
+								{formatearMoneda(costoFinal)}
+							</p>
+						</div>
+					</div>
+				</Seccion>
+
 				<FormErrors {form} />
 				<FormActions
 					cancelHref={resolve('/insumos')}
 					pending={!!form.pending}
 					submitText="Guardar cambios"
 				/>
-			</div>
-		</form>
-	</Can>
+			</form>
+		</Can>
+
+		<aside class="flex min-w-0 flex-col gap-4 sm:gap-6">
+			<Seccion titulo="Usado en" descripcion="Productos cuya receta lleva este insumo.">
+				{#if insumo.usos.length}
+					<ul class="-my-1 divide-y divide-base-300">
+						{#each insumo.usos as uso (uso.id)}
+							<li class="flex items-center justify-between gap-3 py-2 text-sm">
+								<a class="min-w-0 hover:text-primary" href={resolve(`/productos/${uso.id}`)}>
+									<p class="truncate font-medium">{uso.nombre}</p>
+									<p class="secundario font-mono">{uso.codigo}</p>
+								</a>
+								<span class="shrink-0 text-base-content/70 tabular-nums">
+									{cantidad(uso.cantidad)}
+									{insumo.unidad}
+								</span>
+							</li>
+						{/each}
+					</ul>
+				{:else}
+					<p class="text-sm text-base-content/60">No se usa en ninguna receta.</p>
+				{/if}
+			</Seccion>
+
+			<Seccion titulo="Últimos movimientos">
+				{#snippet acciones()}
+					<a class="link text-sm link-primary" href={resolve('/insumos/movimientos')}>Ver todos</a>
+				{/snippet}
+				{#if data.movimientos.length}
+					<ul class="-my-1 divide-y divide-base-300">
+						{#each data.movimientos as movimiento (movimiento.id)}
+							{@const entra = ['ingreso', 'ajuste_entrada'].includes(movimiento.tipo)}
+							<li class="flex items-start justify-between gap-3 py-2 text-sm">
+								<div class="min-w-0">
+									<p class="font-medium">
+										{ETIQUETAS_MOVIMIENTO_INSUMO[movimiento.tipo] ?? movimiento.tipo}
+										{#if movimiento.orden_fabricacion_id}
+											<span class="secundario">· OF-{movimiento.orden_fabricacion_id}</span>
+										{/if}
+									</p>
+									<p class="secundario truncate">
+										{formatearFecha(movimiento.created_at)} · {movimiento.empleado.nombre} · {movimiento.motivo}
+									</p>
+								</div>
+								<span
+									class={[
+										'shrink-0 font-medium tabular-nums',
+										entra ? 'text-success' : 'text-base-content/70'
+									]}
+								>
+									{entra ? '+' : '−'}{cantidad(movimiento.cantidad)}
+								</span>
+							</li>
+						{/each}
+					</ul>
+				{:else}
+					<p class="text-sm text-base-content/60">Sin movimientos registrados.</p>
+				{/if}
+			</Seccion>
+		</aside>
+	</div>
 </PageLayout>
