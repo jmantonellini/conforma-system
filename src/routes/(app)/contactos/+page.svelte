@@ -10,13 +10,15 @@
 		filtrar,
 		parametro
 	} from '$lib/ui';
-	import { eliminarContacto } from '$lib/modulos/contactos/contactos.remote';
+	import { eliminarContacto, obtenerContactos } from '$lib/modulos/contactos/contactos.remote';
 	import { confirmarYEjecutar } from '$lib/ui/confirmar.svelte';
 	import { can } from '$lib/utils/permissions';
 	import type { PageProps } from './$types';
 
 	let { data }: PageProps = $props();
 	const busqueda = $derived(parametro('search'));
+	const listado = $derived(obtenerContactos(data.filtros));
+	const resultado = $derived(await listado);
 	const rol = $derived(parametro('rol'));
 
 	const ROLES = [
@@ -28,10 +30,10 @@
 
 <Listado
 	titulo="Contactos"
-	datos={data.contactos}
-	total={data.total}
-	pagina={data.currentPage}
-	paginas={data.totalPages}
+	datos={resultado.data}
+	total={resultado.total}
+	pagina={resultado.currentPage}
+	paginas={resultado.totalPages}
 	buscar="Razón social, CUIT, nombre, email..."
 	vacio="No hay contactos para estos filtros"
 >
@@ -72,7 +74,7 @@
 		<ColumnaOrden clave="email" porDefecto="razon_social">Contacto</ColumnaOrden>
 		<th></th>
 	{/snippet}
-	{#snippet row(contacto: (typeof data.contactos)[number])}
+	{#snippet row(contacto: (typeof resultado.data)[number])}
 		<td class="max-w-72">
 			<a class="enlace-fila block truncate" href={resolve(`/contactos/${contacto.id}`)}>
 				<Highlight text={contacto.razon_social} query={busqueda} />
@@ -109,7 +111,7 @@
 					onclick={() =>
 						confirmarYEjecutar({
 							mensaje: `¿Eliminar el contacto "${contacto.razon_social}"?`,
-							ejecutar: () => eliminarContacto(contacto.id),
+							ejecutar: () => eliminarContacto(contacto.id).updates(listado),
 							exito: 'Contacto eliminado'
 						})}
 				>

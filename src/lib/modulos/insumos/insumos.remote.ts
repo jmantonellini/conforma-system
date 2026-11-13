@@ -1,7 +1,7 @@
 import { error } from '@sveltejs/kit';
 import * as v from 'valibot';
 import { command, form, query, requested } from '$app/server';
-import { and, asc, count, desc, eq, ilike, inArray, or } from 'drizzle-orm';
+import { and, asc, count, desc, eq, ilike, inArray, or, type SQL } from 'drizzle-orm';
 import { db } from '$lib/server/db';
 import {
 	categorias_insumos,
@@ -255,7 +255,7 @@ export const getInsumos = query(
 		page = 1,
 		limit = 20
 	}) => {
-		const conditions = [];
+		const conditions: (SQL | undefined)[] = [eq(insumos.activo, true)];
 		if (search) {
 			const term = `%${search}%`;
 			conditions.push(or(ilike(insumos.codigo, term), ilike(insumos.nombre, term)));
@@ -267,7 +267,7 @@ export const getInsumos = query(
 			);
 		}
 		if (categoriaId) conditions.push(eq(insumos.categoria_id, categoriaId));
-		const where = conditions.length ? and(...conditions) : undefined;
+		const where = and(...conditions);
 		const columnaOrden = {
 			nombre: insumos.nombre,
 			codigo: insumos.codigo,
@@ -621,7 +621,7 @@ export const actualizarInsumo = form(InsumoSchemaUpdate, async ({ id, ...data })
 export const eliminarInsumo = command(v.number(), async (id) => {
 	await requirePermission('insumos', 'delete');
 	await db.update(insumos).set({ activo: false, updated_at: new Date() }).where(eq(insumos.id, id));
-	getInsumos({}).refresh();
+	await requested(getInsumos, 5).refreshAll();
 	return { success: true };
 });
 

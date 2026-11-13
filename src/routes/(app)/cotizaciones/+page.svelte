@@ -12,6 +12,10 @@
 		parametro
 	} from '$lib/ui';
 	import { eliminarCotizacion } from '$lib/modulos/cotizaciones/cotizaciones.remote';
+	import {
+		getCotizaciones,
+		getEstadosCotizacion
+	} from '$lib/modulos/cotizaciones/cotizaciones-consultas.remote';
 	import { confirmarYEjecutar } from '$lib/ui/confirmar.svelte';
 	import { CANALES_COTIZACION } from '$lib/modulos/cotizaciones/canales';
 	import { formatearFecha } from '$lib/utils/fechas';
@@ -20,16 +24,19 @@
 	import type { PageProps } from './$types';
 
 	let { data }: PageProps = $props();
+	const listado = $derived(getCotizaciones(data.filtros));
+	const resultado = $derived(await listado);
+	const estados = $derived(await getEstadosCotizacion());
 	const veImportes = can(page.data.user, page.data.permisos, 'importes', 'view');
 	const busqueda = $derived(parametro('search'));
 </script>
 
 <Listado
 	titulo="Cotizaciones"
-	datos={data.cotizaciones}
-	total={data.total}
-	pagina={data.currentPage}
-	paginas={data.totalPages}
+	datos={resultado.data}
+	total={resultado.total}
+	pagina={resultado.currentPage}
+	paginas={resultado.totalPages}
 	buscar="Número, cliente, teléfono, CUIT..."
 	vacio="No hay cotizaciones para estos filtros"
 >
@@ -47,7 +54,7 @@
 			onchange={(e) => filtrar({ estado: e.currentTarget.value })}
 		>
 			<option value="">Todos los estados</option>
-			{#each data.estados as estado (estado.id)}
+			{#each estados as estado (estado.id)}
 				<option value={String(estado.id)}>{estado.nombre}</option>
 			{/each}
 		</select>
@@ -61,7 +68,7 @@
 		<th>Asignada a</th>
 		<th></th>
 	{/snippet}
-	{#snippet row(cot: (typeof data.cotizaciones)[number])}
+	{#snippet row(cot: (typeof resultado.data)[number])}
 		<td>
 			<a class="enlace-fila font-mono" href={resolve(`/cotizaciones/${cot.id}`)}>
 				<Highlight text={cot.numero_cotizacion} query={busqueda} />
@@ -98,7 +105,7 @@
 					onclick={() =>
 						confirmarYEjecutar({
 							mensaje: `¿Eliminar la cotización ${cot.numero_cotizacion}?`,
-							ejecutar: () => eliminarCotizacion(cot.id),
+							ejecutar: () => eliminarCotizacion(cot.id).updates(listado),
 							exito: 'Cotización eliminada'
 						})}
 				>

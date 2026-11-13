@@ -11,7 +11,11 @@
 		filtrar,
 		parametro
 	} from '$lib/ui';
-	import { eliminarInsumo } from '$lib/modulos/insumos/insumos.remote';
+	import {
+		eliminarInsumo,
+		getCategoriasInsumo,
+		getInsumos
+	} from '$lib/modulos/insumos/insumos.remote';
 	import { confirmarYEjecutar } from '$lib/ui/confirmar.svelte';
 	import { can } from '$lib/utils/permissions';
 	import { formatearMoneda } from '$lib/utils/precios';
@@ -19,6 +23,9 @@
 
 	let { data }: PageProps = $props();
 	const busqueda = $derived(parametro('search'));
+	const listado = $derived(getInsumos(data.filtros));
+	const resultado = $derived(await listado);
+	const categorias = $derived(await getCategoriasInsumo());
 	const TIPOS = [
 		['material', 'Material'],
 		['mano_obra', 'Mano de obra'],
@@ -30,10 +37,10 @@
 
 <Listado
 	titulo="Insumos"
-	datos={data.insumos.data}
-	total={data.insumos.total}
-	pagina={data.currentPage}
-	paginas={data.insumos.totalPages}
+	datos={resultado.data}
+	total={resultado.total}
+	pagina={resultado.currentPage}
+	paginas={resultado.totalPages}
 	buscar="Código, descripción, categoría..."
 	vacio="No hay insumos para estos filtros"
 >
@@ -62,7 +69,7 @@
 			onchange={(e) => filtrar({ categoria: e.currentTarget.value })}
 		>
 			<option value="">Todas las categorías</option>
-			{#each data.categorias as categoria (categoria.id)}
+			{#each categorias as categoria (categoria.id)}
 				<option value={String(categoria.id)}>{categoria.nombre}</option>
 			{/each}
 		</select>
@@ -83,7 +90,7 @@
 		<ColumnaOrden clave="costo_unitario" porDefecto="nombre" class="text-right">Costo</ColumnaOrden>
 		<th></th>
 	{/snippet}
-	{#snippet row(insumo: (typeof data.insumos.data)[number])}
+	{#snippet row(insumo: (typeof resultado.data)[number])}
 		<td class="max-w-80">
 			<div class="flex items-center gap-3">
 				{#if insumo.imagen_key}
@@ -129,7 +136,7 @@
 					onclick={() =>
 						confirmarYEjecutar({
 							mensaje: `¿Eliminar el insumo ${insumo.nombre}?`,
-							ejecutar: () => eliminarInsumo(insumo.id),
+							ejecutar: () => eliminarInsumo(insumo.id).updates(listado),
 							exito: 'Insumo eliminado'
 						})}
 				>
@@ -138,7 +145,7 @@
 			</Can>
 		</td>
 	{/snippet}
-	{#snippet tarjeta(insumo: (typeof data.insumos.data)[number])}
+	{#snippet tarjeta(insumo: (typeof resultado.data)[number])}
 		<TarjetaImagen
 			href={`/insumos/${insumo.id}`}
 			imagen={insumo.imagen_key ? resolve(`/insumos/${insumo.id}/imagen`) : null}

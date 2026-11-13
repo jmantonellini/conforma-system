@@ -30,6 +30,7 @@
 		convertirCotizacionAPedido,
 		eliminarCotizacion
 	} from '$lib/modulos/cotizaciones/cotizaciones.remote';
+	import { getCotizaciones } from '$lib/modulos/cotizaciones/cotizaciones-consultas.remote';
 	import { CANALES_COTIZACION } from '$lib/modulos/cotizaciones/canales';
 	import { formatearFecha } from '$lib/utils/fechas';
 	import { can } from '$lib/utils/permissions';
@@ -89,7 +90,7 @@
 	}
 
 	async function eliminar() {
-		await eliminarCotizacion(cotizacion.id);
+		await eliminarCotizacion(cotizacion.id).updates(getCotizaciones);
 		toast.success('Cotización eliminada');
 		goto(resolve('/cotizaciones'));
 	}

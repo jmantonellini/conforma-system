@@ -4,7 +4,8 @@
 		getCategoriasComp,
 		actualizarProducto,
 		eliminarProducto,
-		getAtributosCategoria
+		getAtributosCategoria,
+		getProductos
 	} from '$lib/modulos/productos/productos.remote';
 	import AtributosCampos from '$lib/modulos/productos/componentes/AtributosCampos.svelte';
 	import {
@@ -179,7 +180,7 @@
 			modulo: 'productos',
 			mensaje: `¿Eliminar el producto ${data.producto.nombre}?`,
 			onConfirmar: async () => {
-				await eliminarProducto(data.producto.id);
+				await eliminarProducto(data.producto.id).updates(getProductos);
 				toast.success('Producto eliminado');
 				goto(resolve('/productos'));
 			}

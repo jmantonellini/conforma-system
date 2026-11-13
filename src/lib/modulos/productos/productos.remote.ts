@@ -141,7 +141,7 @@ export const actualizarProducto = form(ProductoSchemaUpdate, async (data) => {
 
 export const eliminarProducto = command(v.number(), async (id) => {
 	const result = await eliminarProductoServicio(id);
-	await requested(getProductos, 1).refreshAll();
+	await requested(getProductos, 5).refreshAll();
 	return result;
 });
 

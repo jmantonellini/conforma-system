@@ -277,6 +277,6 @@ export const eliminarOrdenFabricacion = command(idDesdeTexto, async (id) => {
 	const claves = await clavesAdjuntos('fabricacion', id);
 	await db.delete(ordenes_fabricacion).where(eq(ordenes_fabricacion.id, id));
 	await eliminarArchivos(claves);
-	requested(getOrdenesFabricacion, 1).refreshAll();
+	await requested(getOrdenesFabricacion, 5).refreshAll();
 	return { success: true };
 });

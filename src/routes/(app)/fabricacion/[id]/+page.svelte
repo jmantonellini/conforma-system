@@ -10,6 +10,7 @@
 	import {
 		getEstadosFabricacion,
 		getOrdenFabricacion,
+		getOrdenesFabricacion,
 		getHistorialUnidades
 	} from '$lib/modulos/fabricacion/fabricacion-consultas.remote';
 	import {
@@ -97,7 +98,7 @@
 	}
 
 	async function eliminar() {
-		await eliminarOrdenFabricacion(String(orden.id));
+		await eliminarOrdenFabricacion(String(orden.id)).updates(getOrdenesFabricacion);
 		toast.success('Orden eliminada');
 		goto(resolve('/fabricacion'));
 	}

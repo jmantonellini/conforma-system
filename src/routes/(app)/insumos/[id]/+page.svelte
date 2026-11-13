@@ -14,6 +14,7 @@
 		actualizarInsumo,
 		eliminarInsumo,
 		getCategoriasInsumo,
+		getInsumos,
 		obtenerProveedores,
 		getTiposInsumo,
 		getUnidadesInsumo
@@ -69,7 +70,7 @@
 			modulo: 'insumos',
 			mensaje: `¿Eliminar el insumo ${insumo.nombre}? Deja de aparecer en el catálogo.`,
 			onConfirmar: async () => {
-				await eliminarInsumo(insumo.id);
+				await eliminarInsumo(insumo.id).updates(getInsumos);
 				toast.success('Insumo eliminado');
 				goto(resolve('/insumos'));
 			}

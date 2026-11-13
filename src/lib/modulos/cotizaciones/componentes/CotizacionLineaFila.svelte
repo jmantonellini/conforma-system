@@ -103,7 +103,7 @@
 			/>
 			{#if linea.receta_pendiente}
 				<span
-					class="badge mt-1 badge-soft badge-xs badge-warning"
+					class="mt-1 badge badge-soft badge-xs badge-warning"
 					title="Este producto todavía no tiene receta. La composición que cargues abajo se guarda como su receta."
 				>
 					Receta pendiente

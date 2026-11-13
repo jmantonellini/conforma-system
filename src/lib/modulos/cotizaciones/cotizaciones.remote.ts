@@ -1,6 +1,6 @@
 import * as v from 'valibot';
 import { error } from '@sveltejs/kit';
-import { command, form } from '$app/server';
+import { command, form, requested } from '$app/server';
 import { db } from '$lib/server/db';
 import {
 	cotizaciones,
@@ -499,7 +499,7 @@ export const eliminarCotizacion = command(v.number(), async (cotizacionId) => {
 	if (!eliminada) error(409, 'No se puede eliminar: no existe o ya tiene un pedido generado');
 
 	await eliminarArchivos(claves);
-	refrescarCotizacion();
+	await requested(getCotizaciones, 5).refreshAll();
 	return { success: true };
 });
 

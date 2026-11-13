@@ -1,5 +1,5 @@
 import * as v from 'valibot';
-import { command, form, query } from '$app/server';
+import { command, form, query, requested } from '$app/server';
 import { and, asc, count, desc, eq, exists, ilike, or, sql, type SQL } from 'drizzle-orm';
 import { db } from '$lib/server/db';
 import { contactos, proveedores, pedidos, estados } from '$lib/server/db/schema';
@@ -520,14 +520,7 @@ export const eliminarContacto = command(v.number(), async (id) => {
 		.update(contactos)
 		.set({ activo: false, updated_at: new Date() })
 		.where(eq(contactos.id, id));
-	obtenerContactos({
-		search: '',
-		rol: 'todos',
-		page: 1,
-		sort: 'razon_social',
-		direction: 'asc'
-	}).refresh();
-	obtenerContactosCliente({}).refresh();
+	await requested(obtenerContactos, 5).refreshAll();
 	return { success: true };
 });
 

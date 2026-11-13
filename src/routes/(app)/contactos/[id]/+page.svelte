@@ -11,7 +11,11 @@
 		Seccion
 	} from '$lib/ui';
 	import FormDireccion from '$lib/ui/FormDireccion.svelte';
-	import { actualizarContacto, eliminarContacto } from '$lib/modulos/contactos/contactos.remote';
+	import {
+		actualizarContacto,
+		eliminarContacto,
+		obtenerContactos
+	} from '$lib/modulos/contactos/contactos.remote';
 	import { toast } from '$lib/ui/toast.svelte';
 	import { formatearMoneda } from '$lib/utils/precios';
 	import type { PageProps } from './$types';
@@ -29,7 +33,7 @@
 	let editando = $state(false);
 
 	async function eliminar() {
-		await eliminarContacto(contacto.id);
+		await eliminarContacto(contacto.id).updates(obtenerContactos);
 		toast.success('Contacto eliminado');
 		goto(resolve('/contactos'));
 	}

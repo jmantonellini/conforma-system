@@ -10,22 +10,29 @@
 		filtrar,
 		parametro
 	} from '$lib/ui';
-	import { eliminarProducto } from '$lib/modulos/productos/productos.remote';
+	import {
+		eliminarProducto,
+		getCategorias,
+		getProductos
+	} from '$lib/modulos/productos/productos.remote';
 	import { confirmarYEjecutar } from '$lib/ui/confirmar.svelte';
 	import { formatearMoneda } from '$lib/utils/precios';
 	import type { PageProps } from './$types';
 
 	let { data }: PageProps = $props();
 	const busqueda = $derived(parametro('search'));
-	const categorias = $derived(new Map(data.categorias.map((c) => [c.id, c.nombre])));
+	const listado = $derived(getProductos(data.filtros));
+	const resultado = $derived(await listado);
+	const listaCategorias = $derived(await getCategorias());
+	const categorias = $derived(new Map(listaCategorias.map((c) => [c.id, c.nombre])));
 </script>
 
 <Listado
 	titulo="Productos"
-	datos={data.productos}
-	total={data.total}
-	pagina={data.currentPage}
-	paginas={data.totalPages}
+	datos={resultado.data}
+	total={resultado.total}
+	pagina={resultado.currentPage}
+	paginas={resultado.totalPages}
 	buscar="Código, nombre, marca, modelo..."
 	vacio="No hay productos para estos filtros"
 >
@@ -43,7 +50,7 @@
 			onchange={(e) => filtrar({ categoria: e.currentTarget.value })}
 		>
 			<option value="">Todas las categorías</option>
-			{#each data.categorias as categoria (categoria.id)}
+			{#each listaCategorias as categoria (categoria.id)}
 				<option value={String(categoria.id)}>{categoria.nombre}</option>
 			{/each}
 		</select>
@@ -56,7 +63,7 @@
 		<th class="text-right">Precio lista</th>
 		<th></th>
 	{/snippet}
-	{#snippet row(producto: (typeof data.productos)[number])}
+	{#snippet row(producto: (typeof resultado.data)[number])}
 		<td>
 			<a class="enlace-fila" href={resolve(`/productos/${producto.id}`)}>
 				<Highlight text={producto.nombre} query={busqueda} />
@@ -83,7 +90,7 @@
 					onclick={() =>
 						confirmarYEjecutar({
 							mensaje: `¿Eliminar el producto ${producto.nombre}?`,
-							ejecutar: () => eliminarProducto(producto.id),
+							ejecutar: () => eliminarProducto(producto.id).updates(listado),
 							exito: 'Producto eliminado'
 						})}
 				>
@@ -92,7 +99,7 @@
 			</Can>
 		</td>
 	{/snippet}
-	{#snippet tarjeta(producto: (typeof data.productos)[number])}
+	{#snippet tarjeta(producto: (typeof resultado.data)[number])}
 		<TarjetaImagen
 			href={`/productos/${producto.id}`}
 			imagen={producto.portada_id ? resolve(`/adjuntos/${producto.portada_id}`) : null}
