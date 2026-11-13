@@ -5,8 +5,14 @@
 	let {
 		definiciones,
 		valores = $bindable({}),
-		nombre = 'atributos'
-	}: { definiciones: DefinicionAtributo[]; valores?: ValoresAtributos; nombre?: string } = $props();
+		nombre = 'atributos',
+		compacto = false
+	}: {
+		definiciones: DefinicionAtributo[];
+		valores?: ValoresAtributos;
+		nombre?: string;
+		compacto?: boolean;
+	} = $props();
 
 	const grupos = $derived(agruparAtributos(definiciones, valores));
 
@@ -16,7 +22,7 @@
 
 <input type="hidden" name={nombre} value={JSON.stringify(valores)} />
 
-<div class="grid gap-6 md:grid-cols-3">
+<div class={['grid gap-6', !compacto && 'md:grid-cols-3']}>
 	{#each grupos as grupo (grupo.nombre)}
 		<fieldset class="flex min-w-0 flex-col gap-3">
 			<legend class="mb-3 text-sm font-semibold">{grupo.nombre}</legend>

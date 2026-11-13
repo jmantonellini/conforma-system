@@ -111,10 +111,14 @@
 			<Highlight text={insumo.categoria?.nombre ?? 'Sin categoría'} query={busqueda} />
 		</td>
 		<td class="numero text-left">
-			<span class={['font-medium', insumo.stock <= 0 && 'text-error']}>
-				{formatearCantidad(insumo.stock)}
-			</span>
-			<span class="secundario">{insumo.unidad}</span>
+			{#if insumo.controla_stock}
+				<span class={['font-medium', insumo.stock <= 0 && 'text-error']}>
+					{formatearCantidad(insumo.stock)}
+				</span>
+				<span class="secundario">{insumo.unidad}</span>
+			{:else}
+				<span class="secundario" title="No lleva stock">por {insumo.unidad}</span>
+			{/if}
 		</td>
 		<td class="numero">{formatearMoneda(insumo.costo_unitario)}</td>
 		<td class="w-0">
@@ -142,9 +146,13 @@
 			subtitulo={insumo.codigo}
 		>
 			<div class="flex items-baseline justify-between gap-2">
-				<span class={['tabular-nums', insumo.stock <= 0 && 'text-error']}>
-					{formatearCantidad(insumo.stock)} <span class="secundario">{insumo.unidad}</span>
-				</span>
+				{#if insumo.controla_stock}
+					<span class={['tabular-nums', insumo.stock <= 0 && 'text-error']}>
+						{formatearCantidad(insumo.stock)} <span class="secundario">{insumo.unidad}</span>
+					</span>
+				{:else}
+					<span class="secundario">por {insumo.unidad}</span>
+				{/if}
 				<span class="font-semibold tabular-nums">{formatearMoneda(insumo.costo_unitario)}</span>
 			</div>
 		</TarjetaImagen>

@@ -136,8 +136,7 @@
 						<textarea
 							class="textarea w-full resize-none"
 							rows="3"
-							{...form.fields.observaciones.as('text')}
-						></textarea>
+							{...form.fields.observaciones.as('text')}></textarea>
 					</FormFieldWrapper>
 				</div>
 			</div>

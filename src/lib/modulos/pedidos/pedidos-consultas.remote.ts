@@ -19,7 +19,7 @@ export const getDatosCreacionPedido = query(
 		stockUbicacionId: v.optional(v.string()),
 		incluirStock: v.optional(v.boolean(), false)
 	}),
-	async ({ contactoId, productoId, stockUbicacionId, incluirStock }) => {
+	async ({ productoId, stockUbicacionId, incluirStock }) => {
 		const [clientes, productos, insumos, tiposInsumo, categoriasInsumo, unidadesInsumo, stock] =
 			await Promise.all([
 				obtenerContactosCliente({ limit: LIMITE_CATALOGO_PEDIDO }),
@@ -60,7 +60,13 @@ export const getDatosCreacionPedido = query(
 			productosResultado = {
 				...productosResultado,
 				data: [
-					{ ...productoInicial, marca: null, modelo: null, portada_id: null },
+					{
+						...productoInicial,
+						marca: null,
+						modelo: null,
+						portada_id: null,
+						receta_pendiente: false
+					},
 					...productosResultado.data
 				]
 			};

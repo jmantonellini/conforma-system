@@ -225,8 +225,7 @@
 							class="textarea"
 							rows="5"
 							placeholder="Ej.: caño de escape completo para un Gol 2015; pregunta si lo hacemos y cuánto sale."
-							{...form.fields.descripcion.as('text')}
-						></textarea>
+							{...form.fields.descripcion.as('text')}></textarea>
 					</FormFieldWrapper>
 
 					<FormFieldWrapper
@@ -238,8 +237,7 @@
 							id="observaciones"
 							class="textarea"
 							rows="2"
-							{...form.fields.observaciones.as('text')}
-						></textarea>
+							{...form.fields.observaciones.as('text')}></textarea>
 					</FormFieldWrapper>
 				</Seccion>
 

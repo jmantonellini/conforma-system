@@ -102,10 +102,12 @@
 						id="ingreso-insumo"
 						placeholder="Buscar insumo..."
 						field={{ value: () => insumoId, set: (valor: string) => (insumoId = valor) }}
-						options={insumos.data.map((insumo) => ({
-							value: String(insumo.id),
-							label: `${insumo.codigo} - ${insumo.nombre}`
-						}))}
+						options={insumos.data
+							.filter((insumo) => insumo.controla_stock)
+							.map((insumo) => ({
+								value: String(insumo.id),
+								label: `${insumo.codigo} - ${insumo.nombre}`
+							}))}
 						onChange={(valor: string) => (insumoId = valor)}
 					/>
 					<FormFieldWrapper label="Cantidad" id="ingreso-cantidad" required>

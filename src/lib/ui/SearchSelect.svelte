@@ -24,7 +24,11 @@
 	}: {
 		options: Option[];
 		label: string;
-		field: any;
+		field: {
+			value: () => unknown;
+			set?: (valor: string) => void;
+			as?: (tipo: 'select') => Record<string, unknown>;
+		};
 		placeholder?: string;
 		id: string;
 		class?: string;
@@ -34,7 +38,7 @@
 		onCreate?: (term: string) => void;
 		createLabel?: string;
 		compacto?: boolean;
-		[key: string]: any;
+		[key: string]: unknown;
 	} = $props();
 
 	let searchTerm = $state('');
@@ -47,6 +51,28 @@
 	let searchTimer: ReturnType<typeof setTimeout> | undefined;
 	let searchRequestId = 0;
 	let listboxId = $derived(`${id}-options`);
+	let ancla = $state<HTMLDivElement>();
+
+	function flotante(lista: HTMLElement) {
+		const ubicar = () => {
+			if (!ancla) return;
+			const caja = ancla.getBoundingClientRect();
+			const espacioAbajo = window.innerHeight - caja.bottom;
+			const haciaArriba = espacioAbajo < 280 && caja.top > espacioAbajo;
+			lista.style.left = `${caja.left}px`;
+			lista.style.width = `${caja.width}px`;
+			lista.style.top = haciaArriba ? 'auto' : `${caja.bottom + 4}px`;
+			lista.style.bottom = haciaArriba ? `${window.innerHeight - caja.top + 4}px` : 'auto';
+		};
+		lista.showPopover();
+		ubicar();
+		window.addEventListener('scroll', ubicar, true);
+		window.addEventListener('resize', ubicar);
+		return () => {
+			window.removeEventListener('scroll', ubicar, true);
+			window.removeEventListener('resize', ubicar);
+		};
+	}
 	let selectedLabel = $derived(
 		selectedOption && selectedOption.value === field?.value?.()
 			? selectedOption.label
@@ -165,7 +191,7 @@
 
 <div class={[`relative ${className || ''}`, { 'z-50': isOpen }]}>
 	<FormFieldWrapper {label} {id}>
-		<div class="relative">
+		<div class="relative" {@attach (nodo) => void (ancla = nodo)}>
 			<input
 				{id}
 				type="text"
@@ -214,7 +240,9 @@
 
 	{#if isOpen}
 		<div
-			class="absolute z-50 mt-1 w-full overflow-hidden rounded-box border border-base-300 bg-base-100 shadow-lg"
+			popover="manual"
+			{@attach flotante}
+			class="fixed m-0 overflow-hidden rounded-box border border-base-300 bg-base-100 p-0 text-base-content shadow-lg"
 		>
 			{#if isSearching}
 				<div role="status" class="px-3 py-2 text-sm text-base-content/60">Buscando...</div>

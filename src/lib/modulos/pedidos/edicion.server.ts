@@ -132,7 +132,8 @@ export async function editarPedidoServicio(data: EdicionPedido, usuarioId: numbe
 					error(409, `${descripcion ?? 'Una línea'}: ${bloqueo.toLowerCase()}`);
 				}
 
-				const cambiaComposicion = linea.tipo === 'concepto' && !bloqueo;
+				const cambiaComposicion =
+					!bloqueo && (linea.tipo === 'concepto' || (linea.insumos_asociados?.length ?? 0) > 0);
 				if (!mismoProducto || cambiaComposicion) {
 					const resuelta = await resolverLineaComercial(tx, entradaComercial(linea), 'PED', factor);
 					if (resuelta.tipo === 'insumo') {

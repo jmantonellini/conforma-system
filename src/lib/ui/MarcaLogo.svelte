@@ -3,11 +3,11 @@
 		marca,
 		size = 6,
 		className = ''
-	} = $props<{
+	}: {
 		marca: { nombre: string; logo_url?: string | null };
 		size?: number;
 		className?: string;
-	}>();
+	} = $props();
 </script>
 
 {#if marca?.logo_url}

@@ -29,7 +29,9 @@ const PG_ERROR_CODES: Record<string, string> = {
 	'22P02': 'invalid input'
 };
 
-function parsePgError(err: any): { message: string; field?: string } {
+type ErrorPostgres = { code?: string; detail?: string; message?: string };
+
+function parsePgError(err: ErrorPostgres): { message: string; field?: string } {
 	const code = err?.code || '';
 	const detail = err?.detail || '';
 	const msg = err?.message || '';
@@ -112,7 +114,7 @@ const protegerYTraducirErrores: Handle = async ({ event, resolve }) => {
 	try {
 		return await resolve(event);
 	} catch (error) {
-		const err = error as any;
+		const err = error as ErrorPostgres | undefined;
 
 		if (err?.code && PG_ERROR_CODES[err.code]) {
 			const parsed = parsePgError(err);

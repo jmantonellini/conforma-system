@@ -30,6 +30,7 @@ export const tipos_insumo = pgTable(
 		empresa_id: empresa(),
 		codigo: text('codigo').notNull(),
 		nombre: text('nombre').notNull(),
+		controla_stock: boolean('controla_stock').notNull().default(true),
 		activo: boolean('activo').default(true),
 		created_at: creado()
 	},
@@ -167,3 +168,4 @@ export const movimientos_insumos = pgTable(
 
 export const unidadInsumo = sql<string>`coalesce((select ${unidades_medida.codigo} from ${unidades_medida} where ${unidades_medida.id} = ${insumos.unidad_id}), 'unidad')`;
 export const tipoInsumo = sql<string>`coalesce((select ${tipos_insumo.codigo} from ${tipos_insumo} where ${tipos_insumo.id} = ${insumos.tipo_id}), 'material')`;
+export const controlaStockInsumo = sql<boolean>`coalesce((select ${tipos_insumo.controla_stock} from ${tipos_insumo} where ${tipos_insumo.id} = ${insumos.tipo_id}), true)`;

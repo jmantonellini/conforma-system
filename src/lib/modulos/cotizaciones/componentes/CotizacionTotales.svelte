@@ -137,6 +137,5 @@
 		disabled={bloqueada}
 		value={condicionesPago}
 		oninput={(event) => onCambiarCondiciones(event.currentTarget.value)}
-		placeholder="Transferencia, tarjeta de crédito en cuotas, anticipo y saldo..."
-	></textarea>
+		placeholder="Transferencia, tarjeta de crédito en cuotas, anticipo y saldo..."></textarea>
 </label>

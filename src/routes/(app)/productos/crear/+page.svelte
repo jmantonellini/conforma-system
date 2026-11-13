@@ -297,8 +297,7 @@
 					id="notas_fabricacion"
 					class="textarea w-full"
 					rows={3}
-					{...crearProducto.fields.notas_fabricacion.as('text')}
-				></textarea>
+					{...crearProducto.fields.notas_fabricacion.as('text')}></textarea>
 			</Seccion>
 
 			<fieldset class="fieldset seccion">

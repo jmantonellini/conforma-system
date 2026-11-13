@@ -5,6 +5,7 @@ import type { Tx } from '$lib/server/db';
 import { hayStockSuficiente } from '$lib/modulos/insumos/inventario';
 import {
 	empleados,
+	controlaStockInsumo,
 	insumos,
 	lineas_pedido,
 	movimientos_insumos,
@@ -46,14 +47,22 @@ export async function registrarMovimientoInsumoTx(
 	}
 ) {
 	const [insumo] = await tx
-		.select({ id: insumos.id, codigo: insumos.codigo, activo: insumos.activo })
+		.select({
+			id: insumos.id,
+			codigo: insumos.codigo,
+			activo: insumos.activo,
+			controla_stock: controlaStockInsumo
+		})
 		.from(insumos)
 		.where(eq(insumos.id, movimiento.insumo_id))
 		.for('update')
 		.limit(1);
 	if (!insumo || !insumo.activo) error(404, 'Insumo no encontrado o inactivo');
+	if (!insumo.controla_stock && movimiento.tipo !== 'consumo') {
+		error(400, `${insumo.codigo} no lleva stock: solo se registran horas o consumos`);
+	}
 
-	if (movimiento.tipo === 'consumo') {
+	if (movimiento.tipo === 'consumo' && insumo.controla_stock) {
 		const saldo = await obtenerSaldoInsumoTx(tx, movimiento.insumo_id);
 		if (!hayStockSuficiente(saldo, movimiento.cantidad)) {
 			error(

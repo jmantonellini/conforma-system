@@ -300,8 +300,7 @@
 			class="textarea"
 			rows="3"
 			bind:value={motivoPausa}
-			placeholder="Ej.: falta de material"
-		></textarea>
+			placeholder="Ej.: falta de material"></textarea>
 	</FormFieldWrapper>
 </Modal>
 

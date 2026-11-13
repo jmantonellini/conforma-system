@@ -1,15 +1,17 @@
 <script lang="ts">
 	import { page } from '$app/state';
-	import { onMount, type Snippet } from 'svelte';
+	import { onMount, untrack, type Snippet } from 'svelte';
 	import CotizacionLineasTabla from '$lib/modulos/cotizaciones/componentes/CotizacionLineasTabla.svelte';
 	import CotizacionNuevoInsumoDialog from '$lib/modulos/cotizaciones/componentes/CotizacionNuevoInsumoDialog.svelte';
-	import { Can, Seccion } from '$lib/ui';
+	import ProductoRapido from '$lib/modulos/productos/componentes/ProductoRapido.svelte';
+	import { Seccion } from '$lib/ui';
 	import { getProductoConReceta, getProductoPrecio } from '$lib/modulos/productos/productos.remote';
-	import type {
-		InsumoOpcion,
-		LineaEdicion,
-		MaterialSnapshot,
-		ProductoOpcion
+	import {
+		llevaComposicion,
+		type InsumoOpcion,
+		type LineaEdicion,
+		type MaterialSnapshot,
+		type ProductoOpcion
 	} from '$lib/modulos/cotizaciones/tipos';
 	import type { StockDisponibilidad } from '$lib/modulos/stock/tipos';
 	import type { Moneda } from '$lib/utils/moneda';
@@ -70,12 +72,28 @@
 	let siguienteId = $state(Date.now());
 	let solicitudProducto = 0;
 	let nuevoInsumoAbierto = $state(false);
+	let dialogoInsumo = $state<CotizacionNuevoInsumoDialog>();
+	let productoRapido = $state<ProductoRapido>();
+	let lineaDestino: number | null = null;
+	let creados = $state<ProductoOpcion[]>([]);
+	let conocidos = $state<Record<number, ProductoOpcion>>(
+		untrack(() => Object.fromEntries(productos.map((producto) => [producto.id, producto])))
+	);
 	let puedeCrearInsumo = $derived(can(page.data.user, page.data.permisos, 'insumos', 'create'));
+	let puedeCrearProducto = $derived(can(page.data.user, page.data.permisos, 'productos', 'create'));
+	const opcionesProductos = $derived.by(() => {
+		const visibles: Record<number, ProductoOpcion> = {};
+		for (const producto of [...creados, ...productos]) visibles[producto.id] ??= producto;
+		for (const linea of lineas) {
+			const id = Number(linea.producto_id);
+			if (id && !visibles[id] && conocidos[id]) visibles[id] = conocidos[id];
+		}
+		return Object.values(visibles);
+	});
 	const atajosAgregar = [
 		{ key: 'p', action: () => agregarLinea('producto') },
-		{ key: 'i', action: () => agregarLinea('insumo') },
-		{ key: 'c', action: () => agregarLinea('concepto') },
-		{ key: 'n', action: abrirNuevoInsumo }
+		{ key: 't', action: () => agregarLinea('concepto') },
+		{ key: 'i', action: () => agregarLinea('insumo') }
 	] as const;
 
 	const enMoneda = (valorUsd: number | null | undefined) =>
@@ -125,14 +143,11 @@
 			limpiarLinea(lineaId, 'producto');
 			return;
 		}
-		const producto = productos.find((item) => item.id === Number(productoId));
+		const producto = opcionesProductos.find((item) => item.id === Number(productoId));
 		if (!producto) return;
+		conocidos[producto.id] = producto;
 
 		let snapshot: MaterialSnapshot[] = [];
-		let precioProducto = {
-			costo_materiales: producto.costo_materiales ?? 0,
-			precio_venta: producto.precio_venta ?? 0
-		};
 		const [recetaResultado, precioResultado] = await Promise.allSettled([
 			getProductoConReceta(Number(productoId)),
 			getProductoPrecio(Number(productoId))
@@ -143,7 +158,9 @@
 			limpiarLinea(lineaId, 'producto');
 			return;
 		}
-		precioProducto = precioResultado.value;
+		const precioProducto = precioResultado.value;
+		const sinReceta =
+			recetaResultado.status === 'fulfilled' && !recetaResultado.value.recetaDirecta.length;
 		if (recetaResultado.status === 'fulfilled') {
 			const receta = recetaResultado.value;
 			snapshot = receta.recetaDirecta.map((material) => {
@@ -187,7 +204,8 @@
 			precio_lista_unitario: enMoneda(precioProducto.precio_venta),
 			precio_minimo_unitario: enMoneda(precioProducto.precio_venta),
 			precio_unitario: enMoneda(precioProducto.precio_venta),
-			insumos_snapshot: snapshot
+			insumos_snapshot: snapshot,
+			receta_pendiente: sinReceta
 		});
 	}
 
@@ -240,7 +258,7 @@
 	function agregarInsumoAsociado(lineaId: number, insumoId: number, cantidad: number) {
 		const insumo = insumos.find((item) => item.id === insumoId);
 		const linea = lineas.find((item) => item.idx === lineaId);
-		if (!insumo || linea?.tipo !== 'concepto') return;
+		if (!insumo || !linea || !llevaComposicion(linea)) return;
 		if (linea.insumos_snapshot.some((material) => material.insumo_id === insumoId)) return;
 
 		const snapshot = [
@@ -271,7 +289,7 @@
 
 	function quitarInsumoAsociado(lineaId: number, indice: number) {
 		const linea = lineas.find((item) => item.idx === lineaId);
-		if (linea?.tipo !== 'concepto') return;
+		if (!linea || !llevaComposicion(linea)) return;
 
 		const snapshot = linea.insumos_snapshot.filter((_, index) => index !== indice);
 		const precio = ajustarPrecioPorCambioDeCosto(
@@ -294,24 +312,51 @@
 		}
 	}
 
-	function abrirNuevoInsumo() {
-		if (!bloqueada && puedeCrearInsumo) nuevoInsumoAbierto = true;
+	function crearProducto(lineaId: number, texto: string) {
+		if (bloqueada || !puedeCrearProducto) return;
+		lineaDestino = lineaId;
+		productoRapido?.abrir(texto);
+	}
+
+	function productoCreado(producto: { id: number; nombre: string }) {
+		creados = [
+			{
+				id: producto.id,
+				nombre: producto.nombre,
+				costo_materiales: 0,
+				precio_venta: 0,
+				receta_pendiente: true
+			},
+			...creados
+		];
+		if (lineaDestino !== null) void seleccionarProducto(lineaDestino, String(producto.id));
+		lineaDestino = null;
+	}
+
+	function crearInsumo(lineaId: number, texto: string) {
+		if (bloqueada || !puedeCrearInsumo) return;
+		lineaDestino = lineaId;
+		dialogoInsumo?.abrir(texto);
 	}
 
 	function agregarNuevoInsumo(nuevo: NonNullable<LineaEdicion['nuevo_insumo']>) {
-		guardarLineas([
-			...lineas,
-			{
-				...lineaVacia('insumo', siguienteId++),
-				nuevo_insumo: nuevo,
-				descripcion: nuevo.nombre,
-				unidad: nuevo.unidad,
-				precio_unitario: redondearPrecio(nuevo.costo_unitario),
-				precio_lista_unitario: redondearPrecio(nuevo.costo_unitario),
-				precio_minimo_unitario: redondearPrecio(nuevo.costo_unitario),
-				costo_materiales: redondearPrecio(nuevo.costo_unitario)
-			}
-		]);
+		const destino = lineaDestino;
+		lineaDestino = null;
+		const linea = {
+			...lineaVacia('insumo', destino ?? siguienteId++),
+			nuevo_insumo: nuevo,
+			descripcion: nuevo.nombre,
+			unidad: nuevo.unidad,
+			precio_unitario: redondearPrecio(nuevo.costo_unitario),
+			precio_lista_unitario: redondearPrecio(nuevo.costo_unitario),
+			precio_minimo_unitario: redondearPrecio(nuevo.costo_unitario),
+			costo_materiales: redondearPrecio(nuevo.costo_unitario)
+		};
+		guardarLineas(
+			destino === null
+				? [...lineas, linea]
+				: lineas.map((actual) => (actual.idx === destino ? linea : actual))
+		);
 	}
 
 	onMount(() => {
@@ -346,36 +391,30 @@
 			</button>
 			<button
 				type="button"
+				class="btn btn-outline btn-accent btn-sm"
+				disabled={bloqueada}
+				title="Reparaciones, obras industriales o arquitectónicas: descripción libre con materiales y horas"
+				onclick={() => agregarLinea('concepto')}
+			>
+				<span>Trabajo / servicio</span><kbd class="kbd kbd-xs">Alt+Shift+T</kbd>
+			</button>
+			<button
+				type="button"
 				class="btn btn-outline btn-secondary btn-sm"
 				disabled={bloqueada}
+				title="Material o repuesto que se vende tal cual"
 				onclick={() => agregarLinea('insumo')}
 			>
 				<span>Insumo</span><kbd class="kbd kbd-xs">Alt+Shift+I</kbd>
 			</button>
-			<button
-				type="button"
-				class="btn btn-outline btn-accent btn-sm"
-				disabled={bloqueada}
-				onclick={() => agregarLinea('concepto')}
-			>
-				<span>Concepto</span><kbd class="kbd kbd-xs">Alt+Shift+C</kbd>
-			</button>
-			<Can modulo="insumos" accion="create">
-				<button
-					type="button"
-					class="btn btn-outline btn-sm"
-					disabled={bloqueada}
-					onclick={abrirNuevoInsumo}
-				>
-					<span>Insumo nuevo</span><kbd class="kbd kbd-xs">Alt+Shift+N</kbd>
-				</button>
-			</Can>
 		</div>
 		<CotizacionLineasTabla
 			{lineas}
 			{bloqueada}
 			{moneda}
-			{productos}
+			productos={opcionesProductos}
+			onCrearProducto={puedeCrearProducto ? crearProducto : undefined}
+			onCrearInsumo={puedeCrearInsumo ? crearInsumo : undefined}
 			{onBuscarProducto}
 			{insumos}
 			{descuentoGlobal}
@@ -445,7 +484,10 @@
 	{@render pie?.()}
 </Seccion>
 
+<ProductoRapido bind:this={productoRapido} onCreado={productoCreado} />
+
 <CotizacionNuevoInsumoDialog
+	bind:this={dialogoInsumo}
 	bind:open={nuevoInsumoAbierto}
 	{contexto}
 	tipos={tiposInsumo}

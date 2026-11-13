@@ -16,7 +16,12 @@
 	import { toast } from '$lib/ui/toast.svelte';
 	import { Paths } from '$lib/tipos';
 	import { can } from '$lib/utils/permissions';
-	import type { InsumoOpcion, LineaEdicion, ProductoOpcion } from '$lib/modulos/cotizaciones/tipos';
+	import {
+		insumosAsociados,
+		type InsumoOpcion,
+		type LineaEdicion,
+		type ProductoOpcion
+	} from '$lib/modulos/cotizaciones/tipos';
 	import {
 		formatearDosDecimales,
 		formatearMoneda,
@@ -75,7 +80,6 @@
 	const tipoCambio = $derived(parsearNumeroDecimal(tipoCambioTexto));
 	const factor = $derived(moneda === 'ARS' ? (tipoCambio ?? 0) : 1);
 	let usarCreditoDistribuidor = $state(false);
-	let clienteSeleccionadoId = $state(contactoInicialId);
 	let distribuidorSeleccionadoId = $state('');
 	let porcentajeComisionDistribuidor = $state(0);
 	let archivosSeleccionados = $state<File[]>([]);
@@ -96,15 +100,7 @@
 				precio_lista: linea.precio_lista_unitario,
 				costo_materiales: linea.costo_materiales,
 				descripcion: linea.descripcion,
-				insumos_asociados:
-					linea.tipo === 'concepto'
-						? linea.insumos_snapshot
-								.filter((material) => material.insumo_id != null)
-								.map((material) => ({
-									insumo_id: Number(material.insumo_id),
-									cantidad: material.cantidad
-								}))
-						: []
+				insumos_asociados: insumosAsociados(linea)
 			}))
 		);
 	}
@@ -227,7 +223,6 @@
 		const opcion = { value: String(contacto.id), label: contacto.razon_social };
 		clientesOptions = [opcion, ...clientesOptions.filter((item) => item.value !== opcion.value)];
 		form.fields.contacto_id.set(opcion.value);
-		clienteSeleccionadoId = opcion.value;
 	}
 
 	async function buscarClientes(search: string) {
@@ -363,7 +358,6 @@
 					options={clientesOptions}
 					placeholder="Buscar cliente..."
 					field={form.fields.contacto_id}
-					onChange={(value) => (clienteSeleccionadoId = value)}
 					onSearch={buscarClientes}
 					onCreate={(texto) => altaContacto.abrir(texto)}
 					createLabel="Crear contacto"
@@ -520,9 +514,7 @@
 					placeholder="Notas adicionales sobre el pedido..."
 					rows={3}
 					{...form.fields?.observaciones?.as('text')}
-					class="textarea w-full resize-none"
-				>
-				</textarea>
+					class="textarea w-full resize-none"></textarea>
 			</FormFieldWrapper>
 		</fieldset>
 

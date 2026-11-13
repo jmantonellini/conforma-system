@@ -1,6 +1,11 @@
 <script lang="ts">
 	import { SearchSelect } from '$lib/ui';
-	import type { InsumoOpcion, LineaEdicion, ProductoOpcion } from '$lib/modulos/cotizaciones/tipos';
+	import {
+		llevaComposicion,
+		type InsumoOpcion,
+		type LineaEdicion,
+		type ProductoOpcion
+	} from '$lib/modulos/cotizaciones/tipos';
 	import {
 		formatearDosDecimales,
 		formatearMoneda,
@@ -28,6 +33,8 @@
 		onActualizarCostoInterno: (lineaId: number, costo: number) => void;
 		onAgregarInsumoAsociado: (lineaId: number, insumoId: number, cantidad: number) => void;
 		onQuitarInsumoAsociado: (lineaId: number, indice: number) => void;
+		onCrearProducto?: (lineaId: number, texto: string) => void;
+		onCrearInsumo?: (lineaId: number, texto: string) => void;
 	};
 
 	let {
@@ -47,7 +54,9 @@
 		onCambiarVisibilidad,
 		onActualizarCostoInterno,
 		onAgregarInsumoAsociado,
-		onQuitarInsumoAsociado
+		onQuitarInsumoAsociado,
+		onCrearProducto,
+		onCrearInsumo
 	}: Props = $props();
 	let estructuraFija = $derived(bloqueada || Boolean(linea.bloqueo));
 	let costoBorrador = $state<string | null>(null);
@@ -87,7 +96,19 @@
 				}))}
 				onChange={(value: string) => onSeleccionarProducto(linea.idx, value)}
 				onSearch={onBuscarProducto}
+				onCreate={onCrearProducto && !estructuraFija
+					? (texto: string) => onCrearProducto(linea.idx, texto)
+					: undefined}
+				createLabel="Crear producto"
 			/>
+			{#if linea.receta_pendiente}
+				<span
+					class="badge mt-1 badge-soft badge-xs badge-warning"
+					title="Este producto todavía no tiene receta. La composición que cargues abajo se guarda como su receta."
+				>
+					Receta pendiente
+				</span>
+			{/if}
 		{:else if linea.nuevo_insumo}
 			<div class="flex min-h-8 flex-col justify-center">
 				<span class="font-medium">{linea.nuevo_insumo.nombre}</span>
@@ -108,6 +129,10 @@
 					label: `${insumo.codigo} - ${insumo.nombre}`
 				}))}
 				onChange={(value: string) => onSeleccionarInsumo(linea.idx, value)}
+				onCreate={onCrearInsumo && !estructuraFija
+					? (texto: string) => onCrearInsumo(linea.idx, texto)
+					: undefined}
+				createLabel="Crear insumo"
 			/>
 		{:else}
 			<input
@@ -116,8 +141,8 @@
 				disabled={bloqueada}
 				value={linea.descripcion}
 				placeholder={linea.visible_cliente
-					? 'Trabajo o concepto para el cliente'
-					: 'Concepto interno'}
+					? 'Trabajo, reparación u obra para el cliente'
+					: 'Trabajo interno'}
 				oninput={(event) => onActualizarDescripcion(linea.idx, event.currentTarget.value)}
 			/>
 		{/if}
@@ -199,14 +224,16 @@
 	</td>
 </tr>
 
-{#if linea.tipo === 'concepto'}
+{#if llevaComposicion(linea)}
 	<tr class="relative z-0 border-x-2 border-b-2 border-base-300/80 focus-within:z-50">
 		<td colspan="6" class="p-0">
 			<details class="collapse-arrow collapse w-full rounded-none bg-base-200/40">
 				<summary class="collapse-title w-full px-3 py-2 text-xs font-medium text-base-content/80">
 					{linea.insumos_snapshot.length
-						? `Composición interna (${linea.insumos_snapshot.length})`
-						: 'Agregar composición interna (opcional)'}
+						? `${linea.receta_pendiente ? 'Receta' : 'Composición interna'} (${linea.insumos_snapshot.length})`
+						: linea.receta_pendiente
+							? 'Cargar receta: materiales y horas (se guarda en el producto)'
+							: 'Agregar materiales y horas (opcional)'}
 				</summary>
 				<div class="collapse-content flex flex-col gap-3 px-3 pb-3">
 					<div class="flex flex-wrap items-end gap-2">

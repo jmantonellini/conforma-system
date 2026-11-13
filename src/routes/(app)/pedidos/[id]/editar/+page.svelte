@@ -5,7 +5,11 @@
 	import { FormFieldWrapper, PageLayout, Seccion } from '$lib/ui';
 	import { toast } from '$lib/ui/toast.svelte';
 	import LineasConceptosEditor from '$lib/modulos/cotizaciones/componentes/LineasConceptosEditor.svelte';
-	import type { LineaEdicion, ProductoOpcion } from '$lib/modulos/cotizaciones/tipos';
+	import {
+		insumosAsociados,
+		type LineaEdicion,
+		type ProductoOpcion
+	} from '$lib/modulos/cotizaciones/tipos';
 	import { editarPedido, getPedidoParaEditar } from '$lib/modulos/pedidos/pedidos.remote';
 	import { getDatosCreacionPedido } from '$lib/modulos/pedidos/pedidos-consultas.remote';
 	import { getProductosCatalogo } from '$lib/modulos/productos/productos.remote';
@@ -52,25 +56,23 @@
 				costo_materiales: linea.costo_materiales ?? 0
 			};
 		}),
-		...edicion.insumosAdicionales.map(
-			(insumo, indice): LineaEdicion => ({
-				idx: edicion.lineas.length + indice + 1,
-				ref: `insumo:${insumo.id}`,
-				bloqueo: null,
-				tipo: 'insumo',
-				visible_cliente: (insumo.precio_unitario ?? 0) > 0,
-				producto_id: '',
-				insumo_id: insumo.insumo_id,
-				insumos_snapshot: [],
-				unidad: insumo.unidad,
-				descripcion: insumo.nombre,
-				cantidad: insumo.cantidad,
-				precio_unitario: insumo.precio_lista_unitario ?? 0,
-				precio_lista_unitario: insumo.precio_lista_unitario ?? 0,
-				precio_minimo_unitario: 0,
-				costo_materiales: insumo.costo_unitario ?? 0
-			})
-		)
+		...edicion.insumosAdicionales.map((insumo, indice): LineaEdicion => ({
+			idx: edicion.lineas.length + indice + 1,
+			ref: `insumo:${insumo.id}`,
+			bloqueo: null,
+			tipo: 'insumo',
+			visible_cliente: (insumo.precio_unitario ?? 0) > 0,
+			producto_id: '',
+			insumo_id: insumo.insumo_id,
+			insumos_snapshot: [],
+			unidad: insumo.unidad,
+			descripcion: insumo.nombre,
+			cantidad: insumo.cantidad,
+			precio_unitario: insumo.precio_lista_unitario ?? 0,
+			precio_lista_unitario: insumo.precio_lista_unitario ?? 0,
+			precio_minimo_unitario: 0,
+			costo_materiales: insumo.costo_unitario ?? 0
+		}))
 	];
 
 	const sumarLineas = (lineas: LineaEdicion[]) =>
@@ -88,7 +90,8 @@
 				id: producto.id,
 				nombre: producto.nombre,
 				costo_materiales: detalle.costo_materiales ?? null,
-				precio_venta: detalle.precio_venta ?? null
+				precio_venta: detalle.precio_venta ?? null,
+				receta_pendiente: producto.receta_pendiente
 			};
 		})
 	);
@@ -154,15 +157,7 @@
 					precio_lista: linea.precio_lista_unitario,
 					costo_materiales: linea.costo_materiales,
 					descripcion: linea.descripcion,
-					insumos_asociados:
-						linea.tipo === 'concepto'
-							? linea.insumos_snapshot
-									.filter((material) => material.insumo_id != null)
-									.map((material) => ({
-										insumo_id: Number(material.insumo_id),
-										cantidad: material.cantidad
-									}))
-							: []
+					insumos_asociados: insumosAsociados(linea)
 				}))
 			});
 			toast.success('Pedido actualizado');
@@ -261,8 +256,7 @@
 							class="textarea w-full"
 							rows="3"
 							maxlength="2000"
-							bind:value={observaciones}
-						></textarea>
+							bind:value={observaciones}></textarea>
 					</FormFieldWrapper>
 				</div>
 			</div>

@@ -40,6 +40,11 @@
 		};
 	}
 
+	export function abrir(nombre = '') {
+		nuevoInsumo = { ...formularioVacio(), nombre: nombre.trim() };
+		open = true;
+	}
+
 	function confirmar() {
 		if (!valido || costoUnitario === null) return;
 		const tipo = tipos.find((opcion) => opcion.id === Number(nuevoInsumo.tipo_id));

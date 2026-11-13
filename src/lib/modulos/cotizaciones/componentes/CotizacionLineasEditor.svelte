@@ -14,12 +14,14 @@
 		precioNetoCubreCosto,
 		redondearPrecio
 	} from '$lib/utils/precios';
-	import type {
-		InsumoOpcion,
-		LineaEdicion,
-		LineaInicial,
-		ProductoOpcion
+	import {
+		insumosAsociados,
+		type InsumoOpcion,
+		type LineaEdicion,
+		type LineaInicial,
+		type ProductoOpcion
 	} from '$lib/modulos/cotizaciones/tipos';
+	import { getProductos } from '$lib/modulos/productos/productos.remote';
 	import { factorDesdeUsd, type Moneda } from '$lib/utils/moneda';
 
 	type Props = {
@@ -67,6 +69,14 @@
 		untrack(() => (precioTotalInicial === null ? null : formatearDosDecimales(precioTotalInicial)))
 	);
 	let guardando = $state(false);
+	let catalogoProductos = $state(untrack(() => productos));
+	let solicitudProductos = 0;
+
+	async function buscarProductos(search: string) {
+		const solicitud = ++solicitudProductos;
+		const resultado = await getProductos({ search: search || undefined, limit: 100 });
+		if (solicitud === solicitudProductos) catalogoProductos = resultado.data;
+	}
 	const factor = $derived(factorDesdeUsd({ moneda, tipo_cambio: tipoCambio }));
 	const enMoneda = (valorUsd: number) => redondearPrecio(valorUsd * factor);
 
@@ -102,6 +112,7 @@
 			return {
 				idx: linea.id,
 				tipo: linea.producto_id ? 'producto' : linea.insumo_id ? 'insumo' : 'concepto',
+				receta_pendiente: !!producto?.receta_pendiente,
 				visible_cliente: linea.visible_cliente,
 				producto_id: linea.producto_id ? String(linea.producto_id) : '',
 				insumo_id: linea.insumo_id ?? undefined,
@@ -167,15 +178,7 @@
 					cantidad: Number(linea.cantidad) || 1,
 					precio_unitario: Number(linea.precio_unitario) || 0,
 					precio_lista_unitario: Number(linea.precio_lista_unitario) || 0,
-					insumos_asociados:
-						linea.tipo === 'concepto'
-							? linea.insumos_snapshot
-									.filter((material) => material.insumo_id != null)
-									.map((material) => ({
-										insumo_id: Number(material.insumo_id),
-										cantidad: material.cantidad
-									}))
-							: [],
+					insumos_asociados: insumosAsociados(linea),
 					costo_materiales: redondearPrecio(Number(linea.costo_materiales) || 0)
 				}))
 			});
@@ -193,7 +196,8 @@
 	bind:lineas
 	{moneda}
 	{factor}
-	{productos}
+	productos={catalogoProductos}
+	onBuscarProducto={buscarProductos}
 	{insumos}
 	{tiposInsumo}
 	{categoriasInsumo}

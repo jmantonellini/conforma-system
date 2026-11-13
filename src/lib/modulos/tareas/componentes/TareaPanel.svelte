@@ -69,8 +69,7 @@
 					id="tarea-descripcion"
 					class="textarea"
 					rows="4"
-					{...form.fields.descripcion.as('text', tarea?.descripcion ?? '')}
-				></textarea>
+					{...form.fields.descripcion.as('text', tarea?.descripcion ?? '')}></textarea>
 			</FormFieldWrapper>
 
 			<div class="campo">

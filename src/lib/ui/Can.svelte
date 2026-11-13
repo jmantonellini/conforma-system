@@ -7,11 +7,11 @@
 		modulo,
 		accion = 'view',
 		children
-	} = $props<{
+	}: {
 		modulo: string;
 		accion?: string;
-		children: () => Snippet;
-	}>();
+		children: Snippet;
+	} = $props();
 </script>
 
 {#if can(page.data.user, page.data.permisos, modulo, accion)}

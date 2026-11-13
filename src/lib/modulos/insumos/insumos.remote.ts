@@ -17,7 +17,8 @@ import {
 	tipos_insumo,
 	unidades_medida,
 	unidadInsumo,
-	tipoInsumo
+	tipoInsumo,
+	controlaStockInsumo
 } from '$lib/server/db/schema';
 import { ImportarInsumosSchema, InsumoSchema, InsumoSchemaUpdate } from './insumos.schema';
 import { requirePermission, tienePermiso } from '$lib/server/auth/permissions';
@@ -281,6 +282,7 @@ export const getInsumos = query(
 					id: tipos_insumo.id,
 					nombre: tipos_insumo.nombre
 				},
+				controla_stock: controlaStockInsumo,
 				categoria: {
 					id: categorias_insumos.id,
 					nombre: categorias_insumos.nombre
@@ -313,12 +315,13 @@ export const getInsumos = query(
 			: [];
 		const saldosPorInsumo = new Map(saldos.map((item) => [item.insumo_id, Number(item.saldo)]));
 		return {
-			data: data.map(({ insumo, unidad, tipo, categoria, proveedor }) => ({
+			data: data.map(({ insumo, unidad, tipo, categoria, proveedor, controla_stock }) => ({
 				...insumo,
 				unidad,
 				tipo,
 				categoria,
 				proveedor,
+				controla_stock,
 				stock: saldosPorInsumo.get(insumo.id) ?? 0
 			})),
 			total: total?.count ?? 0,
@@ -424,7 +427,8 @@ export const getPendientesReceta = query(
 					id: insumos.id,
 					codigo: insumos.codigo,
 					nombre: insumos.nombre,
-					unidad: unidadInsumo
+					unidad: unidadInsumo,
+					controla_stock: controlaStockInsumo
 				})
 				.from(insumos)
 				.where(inArray(insumos.id, ids)),
@@ -447,6 +451,7 @@ export const getPendientesReceta = query(
 				requerido: item.cantidad,
 				consumido,
 				pendiente: Math.max(Number((item.cantidad - consumido).toFixed(4)), 0),
+				controla_stock: detalle?.controla_stock ?? true,
 				stock: saldoPorId.get(item.insumo_id) ?? 0
 			};
 		});
@@ -534,6 +539,7 @@ export const getInsumoById = query(v.number(), async (id) => {
 			insumo: insumos,
 			unidad: unidadInsumo,
 			tipo: { id: tipos_insumo.id, nombre: tipos_insumo.nombre },
+			controla_stock: controlaStockInsumo,
 			categoria: { id: categorias_insumos.id, nombre: categorias_insumos.nombre },
 			proveedor: { id: proveedores.id, nombre: contactos.razon_social }
 		})
@@ -570,6 +576,7 @@ export const getInsumoById = query(v.number(), async (id) => {
 		tipo: resultado.tipo,
 		categoria: resultado.categoria,
 		proveedor: resultado.proveedor,
+		controla_stock: resultado.controla_stock,
 		stock,
 		usos
 	};

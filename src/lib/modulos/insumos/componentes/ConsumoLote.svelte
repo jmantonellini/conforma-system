@@ -5,7 +5,14 @@
 	import { mensajeError } from '$lib/utils/errores';
 	import { registrarLoteConsumo } from '$lib/modulos/insumos/insumos.remote';
 
-	type InsumoOpcion = { id: number; codigo: string; nombre: string; unidad: string; stock: number };
+	type InsumoOpcion = {
+		id: number;
+		codigo: string;
+		nombre: string;
+		unidad: string;
+		stock: number;
+		controla_stock?: boolean;
+	};
 	type Fila = { clave: number; insumo_id: string; cantidad: string };
 
 	let {
@@ -65,7 +72,8 @@
 
 	function excede(fila: Fila) {
 		const insumo = insumoPorId.get(fila.insumo_id);
-		return insumo ? Number(fila.cantidad.replace(',', '.')) > insumo.stock : false;
+		if (!insumo || insumo.controla_stock === false) return false;
+		return Number(fila.cantidad.replace(',', '.')) > insumo.stock;
 	}
 
 	function quitar(fila: Fila) {
@@ -159,7 +167,13 @@
 							/>
 						</td>
 						<td class="text-right whitespace-nowrap text-base-content/70 tabular-nums">
-							{insumo ? `${formatearCantidad(insumo.stock)} ${insumo.unidad}` : '-'}
+							{#if !insumo}
+								-
+							{:else if insumo.controla_stock === false}
+								<span class="text-xs">Sin stock (horas)</span>
+							{:else}
+								{formatearCantidad(insumo.stock)} {insumo.unidad}
+							{/if}
 						</td>
 						<td>
 							<div class="flex items-center justify-end gap-1">

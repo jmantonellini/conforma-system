@@ -23,6 +23,7 @@ export type LineaInicial = {
 export type ProductoOpcion = {
 	id: number;
 	nombre: string;
+	receta_pendiente?: boolean;
 	costo_materiales: number | null;
 	precio_venta: number | null;
 };
@@ -39,6 +40,7 @@ export type LineaEdicion = {
 	idx: number;
 	ref?: string;
 	bloqueo?: string | null;
+	receta_pendiente?: boolean;
 	tipo: TipoLineaComercial;
 	visible_cliente: boolean;
 	producto_id: string;
@@ -54,3 +56,13 @@ export type LineaEdicion = {
 	precio_minimo_unitario: number;
 	costo_materiales: number;
 };
+
+export const llevaComposicion = (linea: Pick<LineaEdicion, 'tipo' | 'receta_pendiente'>) =>
+	linea.tipo === 'concepto' || (linea.tipo === 'producto' && !!linea.receta_pendiente);
+
+export const insumosAsociados = (linea: LineaEdicion) =>
+	llevaComposicion(linea)
+		? linea.insumos_snapshot
+				.filter((material) => material.insumo_id != null)
+				.map((material) => ({ insumo_id: Number(material.insumo_id), cantidad: material.cantidad }))
+		: [];

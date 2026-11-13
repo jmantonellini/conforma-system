@@ -64,9 +64,7 @@ export const mapearFilaContactoExcel = (fila: Record<string, unknown>) => {
 		piso: String(filaMapeada.piso ?? '').trim() || undefined,
 		departamento: String(filaMapeada.departamento ?? '').trim() || undefined,
 		rol: (filaMapeada.rol ? String(filaMapeada.rol).trim().toLowerCase() : 'ninguno') as
-			| 'ninguno'
-			| 'cliente'
-			| 'proveedor',
+			'ninguno' | 'cliente' | 'proveedor',
 		es_distribuidor: booleano(filaMapeada.es_distribuidor),
 		porcentaje_compensacion: numero(filaMapeada.porcentaje_compensacion ?? 0),
 		saldo_disponible: numero(filaMapeada.saldo_disponible ?? 0),

@@ -277,8 +277,7 @@
 							rows="2"
 							maxlength="5000"
 							placeholder="Novedades del cliente, acuerdos o cambios solicitados..."
-							bind:value={nota}
-						></textarea>
+							bind:value={nota}></textarea>
 						<button
 							class="btn self-end btn-sm"
 							disabled={ocupado || !nota.trim()}
@@ -333,8 +332,7 @@
 				rows="3"
 				maxlength="5000"
 				bind:value={rechazo.motivo}
-				placeholder="Ej.: el cliente consiguió mejor precio"
-			></textarea>
+				placeholder="Ej.: el cliente consiguió mejor precio"></textarea>
 		</FormFieldWrapper>
 	{/if}
 </Modal>

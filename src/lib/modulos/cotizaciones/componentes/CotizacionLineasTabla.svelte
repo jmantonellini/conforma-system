@@ -26,6 +26,8 @@
 		onActualizarPrecio: (lineaId: number, precio: string) => void;
 		onCambiarVisibilidad: (lineaId: number, visible: boolean) => void;
 		onActualizarCostoInterno: (lineaId: number, costo: number) => void;
+		onCrearProducto?: (lineaId: number, texto: string) => void;
+		onCrearInsumo?: (lineaId: number, texto: string) => void;
 	};
 
 	let {
@@ -49,7 +51,9 @@
 		onActualizarDescripcion,
 		onActualizarPrecio,
 		onCambiarVisibilidad,
-		onActualizarCostoInterno
+		onActualizarCostoInterno,
+		onCrearProducto,
+		onCrearInsumo
 	}: Props = $props();
 </script>
 
@@ -85,6 +89,8 @@
 					{onActualizarCostoInterno}
 					{onAgregarInsumoAsociado}
 					{onQuitarInsumoAsociado}
+					{onCrearProducto}
+					{onCrearInsumo}
 				/>
 			{/each}
 			{#if descuentoGlobal > 0}

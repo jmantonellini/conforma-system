@@ -1,6 +1,6 @@
 import { query, command, form, requested } from '$app/server';
 import * as v from 'valibot';
-import { ProductoSchema, ProductoSchemaUpdate } from './productos.schema';
+import { ProductoRapidoSchema, ProductoSchema, ProductoSchemaUpdate } from './productos.schema';
 import {
 	getCategoriasService,
 	getCategoriasCompService,
@@ -104,6 +104,18 @@ export const getProductoConReceta = query(v.number(), async (productoId) => {
 
 export const getCategorias = query(async () => {
 	return getCategoriasService();
+});
+
+export const crearProductoRapido = command(ProductoRapidoSchema, async (data) => {
+	const { producto } = await crearProductoServicio({
+		...data,
+		codigo: '',
+		margen_porcentaje: 0,
+		es_personalizable: true,
+		atributos: data.atributos ?? {}
+	});
+	await requested(getProductos, 1).refreshAll();
+	return { id: producto.id, nombre: producto.nombre };
 });
 
 export const crearProducto = form(ProductoSchema, async (data) => {

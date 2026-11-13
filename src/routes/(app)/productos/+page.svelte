@@ -62,6 +62,9 @@
 				<Highlight text={producto.nombre} query={busqueda} />
 			</a>
 			<p class="secundario font-mono"><Highlight text={producto.codigo} query={busqueda} /></p>
+			{#if producto.receta_pendiente}
+				<span class="badge badge-soft badge-xs badge-warning">Receta pendiente</span>
+			{/if}
 		</td>
 		<td class="text-base-content/70">{categorias.get(producto.categoria_id ?? 0) ?? '-'}</td>
 		<td>
@@ -98,7 +101,12 @@
 				.filter(Boolean)
 				.join(' · ')}
 		>
-			<span class="font-semibold tabular-nums">{formatearMoneda(producto.precio_venta)}</span>
+			<div class="flex items-center justify-between gap-2">
+				<span class="font-semibold tabular-nums">{formatearMoneda(producto.precio_venta)}</span>
+				{#if producto.receta_pendiente}
+					<span class="badge badge-soft badge-xs badge-warning">Receta pendiente</span>
+				{/if}
+			</div>
 		</TarjetaImagen>
 	{/snippet}
 </Listado>

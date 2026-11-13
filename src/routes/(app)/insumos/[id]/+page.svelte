@@ -116,9 +116,13 @@
 		<dl class="datos flex-1">
 			<div>
 				<dt>Stock</dt>
-				<dd class={['text-xl font-semibold tabular-nums', insumo.stock <= 0 && 'text-error']}>
-					{cantidad(insumo.stock)} <span class="text-sm font-normal">{insumo.unidad}</span>
-				</dd>
+				{#if insumo.controla_stock}
+					<dd class={['text-xl font-semibold tabular-nums', insumo.stock <= 0 && 'text-error']}>
+						{cantidad(insumo.stock)} <span class="text-sm font-normal">{insumo.unidad}</span>
+					</dd>
+				{:else}
+					<dd class="text-base-content/60">No lleva stock · se registran horas</dd>
+				{/if}
 			</div>
 			<div>
 				<dt>Costo final</dt>

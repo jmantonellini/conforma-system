@@ -115,6 +115,11 @@ export async function getProductosCatalogo({
 	};
 }
 
+export const recetaPendiente = sql<boolean>`(
+	not exists (select 1 from ${producto_insumos} where ${producto_insumos.producto_id} = ${productos.id})
+	and not exists (select 1 from ${producto_componentes} where ${producto_componentes.producto_id} = ${productos.id})
+)`;
+
 export async function getProductosListado({
 	search,
 	categoriaId,
@@ -161,6 +166,7 @@ export async function getProductosListado({
 			nombre: productos.nombre,
 			categoria_id: productos.categoria_id,
 			margen_porcentaje: productos.margen_porcentaje,
+			receta_pendiente: recetaPendiente,
 			portada_id: sql<number | null>`(
 				select ${adjuntos.id} from ${adjuntos}
 				where ${adjuntos.producto_id} = ${productos.id} and ${adjuntos.categoria} = 'portada'

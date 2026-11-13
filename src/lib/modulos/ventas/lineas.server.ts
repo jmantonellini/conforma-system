@@ -14,6 +14,7 @@ import type {
 	TipoLineaComercial
 } from '$lib/modulos/ventas/tipos';
 import { calcularCostoComposicion, redondearPrecio } from '$lib/utils/precios';
+import { sincronizarRecetaProducto } from '$lib/modulos/productos/receta.server';
 
 export type LineaComercialEntrada = {
 	tipo?: TipoLineaComercial;
@@ -43,6 +44,43 @@ export type LineaComercialResuelta = {
 	costo_materiales: number;
 	insumos_snapshot: MaterialSnapshot[];
 };
+
+async function componerDesdeInsumos(
+	tx: Tx,
+	asociados: { insumo_id: number; cantidad: number }[],
+	enMoneda: (valorUsd: number | null | undefined) => number
+): Promise<MaterialSnapshot[]> {
+	const ids = asociados.map((material) => material.insumo_id);
+	if (new Set(ids).size !== ids.length) {
+		error(400, 'No repitas el mismo insumo en la composición');
+	}
+	if (!ids.length) return [];
+	const materiales = await tx
+		.select({
+			id: insumos.id,
+			codigo: insumos.codigo,
+			nombre: insumos.nombre,
+			unidad: unidadInsumo,
+			costo_unitario: insumos.costo_unitario
+		})
+		.from(insumos)
+		.where(inArray(insumos.id, ids));
+	const porId = new Map(materiales.map((material) => [material.id, material]));
+	return asociados.map((asociado) => {
+		const material = porId.get(asociado.insumo_id);
+		if (!material) error(400, 'Uno de los insumos asociados ya no existe');
+		const costo_unitario = enMoneda(material.costo_unitario);
+		return {
+			insumo_id: material.id,
+			codigo: material.codigo,
+			nombre: material.nombre,
+			unidad: material.unidad,
+			cantidad: asociado.cantidad,
+			costo_unitario,
+			subtotal: redondearPrecio(asociado.cantidad * costo_unitario)
+		};
+	});
+}
 
 export async function resolverLineaComercial(
 	tx: Tx,
@@ -88,33 +126,44 @@ export async function resolverLineaComercial(
 			error(400, 'El precio de lista no puede ser menor al precio base del producto');
 		}
 		margen_producto = precio.margen_porcentaje;
-		insumos_snapshot = producto.recetaDirecta.map((material) => {
-			if (material.insumo_id) {
-				const insumo = producto.receta.find((item) => item.insumo_id === material.insumo_id);
-				const costo_unitario = enMoneda(insumo?.costo_unitario);
-				return {
-					insumo_id: material.insumo_id,
-					codigo: insumo?.codigo ?? null,
-					nombre: insumo?.nombre ?? 'Insumo',
-					cantidad: material.cantidad,
-					costo_unitario,
-					unidad: insumo?.unidad ?? '',
-					subtotal: redondearPrecio(material.cantidad * costo_unitario)
-				};
-			}
+		const asociados = linea.insumos_asociados ?? [];
+		if (!producto.recetaDirecta.length && asociados.length) {
+			insumos_snapshot = await componerDesdeInsumos(tx, asociados, enMoneda);
+			costo_materiales = calcularCostoComposicion(insumos_snapshot);
+			await sincronizarRecetaProducto({
+				tx,
+				productoId: producto_id,
+				receta: asociados.map(({ insumo_id, cantidad }) => ({ insumo_id, cantidad }))
+			});
+		} else {
+			insumos_snapshot = producto.recetaDirecta.map((material) => {
+				if (material.insumo_id) {
+					const insumo = producto.receta.find((item) => item.insumo_id === material.insumo_id);
+					const costo_unitario = enMoneda(insumo?.costo_unitario);
+					return {
+						insumo_id: material.insumo_id,
+						codigo: insumo?.codigo ?? null,
+						nombre: insumo?.nombre ?? 'Insumo',
+						cantidad: material.cantidad,
+						costo_unitario,
+						unidad: insumo?.unidad ?? '',
+						subtotal: redondearPrecio(material.cantidad * costo_unitario)
+					};
+				}
 
-			const componente = producto.componentes.find(
-				(item) => item.componente_id === material.producto_id
-			);
-			return {
-				producto_id: material.producto_id ?? null,
-				nombre: `${componente?.nombre ?? 'Componente'} (${material.cantidad}x)`,
-				cantidad: material.cantidad,
-				unidad: 'subproducto',
-				costo_unitario: 0,
-				subtotal: 0
-			};
-		});
+				const componente = producto.componentes.find(
+					(item) => item.componente_id === material.producto_id
+				);
+				return {
+					producto_id: material.producto_id ?? null,
+					nombre: `${componente?.nombre ?? 'Componente'} (${material.cantidad}x)`,
+					cantidad: material.cantidad,
+					unidad: 'subproducto',
+					costo_unitario: 0,
+					subtotal: 0
+				};
+			});
+		}
 	} else if (tipo === 'insumo') {
 		if (linea.nuevo_insumo) {
 			const nuevo = linea.nuevo_insumo;
@@ -189,39 +238,11 @@ export async function resolverLineaComercial(
 			}
 		];
 	} else {
-		if (!descripcion) error(400, 'La descripción del concepto es requerida');
-		const asociados = linea.insumos_asociados ?? [];
-		const ids = asociados.map((material) => material.insumo_id);
-		if (new Set(ids).size !== ids.length) {
-			error(400, 'No repitas el mismo insumo en la composición');
-		}
-		if (ids.length) {
-			const materiales = await tx
-				.select({
-					id: insumos.id,
-					codigo: insumos.codigo,
-					nombre: insumos.nombre,
-					unidad: unidadInsumo,
-					costo_unitario: insumos.costo_unitario
-				})
-				.from(insumos)
-				.where(inArray(insumos.id, ids));
-			const porId = new Map(materiales.map((material) => [material.id, material]));
-			insumos_snapshot = asociados.map((asociado) => {
-				const material = porId.get(asociado.insumo_id);
-				if (!material) error(400, 'Uno de los insumos asociados ya no existe');
-				const costo_unitario = enMoneda(material.costo_unitario);
-				return {
-					insumo_id: material.id,
-					codigo: material.codigo,
-					nombre: material.nombre,
-					unidad: material.unidad,
-					cantidad: asociado.cantidad,
-					costo_unitario,
-					subtotal: redondearPrecio(asociado.cantidad * costo_unitario)
-				};
-			});
-			costo_materiales = calcularCostoComposicion(insumos_snapshot);
+		if (!descripcion) error(400, 'La descripción del trabajo es requerida');
+		const composicion = await componerDesdeInsumos(tx, linea.insumos_asociados ?? [], enMoneda);
+		if (composicion.length) {
+			insumos_snapshot = composicion;
+			costo_materiales = calcularCostoComposicion(composicion);
 		}
 	}
 
