@@ -70,6 +70,7 @@ function remotaInvocada(url: URL) {
 }
 
 const RUTAS_SIN_REGISTRO = new Set(['/salud']);
+const REMOTAS_DE_SONDEO = new Set(['getNotificaciones']);
 
 const registrarRequest: Handle = async ({ event, resolve }) => {
 	if (RUTAS_SIN_REGISTRO.has(event.url.pathname)) return resolve(event);
@@ -82,13 +83,13 @@ const registrarRequest: Handle = async ({ event, resolve }) => {
 		estado = respuesta.status;
 		return respuesta;
 	} finally {
-		const remota = remotaInvocada(new URL(event.request.url));
-		const destino = remota ? `remota ${remota.split('/').pop()}` : event.url.pathname;
+		const remota = remotaInvocada(new URL(event.request.url))?.split('/').pop();
+		const destino = remota ? `remota ${remota}` : event.url.pathname;
 		const ms = Math.round(performance.now() - inicio);
 		const linea = `[http] ${event.request.method} ${destino} ${estado} ${ms}ms ${usuario?.username ?? '-'}`;
 		if (estado >= 500) console.error(linea);
 		else if (estado >= 400) console.warn(linea);
-		else console.info(linea);
+		else if (!REMOTAS_DE_SONDEO.has(remota ?? '')) console.info(linea);
 	}
 };
 

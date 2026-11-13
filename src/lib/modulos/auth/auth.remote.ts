@@ -25,7 +25,7 @@ export const login = form(LoginSchema, async (data) => {
 				: null;
 	if (motivo) {
 		console.warn(
-			`[login] Rechazado "${data.username}": ${motivo} (ip ${event.getClientAddress()})`
+			`[login] Rechazado "${data.username}": ${motivo} (ip ${event.request.headers.get('cf-connecting-ip') ?? event.getClientAddress()})`
 		);
 		error(400, 'Credenciales inválidas');
 	}

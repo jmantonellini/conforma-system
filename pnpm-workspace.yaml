@@ -4,3 +4,5 @@ allowBuilds:
   esbuild: true
 onlyBuiltDependencies:
   - esbuild
+overrides:
+  lucide: 1.43.0
