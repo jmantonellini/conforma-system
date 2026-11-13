@@ -43,6 +43,13 @@
 			"when": 1794598385044,
 			"tag": "0005_monedas_lotes",
 			"breakpoints": true
+		},
+		{
+			"idx": 6,
+			"version": "7",
+			"when": 1794610431075,
+			"tag": "0006_mano_de_obra",
+			"breakpoints": true
 		}
 	]
 }
