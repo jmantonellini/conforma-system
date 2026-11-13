@@ -1,6 +1,7 @@
 import { sql } from 'drizzle-orm';
 import {
 	boolean,
+	check,
 	index,
 	integer,
 	jsonb,
@@ -16,8 +17,10 @@ import {
 	empresa,
 	fecha,
 	importe,
+	moneda,
 	porcentaje,
-	precioUnitario
+	precioUnitario,
+	tipoCambio
 } from './base';
 import { empleados, usuarios } from './acceso';
 import { contactos } from './contactos';
@@ -45,6 +48,8 @@ export const cotizaciones = pgTable(
 			.notNull(),
 		asignada_a: integer('asignada_a').references(() => empleados.id, { onDelete: 'set null' }),
 		creada_por: integer('creada_por').references(() => usuarios.id, { onDelete: 'set null' }),
+		moneda: moneda(),
+		tipo_cambio: tipoCambio('tipo_cambio'),
 		precio_total: importe('precio_total'),
 		descuento_global_porcentaje: porcentaje('descuento_global_porcentaje').notNull().default(0),
 		incluir_iva: boolean('incluir_iva').notNull().default(false),
@@ -58,6 +63,8 @@ export const cotizaciones = pgTable(
 	},
 	(t) => [
 		uniqueIndex('idx_cotizaciones_empresa_numero').on(t.empresa_id, t.numero_cotizacion),
+		check('cotizaciones_moneda_valida', sql`${t.moneda} IN ('USD', 'ARS')`),
+		check('cotizaciones_ars_con_cambio', sql`${t.moneda} = 'USD' OR ${t.tipo_cambio} > 0`),
 		aislamiento()
 	]
 );

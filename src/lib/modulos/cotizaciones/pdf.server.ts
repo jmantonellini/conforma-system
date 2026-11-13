@@ -13,9 +13,10 @@ import { obtenerCotizacionDolarBNA } from '$lib/server/integraciones/tipo-cambio
 import { logoEmpresa } from '$lib/server/pdf/imagenes';
 import { formatearCuit } from '$lib/utils/cuit';
 import { calcularIva21, redondearPrecio } from '$lib/utils/precios';
+import type { Moneda } from '$lib/utils/moneda';
 import { renderizarCotizacion } from './pdf/render';
 
-export type MonedaPDFCotizacion = 'USD' | 'ARS';
+export type MonedaPDFCotizacion = Moneda;
 
 const unir = (partes: (string | null | undefined)[], separador = ', ') =>
 	partes
@@ -28,11 +29,13 @@ export async function generarPDFCotizacion(
 	moneda: MonedaPDFCotizacion = 'USD'
 ) {
 	const empresaPromesa = obtenerEmpresa();
-	const [[cot], lineas, empresa, logo, tipoCambio] = await Promise.all([
+	const [[cot], lineas, empresa, logo] = await Promise.all([
 		db
 			.select({
 				numero: cotizaciones.numero_cotizacion,
 				precio_total: cotizaciones.precio_total,
+				moneda: cotizaciones.moneda,
+				tipo_cambio: cotizaciones.tipo_cambio,
 				descuento: cotizaciones.descuento_global_porcentaje,
 				incluir_iva: cotizaciones.incluir_iva,
 				condiciones_pago: cotizaciones.condiciones_pago,
@@ -67,20 +70,26 @@ export async function generarPDFCotizacion(
 			)
 			.orderBy(lineas_cotizacion.orden_linea, lineas_cotizacion.id),
 		empresaPromesa,
-		empresaPromesa.then((e) => logoEmpresa(e?.logo_url, logoUrl).catch(() => null)),
-		moneda === 'ARS' ? obtenerCotizacionDolarBNA() : null
+		empresaPromesa.then((e) => logoEmpresa(e?.logo_url, logoUrl).catch(() => null))
 	]);
 	if (!cot) throw new Error('Cotización no encontrada');
 
-	const factor = tipoCambio?.venta ?? 1;
+	const tipoCambio =
+		cot.moneda === moneda
+			? null
+			: moneda === 'ARS'
+				? await obtenerCotizacionDolarBNA()
+				: { venta: cot.tipo_cambio ?? 1, fecha: '', hora: '' };
+	const factor = !tipoCambio ? 1 : moneda === 'ARS' ? tipoCambio.venta : 1 / tipoCambio.venta;
 	const convertir = (valor: number) => redondearPrecio(valor * factor);
-	const subtotalUsd = redondearPrecio(
+	const subtotalBase = redondearPrecio(
 		lineas.reduce((s, l) => s + (l.subtotal ?? l.cantidad * l.precio), 0)
 	);
 	const descuentoPorcentaje = cot.descuento ?? 0;
-	const descuentoUsd = redondearPrecio(subtotalUsd * (descuentoPorcentaje / 100));
-	const ivaUsd = cot.incluir_iva ? calcularIva21(subtotalUsd - descuentoUsd) : null;
-	const totalUsd = cot.precio_total ?? redondearPrecio(subtotalUsd - descuentoUsd + (ivaUsd ?? 0));
+	const descuentoBase = redondearPrecio(subtotalBase * (descuentoPorcentaje / 100));
+	const ivaBase = cot.incluir_iva ? calcularIva21(subtotalBase - descuentoBase) : null;
+	const totalBase =
+		cot.precio_total ?? redondearPrecio(subtotalBase - descuentoBase + (ivaBase ?? 0));
 
 	const cliente = cot.cliente;
 	const contacto = unir([cliente?.nombre, cliente?.apellido], ' ');
@@ -128,11 +137,11 @@ export async function generarPDFCotizacion(
 			precio: convertir(l.precio),
 			importe: convertir(l.subtotal ?? l.cantidad * l.precio)
 		})),
-		subtotal: convertir(subtotalUsd),
+		subtotal: convertir(subtotalBase),
 		descuentoPorcentaje,
-		descuento: convertir(descuentoUsd),
-		iva: ivaUsd === null ? null : convertir(ivaUsd),
-		total: convertir(totalUsd),
+		descuento: convertir(descuentoBase),
+		iva: ivaBase === null ? null : convertir(ivaBase),
+		total: convertir(totalBase),
 		condicionesPago:
 			cot.condiciones_pago === null
 				? '50% de anticipo al aprobar, saldo contra entrega.'

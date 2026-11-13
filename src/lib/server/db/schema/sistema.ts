@@ -74,9 +74,11 @@ export const logs_sistema = pgTable(
 		empresa_id: empresa(),
 		usuario_id: integer('usuario_id').references(() => usuarios.id, { onDelete: 'set null' }),
 		accion: text('accion').notNull(),
+		entidad: text('entidad'),
+		entidad_id: integer('entidad_id'),
 		detalles: text('detalles'),
 		ip_address: text('ip_address'),
 		created_at: creado()
 	},
-	() => [aislamiento()]
+	(t) => [index('idx_logs_sistema_entidad').on(t.entidad, t.entidad_id), aislamiento()]
 );

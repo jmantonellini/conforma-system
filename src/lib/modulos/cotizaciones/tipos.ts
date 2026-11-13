@@ -37,6 +37,8 @@ export type InsumoOpcion = {
 
 export type LineaEdicion = {
 	idx: number;
+	ref?: string;
+	bloqueo?: string | null;
 	tipo: TipoLineaComercial;
 	visible_cliente: boolean;
 	producto_id: string;

@@ -16,7 +16,11 @@ const DESPACHO: PermisoDestino = { modulo: 'envios', accion: 'edit' };
 
 async function datosPedido(pedidoId: number, ejecutor: Ejecutor) {
 	const [pedido] = await ejecutor
-		.select({ numero: pedidos.numero_pedido, cliente: contactos.razon_social })
+		.select({
+			numero: pedidos.numero_pedido,
+			cliente: contactos.razon_social,
+			moneda: pedidos.moneda
+		})
 		.from(pedidos)
 		.leftJoin(contactos, eq(contactos.id, pedidos.contacto_id))
 		.where(eq(pedidos.id, pedidoId));
@@ -26,7 +30,7 @@ async function datosPedido(pedidoId: number, ejecutor: Ejecutor) {
 async function avisar(
 	pedidoId: number,
 	actor: number,
-	armar: (pedido: { numero: string; cliente: string | null }) => {
+	armar: (pedido: { numero: string; cliente: string | null; moneda: 'USD' | 'ARS' }) => {
 		titulo: string;
 		mensaje: string;
 	},
@@ -74,9 +78,9 @@ export const avisarCambioEstadoPedido = (
 };
 
 export const avisarPago = (pedidoId: number, monto: number, actor: number) =>
-	avisar(pedidoId, actor, ({ numero, cliente }) => ({
+	avisar(pedidoId, actor, ({ numero, cliente, moneda }) => ({
 		titulo: `Pago registrado en ${numero}`,
-		mensaje: `${formatearMoneda(monto)} de ${cliente ?? 'el cliente'}.`
+		mensaje: `${formatearMoneda(monto, moneda)} de ${cliente ?? 'el cliente'}.`
 	}));
 
 export const avisarEnvio = (pedidoId: number, entregado: boolean, actor: number) =>

@@ -47,8 +47,11 @@ export type LineaComercialResuelta = {
 export async function resolverLineaComercial(
 	tx: Tx,
 	linea: LineaComercialEntrada,
-	codigoPrefijo: 'COT' | 'PED'
+	codigoPrefijo: 'COT' | 'PED',
+	factor = 1
 ): Promise<LineaComercialResuelta> {
+	const enMoneda = (valorUsd: number | null | undefined) =>
+		redondearPrecio((valorUsd ?? 0) * factor);
 	const productoEntrada = String(linea.producto_id ?? '');
 	const tipo =
 		(productoEntrada === 'personalizado' && !linea.insumo_id && !linea.nuevo_insumo
@@ -76,18 +79,19 @@ export async function resolverLineaComercial(
 			obtenerPrecioProducto(producto_id)
 		]);
 		descripcion = producto.producto.nombre;
-		costo_materiales = redondearPrecio(precio.costo_materiales);
+		costo_materiales = enMoneda(precio.costo_materiales);
+		const precioBase = enMoneda(precio.precio_venta);
 		precio_lista_unitario = redondearPrecio(
-			linea.precio_lista_unitario ?? linea.precio_unitario ?? precio.precio_venta
+			linea.precio_lista_unitario ?? linea.precio_unitario ?? precioBase
 		);
-		if (precio_lista_unitario < precio.precio_venta) {
+		if (precio_lista_unitario < precioBase) {
 			error(400, 'El precio de lista no puede ser menor al precio base del producto');
 		}
 		margen_producto = precio.margen_porcentaje;
 		insumos_snapshot = producto.recetaDirecta.map((material) => {
 			if (material.insumo_id) {
 				const insumo = producto.receta.find((item) => item.insumo_id === material.insumo_id);
-				const costo_unitario = redondearPrecio(insumo?.costo_unitario ?? 0);
+				const costo_unitario = enMoneda(insumo?.costo_unitario);
 				return {
 					insumo_id: material.insumo_id,
 					codigo: insumo?.codigo ?? null,
@@ -139,7 +143,7 @@ export async function resolverLineaComercial(
 					tipo_id: nuevo.tipo_id,
 					categoria_id: nuevo.categoria_id ?? null,
 					unidad_id: nuevo.unidad_id,
-					costo_unitario: redondearPrecio(nuevo.costo_unitario),
+					costo_unitario: redondearPrecio(nuevo.costo_unitario / factor),
 					flete_porcentaje: 0,
 					activo: true
 				})
@@ -164,9 +168,11 @@ export async function resolverLineaComercial(
 			.limit(1);
 		if (!insumo) error(404, 'Insumo no encontrado');
 		descripcion = insumo.nombre;
-		costo_materiales = redondearPrecio(insumo.costo_unitario);
+		costo_materiales = linea.nuevo_insumo
+			? redondearPrecio(linea.nuevo_insumo.costo_unitario)
+			: enMoneda(insumo.costo_unitario);
 		precio_lista_unitario = redondearPrecio(
-			linea.precio_lista_unitario ?? linea.precio_unitario ?? insumo.costo_unitario
+			linea.precio_lista_unitario ?? linea.precio_unitario ?? costo_materiales
 		);
 		if (precio_lista_unitario < costo_materiales) {
 			error(400, 'El precio del insumo no puede ser menor al costo unitario');
@@ -204,7 +210,7 @@ export async function resolverLineaComercial(
 			insumos_snapshot = asociados.map((asociado) => {
 				const material = porId.get(asociado.insumo_id);
 				if (!material) error(400, 'Uno de los insumos asociados ya no existe');
-				const costo_unitario = redondearPrecio(material.costo_unitario);
+				const costo_unitario = enMoneda(material.costo_unitario);
 				return {
 					insumo_id: material.id,
 					codigo: material.codigo,

@@ -1,41 +1,48 @@
 {
-  "version": "7",
-  "dialect": "postgresql",
-  "entries": [
-    {
-      "idx": 0,
-      "version": "7",
-      "when": 1794434365170,
-      "tag": "0000_base",
-      "breakpoints": true
-    },
-    {
-      "idx": 1,
-      "version": "7",
-      "when": 1794448684639,
-      "tag": "0001_multiempresa",
-      "breakpoints": true
-    },
-    {
-      "idx": 2,
-      "version": "7",
-      "when": 1794452985877,
-      "tag": "0002_notificaciones",
-      "breakpoints": true
-    },
-    {
-      "idx": 3,
-      "version": "7",
-      "when": 1794455082569,
-      "tag": "0003_permisos_estandar",
-      "breakpoints": true
-    },
-    {
-      "idx": 4,
-      "version": "7",
-      "when": 1794458288541,
-      "tag": "0004_medidas_escapes",
-      "breakpoints": true
-    }
-  ]
+	"version": "7",
+	"dialect": "postgresql",
+	"entries": [
+		{
+			"idx": 0,
+			"version": "7",
+			"when": 1794434365170,
+			"tag": "0000_base",
+			"breakpoints": true
+		},
+		{
+			"idx": 1,
+			"version": "7",
+			"when": 1794448684639,
+			"tag": "0001_multiempresa",
+			"breakpoints": true
+		},
+		{
+			"idx": 2,
+			"version": "7",
+			"when": 1794452985877,
+			"tag": "0002_notificaciones",
+			"breakpoints": true
+		},
+		{
+			"idx": 3,
+			"version": "7",
+			"when": 1794455082569,
+			"tag": "0003_permisos_estandar",
+			"breakpoints": true
+		},
+		{
+			"idx": 4,
+			"version": "7",
+			"when": 1794458288541,
+			"tag": "0004_medidas_escapes",
+			"breakpoints": true
+		},
+		{
+			"idx": 5,
+			"version": "7",
+			"when": 1794598385044,
+			"tag": "0005_monedas_lotes",
+			"breakpoints": true
+		}
+	]
 }

@@ -32,7 +32,11 @@ export const getPagosByPedido = query(v.number(), async (pedidoId) => {
 	const [pagosRows, pedidoRow] = await Promise.all([
 		db.select().from(pagos).where(eq(pagos.pedido_id, pedidoId)).orderBy(desc(pagos.created_at)),
 		db
-			.select({ precio_total: pedidos.precio_total, anticipo: pedidos.anticipo })
+			.select({
+				precio_total: pedidos.precio_total,
+				anticipo: pedidos.anticipo,
+				moneda: pedidos.moneda
+			})
 			.from(pedidos)
 			.where(eq(pedidos.id, pedidoId))
 			.then((r) => r[0])
@@ -53,7 +57,7 @@ export const getPagosByPedido = query(v.number(), async (pedidoId) => {
 		estado = ESTADO_PAGO.PARCIAL;
 	}
 
-	return { pagos: pagosRows, totalPagado, saldo, estado };
+	return { pagos: pagosRows, totalPagado, saldo, estado, moneda: pedidoRow?.moneda ?? 'USD' };
 });
 
 export const registrarPago = form(RegistrarPagoSchema, async (data) => {

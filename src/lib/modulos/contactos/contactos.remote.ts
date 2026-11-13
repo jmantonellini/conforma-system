@@ -567,6 +567,7 @@ export const obtenerPedidosContacto = query(v.number(), async (contactoId) => {
 			numero_pedido: pedidos.numero_pedido,
 			fecha_pedido: pedidos.fecha_pedido,
 			precio_total: pedidos.precio_total,
+			moneda: pedidos.moneda,
 			estado: estados.nombre,
 			estado_color: estados.color
 		})

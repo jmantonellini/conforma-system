@@ -232,9 +232,13 @@ export function renderizarCotizacion(d: DatosPdfCotizacion) {
 		d.iva !== null
 			? 'Los precios incluyen IVA (21%), detallado arriba.'
 			: 'Los precios no incluyen IVA.',
-		d.moneda === 'ARS' && d.tipoCambio
-			? `Importes en pesos al tipo de cambio dólar billete vendedor del Banco Nación ($ ${decimales.format(d.tipoCambio.venta)} por US$ 1, ${d.tipoCambio.fecha} ${d.tipoCambio.hora}).`
-			: 'Importes expresados en dólares estadounidenses (USD).',
+		d.tipoCambio
+			? d.moneda === 'ARS'
+				? `Importes en pesos al tipo de cambio dólar billete vendedor del Banco Nación ($ ${decimales.format(d.tipoCambio.venta)} por US$ 1, ${d.tipoCambio.fecha} ${d.tipoCambio.hora}).`
+				: `Importes en dólares convertidos al tipo de cambio pactado ($ ${decimales.format(d.tipoCambio.venta)} por US$ 1).`
+			: d.moneda === 'ARS'
+				? 'Importes expresados en pesos argentinos (ARS).'
+				: 'Importes expresados en dólares estadounidenses (USD).',
 		'Plazo de entrega: a confirmar al aprobar la cotización, según disponibilidad de materiales.'
 	].filter(Boolean) as string[];
 	const altoCondiciones = 6.5 + condiciones.length * 4.6 + 10;

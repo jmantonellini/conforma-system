@@ -246,7 +246,7 @@
 								>
 								<td>{pedido.fecha_pedido?.toLocaleDateString('es-AR') || '-'}</td>
 								<td><span class="badge badge-sm">{pedido.estado || 'Sin estado'}</span></td>
-								<td class="numero">{formatearMoneda(pedido.precio_total)}</td>
+								<td class="numero">{formatearMoneda(pedido.precio_total, pedido.moneda)}</td>
 							</tr>
 						{/each}
 					</tbody>

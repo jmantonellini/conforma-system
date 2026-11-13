@@ -2,7 +2,7 @@ import type { Formato, Valor } from './tipos';
 
 const moneda = new Intl.NumberFormat('es-AR', {
 	style: 'currency',
-	currency: 'ARS',
+	currency: 'USD',
 	maximumFractionDigits: 0
 });
 const entero = new Intl.NumberFormat('es-AR', { maximumFractionDigits: 2 });
@@ -27,7 +27,7 @@ export function formatear(valor: Valor | undefined, formato: Formato = 'texto') 
 export function formatearEje(valor: number, formato: Formato) {
 	if (formato === 'porcentaje') return porcentaje.format(valor);
 	const texto = Math.abs(valor) >= 10_000 ? compacto.format(valor) : entero.format(valor);
-	return formato === 'moneda' ? `$ ${texto}` : texto;
+	return formato === 'moneda' ? `US$ ${texto}` : texto;
 }
 
 export function variacion(valor: number | null, previo: number | null) {

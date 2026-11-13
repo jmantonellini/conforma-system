@@ -17,7 +17,14 @@
 	import { Paths } from '$lib/tipos';
 	import { can } from '$lib/utils/permissions';
 	import type { InsumoOpcion, LineaEdicion, ProductoOpcion } from '$lib/modulos/cotizaciones/tipos';
-	import { formatearMoneda, redondearPrecio } from '$lib/utils/precios';
+	import {
+		formatearDosDecimales,
+		formatearMoneda,
+		parsearNumeroDecimal,
+		redondearPrecio
+	} from '$lib/utils/precios';
+	import { MONEDAS, NOMBRE_MONEDA, type Moneda } from '$lib/utils/moneda';
+	import { getDolarBNA } from '$lib/modulos/ventas/moneda.remote';
 	import { fechaInputManana } from '$lib/utils/fechas';
 
 	let form = crearPedido;
@@ -62,6 +69,11 @@
 		unidad: insumo.unidad,
 		costo_unitario: insumo.costo_unitario
 	}));
+	const dolar = await getDolarBNA().catch(() => null);
+	let moneda = $state<Moneda>('USD');
+	let tipoCambioTexto = $state(dolar ? formatearDosDecimales(dolar.venta) : '');
+	const tipoCambio = $derived(parsearNumeroDecimal(tipoCambioTexto));
+	const factor = $derived(moneda === 'ARS' ? (tipoCambio ?? 0) : 1);
 	let usarCreditoDistribuidor = $state(false);
 	let clienteSeleccionadoId = $state(contactoInicialId);
 	let distribuidorSeleccionadoId = $state('');
@@ -145,6 +157,37 @@
 				]
 			: [lineaInicial];
 	let lineas = $state<LineaEdicion[]>(lineasIniciales);
+
+	function reescalarLineas(proporcion: number) {
+		if (!Number.isFinite(proporcion) || proporcion <= 0 || proporcion === 1) return;
+		const escalar = (valor: number) => redondearPrecio(valor * proporcion);
+		lineas = lineas.map((linea) => ({
+			...linea,
+			precio_unitario: escalar(linea.precio_unitario),
+			precio_lista_unitario: escalar(linea.precio_lista_unitario),
+			precio_minimo_unitario: escalar(linea.precio_minimo_unitario),
+			costo_materiales: escalar(linea.costo_materiales),
+			insumos_snapshot: linea.insumos_snapshot.map((material) => ({
+				...material,
+				costo_unitario:
+					material.costo_unitario === undefined ? undefined : escalar(material.costo_unitario),
+				subtotal: material.subtotal === undefined ? undefined : escalar(material.subtotal)
+			}))
+		}));
+		form.fields.lineas.set(serializarLineas(lineas));
+	}
+
+	function cambiarMoneda(nueva: Moneda) {
+		const anterior = factor;
+		moneda = nueva;
+		if (anterior > 0 && factor > 0) reescalarLineas(factor / anterior);
+	}
+
+	function cambiarTipoCambio(texto: string) {
+		const anterior = factor;
+		tipoCambioTexto = texto;
+		if (moneda === 'ARS' && anterior > 0 && factor > 0) reescalarLineas(factor / anterior);
+	}
 	if (contactoInicialId) form.fields.contacto_id.set(contactoInicialId);
 	form.fields.lineas.set(serializarLineas(lineasIniciales));
 
@@ -264,10 +307,9 @@
 		Number((total * (porcentajeComisionDistribuidor / 100)).toFixed(2))
 	);
 	let saldoLuegoDeEntrega = $derived(
-		Number(
-			(Number(distribuidorSeleccionado?.saldo_disponible ?? 0) - montoComisionDistribuidor).toFixed(
-				2
-			)
+		redondearPrecio(
+			Number(distribuidorSeleccionado?.saldo_disponible ?? 0) -
+				montoComisionDistribuidor / (factor || 1)
 		)
 	);
 
@@ -358,12 +400,41 @@
 							)}
 						/>
 						<p class="mt-1 text-xs text-base-content/70">
-							Se descontarán {formatearMoneda(montoComisionDistribuidor)} al entregar. Saldo posterior:
+							Se descontarán {formatearMoneda(montoComisionDistribuidor, moneda)} al entregar. Saldo posterior:
 							{formatearMoneda(saldoLuegoDeEntrega)}
 						</p>
 						{#if saldoLuegoDeEntrega < 0}
 							<p class="mt-1 text-xs text-error">El saldo no alcanza para cubrir la comisión.</p>
 						{/if}
+					</FormFieldWrapper>
+				{/if}
+
+				<FormFieldWrapper label="Moneda" id="moneda">
+					<select
+						class="select select-sm"
+						name="moneda"
+						value={moneda}
+						onchange={(event) => cambiarMoneda(event.currentTarget.value as Moneda)}
+					>
+						{#each MONEDAS as opcion (opcion)}
+							<option value={opcion}>{NOMBRE_MONEDA[opcion]} ({opcion})</option>
+						{/each}
+					</select>
+				</FormFieldWrapper>
+
+				{#if moneda === 'ARS'}
+					<FormFieldWrapper
+						label="Tipo de cambio"
+						id="tipo_cambio"
+						ayuda="Pesos por US$ 1. Por defecto, dólar BNA vendedor."
+					>
+						<input
+							class={['input input-sm', !tipoCambio && 'input-error']}
+							inputmode="decimal"
+							value={tipoCambioTexto}
+							onchange={(event) => cambiarTipoCambio(event.currentTarget.value)}
+						/>
+						<input type="hidden" name="n:tipo_cambio" value={tipoCambio ?? ''} />
 					</FormFieldWrapper>
 				{/if}
 
@@ -422,7 +493,9 @@
 			{tiposInsumo}
 			{categoriasInsumo}
 			{unidadesInsumo}
-			bloqueada={!!form.pending}
+			bloqueada={!!form.pending || factor <= 0}
+			{moneda}
+			{factor}
 			contexto="pedido"
 			descuentoGlobal={0}
 			totalBase={total}
@@ -435,7 +508,7 @@
 		<div class="flex justify-end">
 			<div class="text-right">
 				<p class="text-sm text-base-content/70">Total</p>
-				<p class="text-3xl font-bold">{formatearMoneda(total)}</p>
+				<p class="text-3xl font-bold">{formatearMoneda(total, moneda)}</p>
 			</div>
 		</div>
 

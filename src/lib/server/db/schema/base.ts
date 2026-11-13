@@ -1,4 +1,5 @@
 import { sql } from 'drizzle-orm';
+import { MONEDAS } from '$lib/utils/moneda';
 import { integer, numeric, pgPolicy, pgTable, serial, text, timestamp } from 'drizzle-orm/pg-core';
 
 export const fecha = (nombre: string) => timestamp(nombre, { withTimezone: true, mode: 'date' });
@@ -13,6 +14,10 @@ export const porcentaje = (nombre: string) =>
 	numeric(nombre, { precision: 7, scale: 4, mode: 'number' });
 export const cantidad = (nombre: string) =>
 	numeric(nombre, { precision: 14, scale: 4, mode: 'number' });
+export const tipoCambio = (nombre: string) =>
+	numeric(nombre, { precision: 14, scale: 4, mode: 'number' });
+
+export const moneda = () => text('moneda', { enum: MONEDAS }).notNull().default('USD');
 
 export const empresas = pgTable('empresas', {
 	id: serial('id').primaryKey(),

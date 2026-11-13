@@ -7,6 +7,7 @@
 	import type { UsuarioSesion } from '$lib/server/auth/permissions';
 	import { can } from '$lib/utils/permissions';
 	import CampanaNotificaciones from '$lib/modulos/notificaciones/componentes/CampanaNotificaciones.svelte';
+	import DolarBNA from '$lib/modulos/ventas/componentes/DolarBNA.svelte';
 	import FormFieldWrapper from './FormFieldWrapper.svelte';
 	import Icono from './Icono.svelte';
 	import MenuDesplegable from './MenuDesplegable.svelte';
@@ -49,6 +50,7 @@
 	] as const;
 	const accesos = $derived(ACCESOS.filter((a) => can(usuario, permisos, a.modulo, 'create')));
 	const veConfiguracion = $derived(can(usuario, permisos, 'configuracion', 'view'));
+	const veImportes = $derived(can(usuario, permisos, 'importes', 'view'));
 
 	async function salir() {
 		await logout();
@@ -70,6 +72,14 @@
 	{/if}
 
 	<div class="ml-auto flex items-center gap-1">
+		{#if veImportes}
+			<svelte:boundary>
+				<DolarBNA />
+				{#snippet pending()}{/snippet}
+				{#snippet failed()}{/snippet}
+			</svelte:boundary>
+			<span class="mx-1 hidden h-6 border-l border-base-300 md:block"></span>
+		{/if}
 		{#if accesos.length}
 			<MenuDesplegable alFinal class="btn btn-primary btn-sm" titulo="Crear">
 				{#snippet etiqueta()}

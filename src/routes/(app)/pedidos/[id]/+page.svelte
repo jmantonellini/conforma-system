@@ -7,6 +7,7 @@
 	import type { Transicion } from '$lib/ui/EncabezadoDetalle.svelte';
 	import {
 		cambiarEstadoPedido,
+		cambiarMonedaPedido,
 		eliminarPedido,
 		getEstadosPedido,
 		getHistorialPedido,
@@ -22,12 +23,22 @@
 	import PedidoEnvios from './PedidoEnvios.svelte';
 	import PedidoPagos from './PedidoPagos.svelte';
 	import ArchivosAdjuntos from '$lib/modulos/adjuntos/componentes/ArchivosAdjuntos.svelte';
+	import CambiarMonedaDialog from '$lib/modulos/ventas/componentes/CambiarMonedaDialog.svelte';
+	import { getPagosByPedido } from '$lib/modulos/pedidos/facturacion.remote';
+	import { NOMBRE_MONEDA } from '$lib/utils/moneda';
+	import { formatearDosDecimales } from '$lib/utils/precios';
 
 	const id = $derived(Number(page.params.id));
 	const { pedido, lineas, insumosAdicionales, adjuntos } = $derived(await getPedidoById(id));
 	const historial = $derived(await getHistorialPedido(id));
 	const estados = $derived(await getEstadosPedido());
 	const veImportes = can(page.data.user, page.data.permisos, 'importes', 'view');
+	const editable = $derived(
+		veImportes &&
+			can(page.data.user, page.data.permisos, 'pedidos', 'edit') &&
+			!pedido.estado.es_final
+	);
+	let dialogoMoneda = $state<CambiarMonedaDialog>();
 	const contacto = $derived(
 		[pedido.cliente?.nombre, pedido.cliente?.apellido].filter(Boolean).join(' ')
 	);
@@ -88,7 +99,13 @@
 			mensaje: `¿Eliminar el pedido ${pedido.numero_pedido}? Esta acción no se puede deshacer.`,
 			onConfirmar: eliminar
 		}}
-	/>
+	>
+		{#snippet acciones()}
+			{#if editable}
+				<a class="btn btn-sm" href={resolve(`/pedidos/${pedido.id}/editar`)}>Editar</a>
+			{/if}
+		{/snippet}
+	</EncabezadoDetalle>
 
 	<Seccion>
 		<dl class="datos">
@@ -104,14 +121,38 @@
 				<dt>Fecha</dt>
 				<dd>{formatearFecha(pedido.fecha)}</dd>
 			</div>
+			{#if pedido.fecha_entrega_prometida}
+				<div>
+					<dt>Entrega prometida</dt>
+					<dd>{formatearFecha(pedido.fecha_entrega_prometida)}</dd>
+				</div>
+			{/if}
 			{#if veImportes}
 				<div>
+					<dt>Moneda</dt>
+					<dd class="flex items-center gap-2">
+						<span>
+							{NOMBRE_MONEDA[pedido.moneda]} ({pedido.moneda})
+							{#if pedido.tipo_cambio}
+								<span class="block text-sm text-base-content/60">
+									US$ 1 = $ {formatearDosDecimales(pedido.tipo_cambio)}
+								</span>
+							{/if}
+						</span>
+						{#if editable}
+							<button class="btn btn-ghost btn-xs" onclick={() => dialogoMoneda?.abrir()}>
+								Cambiar
+							</button>
+						{/if}
+					</dd>
+				</div>
+				<div>
 					<dt>Total</dt>
-					<dd class="font-semibold">{formatearMoneda(pedido.total)}</dd>
+					<dd class="font-semibold">{formatearMoneda(pedido.total, pedido.moneda)}</dd>
 				</div>
 				<div>
 					<dt>Anticipo</dt>
-					<dd>{formatearMoneda(pedido.anticipo)}</dd>
+					<dd>{formatearMoneda(pedido.anticipo, pedido.moneda)}</dd>
 				</div>
 			{/if}
 			{#if pedido.observaciones}
@@ -145,10 +186,10 @@
 				</td>
 				<td class="numero">{linea.cantidad}</td>
 				{#if veImportes}
-					<td class="numero">{formatearMoneda(linea.costo_materiales)}</td>
-					<td class="numero">{formatearMoneda(linea.precio_lista_unitario)}</td>
-					<td class="numero">{formatearMoneda(linea.precio_unitario)}</td>
-					<td class="numero font-medium">{formatearMoneda(linea.subtotal)}</td>
+					<td class="numero">{formatearMoneda(linea.costo_materiales, pedido.moneda)}</td>
+					<td class="numero">{formatearMoneda(linea.precio_lista_unitario, pedido.moneda)}</td>
+					<td class="numero">{formatearMoneda(linea.precio_unitario, pedido.moneda)}</td>
+					<td class="numero font-medium">{formatearMoneda(linea.subtotal, pedido.moneda)}</td>
 				{/if}
 				<td>
 					{#if linea.reserva_stock}
@@ -176,7 +217,9 @@
 			{#snippet footer()}
 				{#if veImportes}
 					<th colspan="5" class="numero">Total</th>
-					<th class="numero text-base text-base-content">{formatearMoneda(pedido.total)}</th>
+					<th class="numero text-base text-base-content"
+						>{formatearMoneda(pedido.total, pedido.moneda)}</th
+					>
 					<th></th>
 				{/if}
 			{/snippet}
@@ -202,9 +245,9 @@
 					</td>
 					<td class="numero">{insumo.cantidad} {insumo.unidad}</td>
 					{#if veImportes}
-						<td class="numero">{formatearMoneda(insumo.costo_unitario)}</td>
-						<td class="numero">{formatearMoneda(insumo.precio_lista_unitario)}</td>
-						<td class="numero">{formatearMoneda(insumo.precio_unitario)}</td>
+						<td class="numero">{formatearMoneda(insumo.costo_unitario, pedido.moneda)}</td>
+						<td class="numero">{formatearMoneda(insumo.precio_lista_unitario, pedido.moneda)}</td>
+						<td class="numero">{formatearMoneda(insumo.precio_unitario, pedido.moneda)}</td>
 					{/if}
 				{/snippet}
 			</Table>
@@ -225,3 +268,16 @@
 		</div>
 	</div>
 </PageLayout>
+
+{#if veImportes}
+	<CambiarMonedaDialog
+		bind:this={dialogoMoneda}
+		moneda={pedido.moneda}
+		tipoCambio={pedido.tipo_cambio}
+		total={pedido.total}
+		onConfirmar={async (cambio) => {
+			await cambiarMonedaPedido({ id: pedido.id, ...cambio });
+			await getPagosByPedido(pedido.id).refresh();
+		}}
+	/>
+{/if}

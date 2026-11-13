@@ -19,6 +19,13 @@ import {
 	getPedidosListado,
 	obtenerPedidoDetalle
 } from '$lib/modulos/pedidos/pedidos.server';
+import {
+	EdicionPedidoSchema,
+	bloqueosLineasPedido,
+	editarPedidoServicio
+} from '$lib/modulos/pedidos/edicion.server';
+import { cambiarMonedaTx } from '$lib/modulos/ventas/moneda.server';
+import { CambioMonedaSchema } from '$lib/modulos/ventas/moneda.schema';
 
 const idDesdeTexto = v.pipe(v.union([v.string(), v.number()]), v.transform(Number), v.integer());
 
@@ -69,7 +76,8 @@ export const getPedidoById = query(v.number(), async (id) => {
 				'precio_lista_unitario',
 				'margen_porcentaje',
 				'costo_materiales',
-				'subtotal'
+				'subtotal',
+				'insumos_snapshot'
 			])
 		),
 		insumosAdicionales: detalle.insumosAdicionales.map((insumo) =>
@@ -153,4 +161,36 @@ export const crearPedido = form(PedidoSchema, async (data) => {
 	refrescarPedidos();
 	if (creaInsumos) getInsumos({ limit: 100 }).refresh();
 	return { pedidoId: pedido.id };
+});
+
+export const getPedidoParaEditar = query(v.number(), async (id) => {
+	await requirePermission('pedidos', 'edit');
+	await requirePermission('importes', 'view');
+	const [detalle, bloqueos] = await Promise.all([
+		obtenerPedidoDetalle(id),
+		bloqueosLineasPedido(id)
+	]);
+	return {
+		pedido: detalle.pedido,
+		lineas: detalle.lineas.map((linea) => ({ ...linea, bloqueo: bloqueos.get(linea.id) ?? null })),
+		insumosAdicionales: detalle.insumosAdicionales
+	};
+});
+
+export const editarPedido = command(EdicionPedidoSchema, async (data) => {
+	const user = await requirePermission('pedidos', 'edit');
+	await requirePermission('importes', 'view');
+	if (data.lineas.some((linea) => linea.nuevo_insumo)) await requirePermission('insumos', 'create');
+	await editarPedidoServicio(data, user.id);
+	refrescarPedidos(data.pedido_id);
+	getPedidoParaEditar(data.pedido_id).refresh();
+	return { success: true };
+});
+
+export const cambiarMonedaPedido = command(CambioMonedaSchema, async (cambio) => {
+	const user = await requirePermission('pedidos', 'edit');
+	await requirePermission('importes', 'view');
+	await db.transaction((tx) => cambiarMonedaTx(tx, { ...cambio, documento: 'pedido' }, user.id));
+	refrescarPedidos(cambio.id);
+	return { success: true };
 });

@@ -2,10 +2,12 @@
 	import CotizacionLineaFila from '$lib/modulos/cotizaciones/componentes/CotizacionLineaFila.svelte';
 	import type { InsumoOpcion, LineaEdicion, ProductoOpcion } from '$lib/modulos/cotizaciones/tipos';
 	import { formatearDosDecimales, formatearMoneda } from '$lib/utils/precios';
+	import type { Moneda } from '$lib/utils/moneda';
 
 	type Props = {
 		lineas: LineaEdicion[];
 		bloqueada: boolean;
+		moneda?: Moneda;
 		productos: ProductoOpcion[];
 		onBuscarProducto?: (search: string) => Promise<void>;
 		insumos: InsumoOpcion[];
@@ -29,6 +31,7 @@
 	let {
 		lineas,
 		bloqueada,
+		moneda = 'USD',
 		productos,
 		onBuscarProducto,
 		insumos,
@@ -67,6 +70,7 @@
 				<CotizacionLineaFila
 					{linea}
 					{bloqueada}
+					{moneda}
 					cantidadLineas={lineas.length}
 					{productos}
 					{onBuscarProducto}
@@ -87,7 +91,7 @@
 				<tr>
 					<td colspan="3" class="text-right font-semibold">Subtotal</td>
 					<td class="text-right font-semibold whitespace-nowrap tabular-nums">
-						{formatearMoneda(totalBase)}
+						{formatearMoneda(totalBase, moneda)}
 					</td>
 					<td colspan="2"></td>
 				</tr>
@@ -96,7 +100,7 @@
 						Descuento general ({formatearDosDecimales(descuentoGlobal)}%)
 					</td>
 					<td class="text-right font-semibold whitespace-nowrap tabular-nums">
-						-{formatearMoneda(importeDescuento)}
+						-{formatearMoneda(importeDescuento, moneda)}
 					</td>
 					<td colspan="2"></td>
 				</tr>
@@ -105,7 +109,7 @@
 				<tr>
 					<td colspan="3" class="text-right font-semibold">IVA (21%)</td>
 					<td class="text-right font-semibold whitespace-nowrap tabular-nums">
-						{formatearMoneda(importeIva)}
+						{formatearMoneda(importeIva, moneda)}
 					</td>
 					<td colspan="2"></td>
 				</tr>

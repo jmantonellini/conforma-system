@@ -12,6 +12,7 @@
 		ProductoOpcion
 	} from '$lib/modulos/cotizaciones/tipos';
 	import type { StockDisponibilidad } from '$lib/modulos/stock/tipos';
+	import type { Moneda } from '$lib/utils/moneda';
 	import { can } from '$lib/utils/permissions';
 	import { toast } from '$lib/ui/toast.svelte';
 	import {
@@ -32,6 +33,8 @@
 		categoriasInsumo: { id: number; nombre: string }[];
 		unidadesInsumo: { id: number; nombre: string }[];
 		bloqueada: boolean;
+		moneda?: Moneda;
+		factor?: number;
 		contexto?: string;
 		descuentoGlobal: number;
 		totalBase: number;
@@ -52,6 +55,8 @@
 		categoriasInsumo,
 		unidadesInsumo,
 		bloqueada,
+		moneda = 'USD',
+		factor = 1,
 		contexto = 'cotización',
 		descuentoGlobal,
 		totalBase,
@@ -72,6 +77,9 @@
 		{ key: 'c', action: () => agregarLinea('concepto') },
 		{ key: 'n', action: abrirNuevoInsumo }
 	] as const;
+
+	const enMoneda = (valorUsd: number | null | undefined) =>
+		redondearPrecio((valorUsd ?? 0) * factor);
 
 	function guardarLineas(nuevasLineas: LineaEdicion[]) {
 		lineas = nuevasLineas;
@@ -141,7 +149,7 @@
 			snapshot = receta.recetaDirecta.map((material) => {
 				if (material.insumo_id) {
 					const detalle = receta.receta.find((item) => item.insumo_id === material.insumo_id);
-					const costo = redondearPrecio(detalle?.costo_unitario ?? 0);
+					const costo = enMoneda(detalle?.costo_unitario);
 					return {
 						insumo_id: material.insumo_id,
 						codigo: detalle?.codigo ?? null,
@@ -175,10 +183,10 @@
 			nuevo_insumo: undefined,
 			unidad: '',
 			descripcion: producto.nombre,
-			costo_materiales: redondearPrecio(precioProducto.costo_materiales ?? 0),
-			precio_lista_unitario: redondearPrecio(precioProducto.precio_venta),
-			precio_minimo_unitario: redondearPrecio(precioProducto.precio_venta),
-			precio_unitario: redondearPrecio(precioProducto.precio_venta),
+			costo_materiales: enMoneda(precioProducto.costo_materiales),
+			precio_lista_unitario: enMoneda(precioProducto.precio_venta),
+			precio_minimo_unitario: enMoneda(precioProducto.precio_venta),
+			precio_unitario: enMoneda(precioProducto.precio_venta),
 			insumos_snapshot: snapshot
 		});
 	}
@@ -197,10 +205,10 @@
 			nuevo_insumo: undefined,
 			descripcion: insumo.nombre,
 			unidad: insumo.unidad,
-			precio_unitario: redondearPrecio(insumo.costo_unitario),
-			precio_lista_unitario: redondearPrecio(insumo.costo_unitario),
-			precio_minimo_unitario: redondearPrecio(insumo.costo_unitario),
-			costo_materiales: redondearPrecio(insumo.costo_unitario),
+			precio_unitario: enMoneda(insumo.costo_unitario),
+			precio_lista_unitario: enMoneda(insumo.costo_unitario),
+			precio_minimo_unitario: enMoneda(insumo.costo_unitario),
+			costo_materiales: enMoneda(insumo.costo_unitario),
 			insumos_snapshot: [
 				{
 					insumo_id: insumo.id,
@@ -208,8 +216,8 @@
 					nombre: insumo.nombre,
 					cantidad: 1,
 					unidad: insumo.unidad,
-					costo_unitario: insumo.costo_unitario,
-					subtotal: insumo.costo_unitario
+					costo_unitario: enMoneda(insumo.costo_unitario),
+					subtotal: enMoneda(insumo.costo_unitario)
 				}
 			]
 		});
@@ -243,8 +251,8 @@
 				nombre: insumo.nombre,
 				cantidad,
 				unidad: insumo.unidad,
-				costo_unitario: insumo.costo_unitario,
-				subtotal: cantidad * insumo.costo_unitario
+				costo_unitario: enMoneda(insumo.costo_unitario),
+				subtotal: redondearPrecio(cantidad * enMoneda(insumo.costo_unitario))
 			}
 		];
 		const costoNuevo = calcularCostoComposicion(snapshot);
@@ -280,7 +288,10 @@
 	}
 
 	function eliminarLinea(lineaId: number) {
-		if (lineas.length > 1) guardarLineas(lineas.filter((linea) => linea.idx !== lineaId));
+		const linea = lineas.find((item) => item.idx === lineaId);
+		if (lineas.length > 1 && !linea?.bloqueo) {
+			guardarLineas(lineas.filter((item) => item.idx !== lineaId));
+		}
 	}
 
 	function abrirNuevoInsumo() {
@@ -363,6 +374,7 @@
 		<CotizacionLineasTabla
 			{lineas}
 			{bloqueada}
+			{moneda}
 			{productos}
 			{onBuscarProducto}
 			{insumos}

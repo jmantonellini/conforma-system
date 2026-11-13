@@ -1,8 +1,10 @@
 <script lang="ts">
 	import { Can } from '$lib/ui';
 	import { formatearDosDecimales } from '$lib/utils/precios';
+	import { SIMBOLO_MONEDA, type Moneda } from '$lib/utils/moneda';
 
 	type Props = {
+		moneda?: Moneda;
 		bloqueada: boolean;
 		guardando: boolean;
 		validezDias: number;
@@ -23,6 +25,7 @@
 	};
 
 	let {
+		moneda = 'USD',
 		bloqueada,
 		guardando,
 		validezDias,
@@ -84,7 +87,7 @@
 	</Can>
 	<div class="flex items-center gap-2">
 		<label class="flex items-center gap-2 text-sm font-semibold">
-			<span>Total final</span>
+			<span>Total final ({SIMBOLO_MONEDA[moneda]})</span>
 			<input
 				class="input w-40 text-right text-lg font-bold input-sm"
 				type="text"

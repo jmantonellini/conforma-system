@@ -39,14 +39,16 @@
 	<div class="flex items-center justify-between gap-2">
 		<EstadoBadge estado={ESTADOS[facturacion.estado]} />
 		{#if facturacion.saldo > 0}
-			<span class="text-sm text-base-content/70">Saldo {formatearMoneda(facturacion.saldo)}</span>
+			<span class="text-sm text-base-content/70"
+				>Saldo {formatearMoneda(facturacion.saldo, facturacion.moneda)}</span
+			>
 		{/if}
 	</div>
 	{#if items.length}
 		<ul class="list -mx-4 sm:-mx-5">
 			{#each items as pago (pago.id)}
 				<li class="list-row">
-					<div class="numero font-medium">{formatearMoneda(pago.monto)}</div>
+					<div class="numero font-medium">{formatearMoneda(pago.monto, facturacion.moneda)}</div>
 					<div class="text-sm text-base-content/70">
 						<p class="capitalize">
 							{pago.metodo_pago === METODO_PAGO.CUOTAS

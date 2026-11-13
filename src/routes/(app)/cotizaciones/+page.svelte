@@ -74,7 +74,7 @@
 		<td class="text-base-content/70">{formatearFecha(cot.created_at)}</td>
 		{#if veImportes}
 			<td class="numero font-medium">
-				{cot.precio_total != null ? formatearMoneda(cot.precio_total) : '-'}
+				{cot.precio_total != null ? formatearMoneda(cot.precio_total, cot.moneda) : '-'}
 			</td>
 		{/if}
 		<td>

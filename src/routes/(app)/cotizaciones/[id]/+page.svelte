@@ -19,10 +19,14 @@
 	import ArchivosAdjuntos from '$lib/modulos/adjuntos/componentes/ArchivosAdjuntos.svelte';
 	import { Document } from '$lib/ui/icons';
 	import { toast } from '$lib/ui/toast.svelte';
+	import CambiarMonedaDialog from '$lib/modulos/ventas/componentes/CambiarMonedaDialog.svelte';
+	import { NOMBRE_MONEDA } from '$lib/utils/moneda';
+	import { formatearDosDecimales } from '$lib/utils/precios';
 	import {
 		agregarNotaCotizacion,
 		asignarCotizacion,
 		cambiarEstadoCotizacion,
+		cambiarMonedaCotizacion,
 		convertirCotizacionAPedido,
 		eliminarCotizacion
 	} from '$lib/modulos/cotizaciones/cotizaciones.remote';
@@ -38,6 +42,7 @@
 	const cliente = $derived(cotizacion.cliente);
 	const notas = $derived(data.notas.map((nota) => ({ ...nota, detalle: nota.contenido })));
 
+	let dialogoMoneda = $state<CambiarMonedaDialog>();
 	let nota = $state('');
 	let rechazo = $state<{ estadoId: number; motivo: string } | null>(null);
 	let ocupado = $state(false);
@@ -163,6 +168,26 @@
 				<dt>Fecha</dt>
 				<dd>{formatearFecha(cotizacion.created_at)}</dd>
 			</div>
+			{#if veImportes}
+				<div>
+					<dt>Moneda</dt>
+					<dd class="flex items-center gap-2">
+						<span>
+							{NOMBRE_MONEDA[cotizacion.moneda]} ({cotizacion.moneda})
+							{#if cotizacion.tipo_cambio}
+								<span class="block text-sm text-base-content/60">
+									US$ 1 = $ {formatearDosDecimales(cotizacion.tipo_cambio)}
+								</span>
+							{/if}
+						</span>
+						{#if puede('edit') && !cotizacion.pedido_id}
+							<button class="btn btn-ghost btn-xs" onclick={() => dialogoMoneda?.abrir()}>
+								Cambiar
+							</button>
+						{/if}
+					</dd>
+				</div>
+			{/if}
 			<div>
 				<dt>Asignada a</dt>
 				<dd class="flex items-center gap-2">
@@ -214,26 +239,30 @@
 
 	{#if veImportes}
 		<Can modulo="cotizaciones" accion="edit">
-			<CotizacionLineasEditor
-				cotizacionId={cotizacion.id}
-				bloqueada={!!cotizacion.pedido_id}
-				validezInicial={cotizacion.validez_dias ?? 15}
-				precioTotalInicial={cotizacion.precio_total}
-				descuentoGlobalInicial={cotizacion.descuento_global_porcentaje ?? 0}
-				incluirIvaInicial={cotizacion.incluir_iva}
-				condicionesPagoInicial={cotizacion.condiciones_pago}
-				lineasIniciales={data.lineas.map((linea) => ({
-					...linea,
-					precio_unitario: linea.precio_unitario ?? 0,
-					precio_lista_unitario: linea.precio_lista_unitario ?? 0,
-					costo_materiales: linea.costo_materiales ?? 0
-				}))}
-				productos={data.productos}
-				insumos={data.insumos}
-				tiposInsumo={data.tiposInsumo}
-				categoriasInsumo={data.categoriasInsumo}
-				unidadesInsumo={data.unidadesInsumo}
-			/>
+			{#key `${cotizacion.moneda}-${cotizacion.tipo_cambio}`}
+				<CotizacionLineasEditor
+					cotizacionId={cotizacion.id}
+					bloqueada={!!cotizacion.pedido_id}
+					moneda={cotizacion.moneda}
+					tipoCambio={cotizacion.tipo_cambio}
+					validezInicial={cotizacion.validez_dias ?? 15}
+					precioTotalInicial={cotizacion.precio_total}
+					descuentoGlobalInicial={cotizacion.descuento_global_porcentaje ?? 0}
+					incluirIvaInicial={cotizacion.incluir_iva}
+					condicionesPagoInicial={cotizacion.condiciones_pago}
+					lineasIniciales={data.lineas.map((linea) => ({
+						...linea,
+						precio_unitario: linea.precio_unitario ?? 0,
+						precio_lista_unitario: linea.precio_lista_unitario ?? 0,
+						costo_materiales: linea.costo_materiales ?? 0
+					}))}
+					productos={data.productos}
+					insumos={data.insumos}
+					tiposInsumo={data.tiposInsumo}
+					categoriasInsumo={data.categoriasInsumo}
+					unidadesInsumo={data.unidadesInsumo}
+				/>
+			{/key}
 		</Can>
 	{/if}
 
@@ -269,6 +298,19 @@
 		</Seccion>
 	</div>
 </PageLayout>
+
+{#if veImportes}
+	<CambiarMonedaDialog
+		bind:this={dialogoMoneda}
+		moneda={cotizacion.moneda}
+		tipoCambio={cotizacion.tipo_cambio}
+		total={cotizacion.precio_total}
+		onConfirmar={async (cambio) => {
+			await cambiarMonedaCotizacion({ id: cotizacion.id, ...cambio });
+			await invalidateAll();
+		}}
+	/>
+{/if}
 
 <Modal
 	open={rechazo !== null}

@@ -20,10 +20,13 @@
 		LineaInicial,
 		ProductoOpcion
 	} from '$lib/modulos/cotizaciones/tipos';
+	import { factorDesdeUsd, type Moneda } from '$lib/utils/moneda';
 
 	type Props = {
 		cotizacionId: number;
 		bloqueada: boolean;
+		moneda: Moneda;
+		tipoCambio: number | null;
 		validezInicial: number;
 		precioTotalInicial: number | null;
 		descuentoGlobalInicial: number;
@@ -40,6 +43,8 @@
 	let {
 		cotizacionId,
 		bloqueada,
+		moneda,
+		tipoCambio,
 		validezInicial,
 		precioTotalInicial,
 		descuentoGlobalInicial,
@@ -62,6 +67,8 @@
 		untrack(() => (precioTotalInicial === null ? null : formatearDosDecimales(precioTotalInicial)))
 	);
 	let guardando = $state(false);
+	const factor = $derived(factorDesdeUsd({ moneda, tipo_cambio: tipoCambio }));
+	const enMoneda = (valorUsd: number) => redondearPrecio(valorUsd * factor);
 
 	function cargarLineasIniciales(): LineaEdicion[] {
 		return lineasIniciales.map((linea) => {
@@ -72,19 +79,23 @@
 			).map((material) => {
 				const insumoActual = insumos.find((item) => item.id === material.insumo_id);
 				if (!insumoActual) return material;
+				const costo = enMoneda(insumoActual.costo_unitario);
 				return {
 					...material,
 					codigo: insumoActual.codigo,
 					nombre: insumoActual.nombre,
 					unidad: insumoActual.unidad,
-					costo_unitario: insumoActual.costo_unitario,
-					subtotal: material.cantidad * insumoActual.costo_unitario
+					costo_unitario: costo,
+					subtotal: redondearPrecio(material.cantidad * costo)
 				};
 			});
-			const precioMinimo = producto?.precio_venta ?? insumo?.costo_unitario ?? 0;
+			const catalogo = (valor: number | null | undefined) =>
+				valor === null || valor === undefined ? undefined : enMoneda(valor);
+			const precioMinimo =
+				catalogo(producto?.precio_venta) ?? catalogo(insumo?.costo_unitario) ?? 0;
 			const costoMateriales =
-				producto?.costo_materiales ??
-				insumo?.costo_unitario ??
+				catalogo(producto?.costo_materiales) ??
+				catalogo(insumo?.costo_unitario) ??
 				(linea.producto_id === null && linea.insumo_id === null && insumos_snapshot.length
 					? calcularCostoComposicion(insumos_snapshot)
 					: linea.costo_materiales);
@@ -180,6 +191,8 @@
 
 <LineasConceptosEditor
 	bind:lineas
+	{moneda}
+	{factor}
 	{productos}
 	{insumos}
 	{tiposInsumo}
@@ -196,6 +209,7 @@
 >
 	{#snippet pie()}
 		<CotizacionTotales
+			{moneda}
 			{bloqueada}
 			{guardando}
 			{validezDias}

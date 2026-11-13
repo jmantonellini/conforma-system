@@ -41,6 +41,7 @@ export async function registrarMovimientoInsumoTx(
 		orden_fabricacion_id?: number;
 		empleado_id: number;
 		usuario_id: number;
+		lote_id?: number;
 		motivo: string;
 	}
 ) {
@@ -163,4 +164,21 @@ export async function verificarEmpleadoActivo(tx: Tx, empleadoId: number) {
 		.where(and(eq(empleados.id, empleadoId), eq(empleados.activo, true)))
 		.limit(1);
 	return empleado;
+}
+
+export async function consumidoPorInsumoOrdenTx(tx: Tx, ordenId: number) {
+	const filas = await tx
+		.select({
+			insumo_id: movimientos_insumos.insumo_id,
+			cantidad: sql<number>`coalesce(sum(${movimientos_insumos.cantidad}), 0)`.mapWith(Number)
+		})
+		.from(movimientos_insumos)
+		.where(
+			and(
+				eq(movimientos_insumos.orden_fabricacion_id, ordenId),
+				eq(movimientos_insumos.tipo, 'consumo')
+			)
+		)
+		.groupBy(movimientos_insumos.insumo_id);
+	return new Map(filas.map((fila) => [fila.insumo_id, fila.cantidad]));
 }

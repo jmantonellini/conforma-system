@@ -17,6 +17,7 @@ import {
 } from '$lib/server/db/schema';
 import { and, count, desc, eq, ilike, or, sql } from 'drizzle-orm';
 import { ocultar, puedeVerImportes, requirePermission } from '$lib/server/auth/permissions';
+import { historialAuditoria } from '$lib/server/auditoria';
 import { historialEstados, listarEstados, transicionesDesde } from '$lib/server/estados';
 import { listarAdjuntosRelacionados } from '$lib/modulos/adjuntos/adjuntos.server';
 import type { MaterialSnapshot } from '$lib/modulos/cotizaciones/tipos';
@@ -74,6 +75,7 @@ export const getCotizaciones = query(
 				canal: cotizaciones.canal,
 				created_at: cotizaciones.created_at,
 				precio_total: cotizaciones.precio_total,
+				moneda: cotizaciones.moneda,
 				estado_id: cotizaciones.estado_id,
 				estado_nombre: estados.nombre,
 				estado_color: estados.color,
@@ -117,6 +119,8 @@ export const getCotizacionById = query(v.number(), async (id) => {
 			descripcion: cotizaciones.descripcion,
 			observaciones: cotizaciones.observaciones,
 			precio_total: cotizaciones.precio_total,
+			moneda: cotizaciones.moneda,
+			tipo_cambio: cotizaciones.tipo_cambio,
 			descuento_global_porcentaje: cotizaciones.descuento_global_porcentaje,
 			incluir_iva: cotizaciones.incluir_iva,
 			condiciones_pago: cotizaciones.condiciones_pago,
@@ -225,7 +229,23 @@ export const getEstadosCotizacion = query(async () => {
 
 export const getHistorialCotizacion = query(v.number(), async (cotizacionId) => {
 	await requirePermission('cotizaciones', 'view');
-	return historialEstados('cotizacion', [cotizacionId]);
+	const [cambios, auditoria] = await Promise.all([
+		historialEstados('cotizacion', [cotizacionId]),
+		historialAuditoria('cotizacion', [cotizacionId])
+	]);
+	return [
+		...cambios.map((cambio) => ({ ...cambio, titulo: undefined as string | undefined })),
+		...auditoria.map((registro) => ({
+			id: -registro.id,
+			entidad_id: registro.entidad_id,
+			estado_anterior: null,
+			estado_nuevo: null,
+			comentario: registro.detalle,
+			fecha: registro.fecha,
+			empleado: registro.empleado,
+			titulo: registro.titulo as string | undefined
+		}))
+	].sort((a, b) => (b.fecha?.getTime() ?? 0) - (a.fecha?.getTime() ?? 0));
 });
 
 export const getNotasCotizacion = query(v.number(), async (cotizacionId) => {

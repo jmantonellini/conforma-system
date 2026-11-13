@@ -38,8 +38,8 @@ export function formatearDosDecimales(valor: number | null | undefined) {
 	return formatoDosDecimales.format(Number(valor ?? 0));
 }
 
-export const formatearMoneda = (valor: number | null | undefined) =>
-	`$ ${formatearDosDecimales(valor)}`;
+export const formatearMoneda = (valor: number | null | undefined, moneda: 'USD' | 'ARS' = 'USD') =>
+	`${moneda === 'ARS' ? '$' : 'US$'} ${formatearDosDecimales(valor)}`;
 
 export function calcularIva21(base: number) {
 	return redondearPrecio(base * 0.21);

@@ -8,6 +8,7 @@ import {
 	contactos,
 	empleados,
 	insumos,
+	lotes_consumo,
 	movimientos_insumos,
 	ordenes_fabricacion,
 	producto_insumos,
@@ -21,6 +22,7 @@ import {
 import { ImportarInsumosSchema, InsumoSchema, InsumoSchemaUpdate } from './insumos.schema';
 import { requirePermission, tienePermiso } from '$lib/server/auth/permissions';
 import {
+	consumidoPorInsumoOrdenTx,
 	obtenerInsumosRequeridosOrdenTx,
 	saldoMovimientos,
 	registrarMovimientoInsumoTx,
@@ -339,6 +341,7 @@ export const getMovimientosInsumos = query(
 				id: movimientos_insumos.id,
 				tipo: movimientos_insumos.tipo,
 				fuente: movimientos_insumos.fuente,
+				lote_id: movimientos_insumos.lote_id,
 				cantidad: movimientos_insumos.cantidad,
 				motivo: movimientos_insumos.motivo,
 				created_at: movimientos_insumos.created_at,
@@ -404,51 +407,123 @@ export const registrarMovimientoInsumo = command(
 	}
 );
 
-export const consumirRecetaOrden = command(
-	v.object({
-		orden_id: v.pipe(v.number(), v.integer(), v.minValue(1)),
-		empleado_id: v.pipe(v.number(), v.integer(), v.minValue(1)),
-		motivo: v.optional(v.pipe(v.string(), v.trim(), v.maxLength(500)))
-	}),
-	async ({ orden_id, empleado_id, motivo }) => {
-		const user = await requirePermission('insumos', 'edit');
+export const getPendientesReceta = query(
+	v.pipe(v.number(), v.integer(), v.minValue(1)),
+	async (ordenId) => {
+		await requirePermission('insumos', 'view');
 		await requirePermission('fabricacion', 'view');
-		const cantidadMovimientos = await db.transaction(async (tx) => {
+		const { requeridos, consumidos } = await db.transaction(async (tx) => ({
+			requeridos: await obtenerInsumosRequeridosOrdenTx(tx, ordenId).catch(() => []),
+			consumidos: await consumidoPorInsumoOrdenTx(tx, ordenId)
+		}));
+		if (!requeridos.length) return [];
+		const ids = requeridos.map((item) => item.insumo_id);
+		const [detalles, saldos] = await Promise.all([
+			db
+				.select({
+					id: insumos.id,
+					codigo: insumos.codigo,
+					nombre: insumos.nombre,
+					unidad: unidadInsumo
+				})
+				.from(insumos)
+				.where(inArray(insumos.id, ids)),
+			db
+				.select({ insumo_id: movimientos_insumos.insumo_id, saldo: saldoMovimientos })
+				.from(movimientos_insumos)
+				.where(inArray(movimientos_insumos.insumo_id, ids))
+				.groupBy(movimientos_insumos.insumo_id)
+		]);
+		const detallePorId = new Map(detalles.map((detalle) => [detalle.id, detalle]));
+		const saldoPorId = new Map(saldos.map((fila) => [fila.insumo_id, fila.saldo]));
+		return requeridos.map((item) => {
+			const consumido = consumidos.get(item.insumo_id) ?? 0;
+			const detalle = detallePorId.get(item.insumo_id);
+			return {
+				insumo_id: item.insumo_id,
+				codigo: detalle?.codigo ?? '',
+				nombre: detalle?.nombre ?? 'Insumo',
+				unidad: detalle?.unidad ?? '',
+				requerido: item.cantidad,
+				consumido,
+				pendiente: Math.max(Number((item.cantidad - consumido).toFixed(4)), 0),
+				stock: saldoPorId.get(item.insumo_id) ?? 0
+			};
+		});
+	}
+);
+
+export const registrarLoteConsumo = command(
+	v.object({
+		empleado_id: v.pipe(v.number(), v.integer(), v.minValue(1)),
+		orden_fabricacion_id: v.optional(v.pipe(v.number(), v.integer(), v.minValue(1))),
+		motivo: v.optional(v.pipe(v.string(), v.trim(), v.maxLength(500))),
+		items: v.pipe(
+			v.array(
+				v.object({
+					insumo_id: v.pipe(v.number(), v.integer(), v.minValue(1)),
+					cantidad: v.pipe(v.number(), v.minValue(0.000001, 'Las cantidades deben ser mayores a 0'))
+				})
+			),
+			v.minLength(1, 'Agregá al menos un insumo')
+		)
+	}),
+	async ({ empleado_id, orden_fabricacion_id, motivo, items }) => {
+		const user = await requirePermission('insumos', 'edit');
+		if (orden_fabricacion_id) await requirePermission('fabricacion', 'view');
+		const motivoFinal =
+			motivo || (orden_fabricacion_id ? `Preparación de OF-${orden_fabricacion_id}` : '');
+		if (!motivoFinal) error(400, 'Indicá para qué se usan los insumos');
+
+		const agrupados = new Map<number, number>();
+		for (const item of items) {
+			agrupados.set(item.insumo_id, (agrupados.get(item.insumo_id) ?? 0) + item.cantidad);
+		}
+
+		const loteId = await db.transaction(async (tx) => {
 			if (!(await verificarEmpleadoActivo(tx, empleado_id))) {
 				error(400, 'Seleccioná un empleado activo');
 			}
-			const requeridos = await obtenerInsumosRequeridosOrdenTx(tx, orden_id);
-			const existentes = await tx
-				.select({ id: movimientos_insumos.id })
-				.from(movimientos_insumos)
-				.where(
-					and(
-						eq(movimientos_insumos.orden_fabricacion_id, orden_id),
-						eq(movimientos_insumos.fuente, 'receta')
-					)
-				)
-				.limit(1);
-			if (existentes.length) error(400, 'La receta de esta orden ya fue consumida');
-
-			for (const requerido of requeridos) {
+			if (orden_fabricacion_id) {
+				const [orden] = await tx
+					.select({ id: ordenes_fabricacion.id })
+					.from(ordenes_fabricacion)
+					.where(eq(ordenes_fabricacion.id, orden_fabricacion_id))
+					.limit(1);
+				if (!orden) error(404, 'Orden de fabricación no encontrada');
+			}
+			const [lote] = await tx
+				.insert(lotes_consumo)
+				.values({
+					empleado_id,
+					orden_fabricacion_id: orden_fabricacion_id ?? null,
+					usuario_id: user.id,
+					motivo: motivoFinal
+				})
+				.returning({ id: lotes_consumo.id });
+			for (const [insumo_id, cantidad] of agrupados) {
 				await registrarMovimientoInsumoTx(tx, {
-					insumo_id: requerido.insumo_id,
+					insumo_id,
 					tipo: 'consumo',
-					fuente: 'receta',
-					cantidad: requerido.cantidad,
-					orden_fabricacion_id: orden_id,
+					cantidad,
+					orden_fabricacion_id,
 					empleado_id,
 					usuario_id: user.id,
-					motivo: motivo || `Consumo de receta de OF-${orden_id}`
+					lote_id: lote.id,
+					motivo: motivoFinal
 				});
 			}
-			return requeridos.length;
+			return lote.id;
 		});
+
 		requested(getInsumos, 1).refreshAll();
-		if (await tienePermiso(user, 'insumos', 'view')) {
-			getMovimientosInsumos({ orden_id, limit: 100 }).refresh();
+		getInsumos({ limit: 100 }).refresh();
+		getMovimientosInsumos({ limit: 100 }).refresh();
+		if (orden_fabricacion_id) {
+			getMovimientosInsumos({ orden_id: orden_fabricacion_id, limit: 100 }).refresh();
+			getPendientesReceta(orden_fabricacion_id).refresh();
 		}
-		return { success: true, cantidad: cantidadMovimientos };
+		return { success: true, loteId, cantidad: agrupados.size };
 	}
 );
 

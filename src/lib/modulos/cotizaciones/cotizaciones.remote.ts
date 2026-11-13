@@ -18,6 +18,9 @@ import { calcularIva21, precioNetoCubreCosto, redondearPrecio } from '$lib/utils
 import { requirePermission, tienePermiso } from '$lib/server/auth/permissions';
 import { clavesAdjuntos, eliminarArchivos } from '$lib/modulos/adjuntos/adjuntos.server';
 import { resolverLineaComercial } from '$lib/modulos/ventas/lineas.server';
+import { cambiarMonedaTx, dolarBNA } from '$lib/modulos/ventas/moneda.server';
+import { CambioMonedaSchema } from '$lib/modulos/ventas/moneda.schema';
+import { factorDesdeUsd } from '$lib/utils/moneda';
 import {
 	estadoPorSlug,
 	registrarCambioEstado,
@@ -143,9 +146,10 @@ export const crearCotizacion = form(CotizacionSchema, async (data) => {
 	if (asignadaA && !(await tienePermiso(user, 'cotizaciones', 'edit'))) {
 		error(403, 'No tenés permiso para asignar cotizaciones');
 	}
-	const [ingresada, asignada] = await Promise.all([
+	const [ingresada, asignada, dolar] = await Promise.all([
 		estadoPorSlug('cotizacion', 'ingresada'),
-		estadoPorSlug('cotizacion', 'asignada')
+		estadoPorSlug('cotizacion', 'asignada'),
+		dolarBNA()
 	]);
 
 	const cotizacion = await db.transaction(async (tx) => {
@@ -161,6 +165,7 @@ export const crearCotizacion = form(CotizacionSchema, async (data) => {
 				observaciones: data.observaciones || null,
 				asignada_a: asignadaA,
 				estado_id: avanza ? asignada.id : ingresada.id,
+				tipo_cambio: dolar?.venta ?? null,
 				creada_por: user.id
 			})
 			.returning({ id: cotizaciones.id, numero: cotizaciones.numero_cotizacion });
@@ -252,6 +257,7 @@ export const cotizarCotizacion = command(
 			if (cotizacion.pedido_id) {
 				error(409, 'No se puede modificar una cotización convertida en pedido');
 			}
+			const factor = factorDesdeUsd(cotizacion);
 
 			const filas = [];
 			for (const [orden_linea, linea] of lineas.entries()) {
@@ -265,7 +271,8 @@ export const cotizarCotizacion = command(
 								? 'insumo'
 								: 'concepto'
 					},
-					'COT'
+					'COT',
+					factor
 				);
 				const costo = redondearPrecio(resuelta.costo_materiales);
 				const precio = resuelta.precio_unitario;
@@ -418,6 +425,8 @@ export const convertirCotizacionAPedido = command(v.number(), async (cotizacionI
 				fecha_pedido: new Date(),
 				estado_id: pendiente.id,
 				precio_total: precioTotal,
+				moneda: cotizacion.moneda,
+				tipo_cambio: cotizacion.tipo_cambio,
 				creado_por: user.id,
 				observaciones: [
 					`Generado desde cotización ${cotizacion.numero_cotizacion}.`,
@@ -491,5 +500,16 @@ export const eliminarCotizacion = command(v.number(), async (cotizacionId) => {
 
 	await eliminarArchivos(claves);
 	refrescarCotizacion();
+	return { success: true };
+});
+
+export const cambiarMonedaCotizacion = command(CambioMonedaSchema, async (cambio) => {
+	const user = await requirePermission('cotizaciones', 'edit');
+	await requirePermission('importes', 'view');
+	await db.transaction((tx) =>
+		cambiarMonedaTx(tx, { ...cambio, documento: 'cotizacion' }, user.id)
+	);
+	refrescarCotizacion(cambio.id);
+	getHistorialCotizacion(cambio.id).refresh();
 	return { success: true };
 });

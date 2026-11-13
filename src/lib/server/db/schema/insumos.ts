@@ -100,6 +100,28 @@ export const insumos = pgTable(
 	(t) => [uniqueIndex('idx_insumos_empresa_codigo').on(t.empresa_id, t.codigo), aislamiento()]
 );
 
+export const lotes_consumo = pgTable(
+	'lotes_consumo',
+	{
+		id: serial('id').primaryKey(),
+		empresa_id: empresa(),
+		empleado_id: integer('empleado_id')
+			.references(() => empleados.id, { onDelete: 'restrict' })
+			.notNull(),
+		orden_fabricacion_id: integer('orden_fabricacion_id').references(() => ordenes_fabricacion.id, {
+			onDelete: 'restrict'
+		}),
+		usuario_id: integer('usuario_id').references(() => usuarios.id, { onDelete: 'set null' }),
+		motivo: text('motivo').notNull(),
+		created_at: creado()
+	},
+	(t) => [
+		index('idx_lotes_consumo_orden').on(t.orden_fabricacion_id),
+		index('idx_lotes_consumo_fecha').on(t.created_at),
+		aislamiento()
+	]
+);
+
 export const movimientos_insumos = pgTable(
 	'movimientos_insumos',
 	{
@@ -122,10 +144,12 @@ export const movimientos_insumos = pgTable(
 			.references(() => empleados.id, { onDelete: 'restrict' })
 			.notNull(),
 		usuario_id: integer('usuario_id').references(() => usuarios.id, { onDelete: 'set null' }),
+		lote_id: integer('lote_id').references(() => lotes_consumo.id, { onDelete: 'restrict' }),
 		motivo: text('motivo').notNull(),
 		created_at: creado()
 	},
 	(t) => [
+		index('idx_movimientos_insumos_lote').on(t.lote_id),
 		check('movimientos_insumos_cantidad_positiva', sql`${t.cantidad} > 0`),
 		check('movimientos_insumos_motivo_requerido', sql`length(trim(${t.motivo})) > 0`),
 		check(

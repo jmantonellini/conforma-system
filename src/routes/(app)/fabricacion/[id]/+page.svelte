@@ -25,13 +25,18 @@
 	} from '$lib/ui';
 	import ArchivosAdjuntos from '$lib/modulos/adjuntos/componentes/ArchivosAdjuntos.svelte';
 	import { toast } from '$lib/ui/toast.svelte';
-	import { goto, invalidateAll } from '$app/navigation';
+	import { goto } from '$app/navigation';
 	import { resolve } from '$app/paths';
 	import { formatearFecha } from '$lib/utils/fechas';
 	import type { MaterialSnapshot } from '$lib/modulos/ventas/tipos';
 	import { ESTADO_FABRICACION, ETIQUETA_PRIORIDAD } from '$lib/modulos/fabricacion/tipos';
 	import { getEmpleadosOpciones } from '$lib/modulos/configuracion/empleados.remote';
-	import { consumirRecetaOrden, getMovimientosInsumos } from '$lib/modulos/insumos/insumos.remote';
+	import {
+		getInsumos,
+		getMovimientosInsumos,
+		getPendientesReceta
+	} from '$lib/modulos/insumos/insumos.remote';
+	import ConsumoLote from '$lib/modulos/insumos/componentes/ConsumoLote.svelte';
 	import { can } from '$lib/utils/permissions';
 	import InsumosMovimientosTabla from '$lib/modulos/insumos/componentes/InsumosMovimientosTabla.svelte';
 
@@ -47,14 +52,16 @@
 	const movimientos = $derived(
 		puedeVerMovimientos ? await getMovimientosInsumos({ orden_id: id, limit: 100 }) : []
 	);
-	const recetaConsumida = $derived(movimientos.some((m) => m.fuente === 'receta'));
+	const pendientes = $derived(puedeVerMovimientos ? await getPendientesReceta(id) : []);
+	const conPendiente = $derived(pendientes.filter((item) => item.pendiente > 0));
+	let preparando = $state(false);
+	const insumosCatalogo = $derived(preparando ? (await getInsumos({ limit: 100 })).data : []);
 	const listasInsumos = $derived([
 		{ titulo: 'Insumos requeridos', items: orden.insumos_requeridos as MaterialSnapshot[] },
 		{ titulo: 'Adicionales del pedido', items: orden.insumos_adicionales as MaterialSnapshot[] }
 	]);
 
 	let ocupado = $state(false);
-	let empleadoReceta = $state('');
 	let unidadAPausar = $state<{ id: number; estadoId: number } | null>(null);
 	let motivoPausa = $state('');
 
@@ -246,40 +253,27 @@
 				<Seccion titulo="Consumo de insumos">
 					{#snippet acciones()}
 						{#if puedeEditarInsumos}
-							<div class="join">
-								<select class="select join-item select-sm" bind:value={empleadoReceta}>
-									<option value="">Responsable...</option>
-									{#each empleados as empleado (empleado.id)}
-										<option value={String(empleado.id)}
-											>{empleado.nombre} {empleado.apellido}</option
-										>
-									{/each}
-								</select>
-								<button
-									class="btn join-item btn-sm"
-									disabled={ocupado ||
-										!empleadoReceta ||
-										recetaConsumida ||
-										!orden.insumos_requeridos.length}
-									onclick={() =>
-										ejecutar(async () => {
-											await consumirRecetaOrden({
-												orden_id: orden.id,
-												empleado_id: Number(empleadoReceta)
-											});
-											await invalidateAll();
-										}, 'Consumo de receta registrado')}
-								>
-									{recetaConsumida ? 'Receta consumida' : 'Consumir receta'}
-								</button>
-							</div>
-							<a
-								class="btn btn-primary btn-sm"
-								href={resolve(`/insumos/movimientos?orden=${orden.id}`)}>Registrar consumo real</a
-							>
+							<button class="btn btn-primary btn-sm" onclick={() => (preparando = true)}>
+								Preparar insumos
+							</button>
 						{/if}
 					{/snippet}
-					<InsumosMovimientosTabla {movimientos} emptyMessage="Sin consumos registrados" />
+					{#if pendientes.length}
+						<div class="mb-4 flex flex-wrap items-center gap-2 text-sm">
+							{#if conPendiente.length}
+								<span class="badge badge-soft badge-warning">
+									{conPendiente.length} de {pendientes.length} insumos de la receta pendientes
+								</span>
+							{:else}
+								<span class="badge badge-soft badge-success">Receta completa</span>
+							{/if}
+						</div>
+					{/if}
+					<InsumosMovimientosTabla
+						{movimientos}
+						mostrarOrden={false}
+						emptyMessage="Sin consumos registrados"
+					/>
 				</Seccion>
 			{/if}
 		</div>
@@ -309,4 +303,28 @@
 			placeholder="Ej.: falta de material"
 		></textarea>
 	</FormFieldWrapper>
+</Modal>
+
+<Modal
+	bind:open={preparando}
+	titulo={`Preparar insumos · OF-${orden.id}`}
+	descripcion="Se registra como un solo consumo, a nombre del empleado que retira."
+	ancho="lg"
+>
+	{#if pendientes.length}
+		<p class="mb-3 text-sm text-base-content/70">
+			Cargamos lo pendiente de la receta. Ajustá cantidades, quitá lo que no se retira o agregá
+			otros insumos.
+		</p>
+	{/if}
+	<ConsumoLote
+		insumos={insumosCatalogo}
+		{empleados}
+		ordenId={orden.id}
+		filasIniciales={conPendiente.map((item) => ({
+			insumo_id: item.insumo_id,
+			cantidad: item.pendiente
+		}))}
+		onRegistrado={() => (preparando = false)}
+	/>
 </Modal>

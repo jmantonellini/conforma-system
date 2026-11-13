@@ -8,10 +8,12 @@
 		redondearPrecio
 	} from '$lib/utils/precios';
 	import { describeMaterialReceta, esMaterialSubproducto } from '$lib/modulos/productos/receta';
+	import type { Moneda } from '$lib/utils/moneda';
 
 	type Props = {
 		linea: LineaEdicion;
 		bloqueada: boolean;
+		moneda?: Moneda;
 		cantidadLineas: number;
 		productos: ProductoOpcion[];
 		onBuscarProducto?: (search: string) => Promise<void>;
@@ -31,6 +33,7 @@
 	let {
 		linea,
 		bloqueada,
+		moneda = 'USD',
 		cantidadLineas,
 		productos,
 		onBuscarProducto,
@@ -46,6 +49,7 @@
 		onAgregarInsumoAsociado,
 		onQuitarInsumoAsociado
 	}: Props = $props();
+	let estructuraFija = $derived(bloqueada || Boolean(linea.bloqueo));
 	let costoBorrador = $state<string | null>(null);
 	let precioBorrador = $state<string | null>(null);
 	let insumoSeleccionado = $state('');
@@ -73,7 +77,7 @@
 				label=""
 				id={`producto-${linea.idx}`}
 				placeholder="Buscar producto..."
-				disabled={bloqueada}
+				disabled={estructuraFija}
 				field={{
 					value: () => linea.producto_id
 				}}
@@ -95,7 +99,7 @@
 				label=""
 				id={`insumo-${linea.idx}`}
 				placeholder="Buscar insumo interno..."
-				disabled={bloqueada}
+				disabled={estructuraFija}
 				field={{
 					value: () => String(linea.insumo_id ?? '')
 				}}
@@ -124,13 +128,16 @@
 				class="input w-20 text-right input-sm"
 				type="number"
 				min="1"
-				disabled={bloqueada}
+				disabled={estructuraFija}
 				value={linea.cantidad}
 				aria-label="Cantidad"
 				oninput={(event) => onActualizarCantidad(linea.idx, Number(event.currentTarget.value) || 1)}
 			/>
 			{#if linea.unidad}<span class="text-xs text-base-content/60">{linea.unidad}</span>{/if}
 		</div>
+		{#if linea.bloqueo}
+			<span class="mt-1 badge badge-ghost badge-xs" title={linea.bloqueo}>Fija</span>
+		{/if}
 	</td>
 	<td class="text-right">
 		{#if !linea.visible_cliente}
@@ -167,7 +174,8 @@
 	</td>
 	<td class="text-right font-semibold whitespace-nowrap tabular-nums">
 		{formatearMoneda(
-			(linea.visible_cliente ? linea.precio_unitario : linea.costo_materiales) * linea.cantidad
+			(linea.visible_cliente ? linea.precio_unitario : linea.costo_materiales) * linea.cantidad,
+			moneda
 		)}
 	</td>
 	<td>
@@ -175,7 +183,7 @@
 			class="toggle toggle-success toggle-xs"
 			type="checkbox"
 			checked={linea.visible_cliente}
-			disabled={bloqueada}
+			disabled={estructuraFija}
 			aria-label={linea.visible_cliente ? 'Visible para el cliente' : 'Solo interno'}
 			onchange={(event) => onCambiarVisibilidad(linea.idx, event.currentTarget.checked)}
 		/>
@@ -184,8 +192,8 @@
 		<button
 			type="button"
 			class="btn btn-square btn-ghost btn-xs"
-			disabled={bloqueada || cantidadLineas === 1}
-			title="Quitar línea"
+			disabled={estructuraFija || cantidadLineas === 1}
+			title={linea.bloqueo ?? 'Quitar línea'}
 			onclick={() => onEliminar(linea.idx)}>✕</button
 		>
 	</td>
@@ -208,7 +216,7 @@
 								label=""
 								id={`composicion-${linea.idx}`}
 								placeholder="Buscar insumo..."
-								disabled={bloqueada}
+								disabled={estructuraFija}
 								field={{
 									value: () => insumoSeleccionado,
 									set: (value: string) => (insumoSeleccionado = value)
@@ -234,14 +242,14 @@
 								type="number"
 								min="0.000001"
 								step="any"
-								disabled={bloqueada}
+								disabled={estructuraFija}
 								bind:value={cantidadInsumo}
 							/>
 						</label>
 						<button
 							type="button"
 							class="btn btn-outline btn-sm"
-							disabled={bloqueada || !insumoSeleccionado}
+							disabled={estructuraFija || !insumoSeleccionado}
 							onclick={agregarMaterialAsociado}
 						>
 							Agregar
@@ -255,13 +263,13 @@
 										{material.cantidad}
 										{material.unidad ?? ''} · {material.nombre}
 										<span class="text-base-content/60">
-											{formatearMoneda(material.subtotal)}
+											{formatearMoneda(material.subtotal, moneda)}
 										</span>
 									</span>
 									<button
 										type="button"
 										class="btn btn-square btn-ghost btn-xs"
-										disabled={bloqueada}
+										disabled={estructuraFija}
 										aria-label={`Quitar ${material.nombre} de la composición`}
 										title="Quitar insumo"
 										onclick={() => onQuitarInsumoAsociado(linea.idx, index)}
@@ -292,7 +300,7 @@
 							{#if esMaterialSubproducto(material)}
 								<span class="text-base-content/60">subproducto</span>
 							{:else}
-								<span>{formatearMoneda(material.subtotal)}</span>
+								<span>{formatearMoneda(material.subtotal, moneda)}</span>
 							{/if}
 						</li>
 					{/each}

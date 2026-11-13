@@ -82,6 +82,10 @@ const comparar = async <T>(contexto: Contexto, calcular: (rango: Rango) => Promi
 };
 
 const estadoPedido = aliasedTable(estados, 'estado_pedido');
+const usdPedido = (columna: PgColumn) =>
+	sql<number>`${columna} / (CASE WHEN ${pedidos.moneda} = 'ARS' THEN ${pedidos.tipo_cambio} ELSE 1 END)`;
+const usdCotizacion = (columna: PgColumn) =>
+	sql<number>`${columna} / (CASE WHEN ${cotizaciones.moneda} = 'ARS' THEN ${cotizaciones.tipo_cambio} ELSE 1 END)`;
 const pedidoVigente = (rango: Rango) =>
 	and(enRango(pedidos.fecha_pedido, rango), ne(estadoPedido.slug, 'cancelado'));
 
@@ -91,15 +95,16 @@ async function ventas(contexto: Contexto): Promise<Omit<Reporte, keyof Contexto 
 		const [fila] = await db
 			.select({
 				pedidos: count(),
-				monto: sum(pedidos.precio_total),
-				anticipos: sum(pedidos.anticipo)
+				monto: sum(usdPedido(pedidos.precio_total)),
+				anticipos: sum(usdPedido(pedidos.anticipo))
 			})
 			.from(pedidos)
 			.innerJoin(estadoPedido, eq(estadoPedido.id, pedidos.estado_id))
 			.where(pedidoVigente(rango));
 		const [cobros] = await db
-			.select({ monto: sum(pagos.monto) })
+			.select({ monto: sum(usdPedido(pagos.monto)) })
 			.from(pagos)
+			.innerJoin(pedidos, eq(pedidos.id, pagos.pedido_id))
 			.where(enRango(pagos.fecha_pago, rango));
 		const monto = numero(fila.monto);
 		return {
@@ -115,7 +120,7 @@ async function ventas(contexto: Contexto): Promise<Omit<Reporte, keyof Contexto 
 		db
 			.select({
 				grupo: grupoDe(pedidos.fecha_pedido, contexto.agrupacion),
-				valor: importes ? sum(pedidos.precio_total) : count()
+				valor: importes ? sum(usdPedido(pedidos.precio_total)) : count()
 			})
 			.from(pedidos)
 			.innerJoin(estadoPedido, eq(estadoPedido.id, pedidos.estado_id))
@@ -125,20 +130,20 @@ async function ventas(contexto: Contexto): Promise<Omit<Reporte, keyof Contexto 
 			.select({
 				cliente: contactos.razon_social,
 				pedidos: count(),
-				monto: sum(pedidos.precio_total)
+				monto: sum(usdPedido(pedidos.precio_total))
 			})
 			.from(pedidos)
 			.innerJoin(estadoPedido, eq(estadoPedido.id, pedidos.estado_id))
 			.innerJoin(contactos, eq(contactos.id, pedidos.contacto_id))
 			.where(pedidoVigente(contexto.rango))
 			.groupBy(contactos.razon_social)
-			.orderBy(desc(importes ? sum(pedidos.precio_total) : count()))
+			.orderBy(desc(importes ? sum(usdPedido(pedidos.precio_total)) : count()))
 			.limit(10),
 		db
 			.select({
 				articulo: sql<string>`coalesce(${productos.nombre}, ${lineas_pedido.descripcion_personalizada}, 'Trabajo personalizado')`,
 				unidades: sum(lineas_pedido.cantidad),
-				monto: sum(lineas_pedido.subtotal)
+				monto: sum(usdPedido(lineas_pedido.subtotal))
 			})
 			.from(lineas_pedido)
 			.innerJoin(pedidos, eq(pedidos.id, lineas_pedido.pedido_id))
@@ -233,7 +238,7 @@ async function cotizacionesReporte(
 				enviadas: contar(sql`${cotizaciones.fecha_envio} IS NOT NULL`),
 				aprobadas: contar(aprobada),
 				rechazadas: contar(rechazada),
-				monto: sum(cotizaciones.precio_total),
+				monto: sum(usdCotizacion(cotizaciones.precio_total)),
 				dias: sql<number>`avg(extract(epoch from ${cotizaciones.fecha_envio} - ${cotizaciones.created_at}) / 86400)`.mapWith(
 					Number
 				)

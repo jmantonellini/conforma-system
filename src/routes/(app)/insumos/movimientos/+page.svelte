@@ -9,7 +9,8 @@
 		registrarMovimientoInsumo
 	} from '$lib/modulos/insumos/insumos.remote';
 	import { getOrdenesFabricacion } from '$lib/modulos/fabricacion/fabricacion-consultas.remote';
-	import { FormFieldWrapper, PageLayout } from '$lib/ui';
+	import { FormFieldWrapper, PageLayout, SearchSelect } from '$lib/ui';
+	import ConsumoLote from '$lib/modulos/insumos/componentes/ConsumoLote.svelte';
 	import InsumosMovimientosTabla from '$lib/modulos/insumos/componentes/InsumosMovimientosTabla.svelte';
 	import { toast } from '$lib/ui/toast.svelte';
 	import { can } from '$lib/utils/permissions';
@@ -25,40 +26,40 @@
 	const movimientos = $derived(
 		puedeVerMovimientos ? await getMovimientosInsumos({ limit: 100 }) : []
 	);
-	let tipo = $state<'ingreso' | 'consumo'>('consumo');
+
+	let vista = $state<'consumo' | 'ingreso'>('consumo');
 	let insumoId = $state('');
 	let cantidad = $state('');
 	let empleadoId = $state('');
-	let ordenId = $state(page.url.searchParams.get('orden') ?? '');
 	let motivo = $state('');
 	let guardando = $state(false);
 
-	const formatearCantidad = (valor: number) =>
-		new Intl.NumberFormat('es-AR', { maximumFractionDigits: 3 }).format(valor);
+	async function refrescar() {
+		await Promise.all([
+			getInsumos({ limit: 100 }).refresh(),
+			getMovimientosInsumos({ limit: 100 }).refresh()
+		]);
+	}
 
-	async function guardarMovimiento(event: SubmitEvent) {
+	async function registrarIngreso(event: SubmitEvent) {
 		event.preventDefault();
 		if (guardando) return;
 		guardando = true;
 		try {
 			await registrarMovimientoInsumo({
 				insumo_id: Number(insumoId),
-				tipo,
-				cantidad: Number(cantidad),
+				tipo: 'ingreso',
+				cantidad: Number(cantidad.replace(',', '.')),
 				empleado_id: Number(empleadoId),
-				orden_fabricacion_id: tipo === 'consumo' && ordenId ? Number(ordenId) : undefined,
 				motivo: motivo.trim()
 			});
 			insumoId = '';
 			cantidad = '';
 			motivo = '';
-			toast.success(tipo === 'ingreso' ? 'Ingreso registrado' : 'Consumo registrado');
-			await Promise.all([
-				getInsumos({ limit: 100 }).refresh(),
-				getMovimientosInsumos({ limit: 100 }).refresh()
-			]);
+			toast.success('Ingreso registrado');
+			await refrescar();
 		} catch (error) {
-			toast.error(mensajeError(error, 'No se pudo registrar el movimiento'));
+			toast.error(mensajeError(error, 'No se pudo registrar el ingreso'));
 		} finally {
 			guardando = false;
 		}
@@ -67,84 +68,87 @@
 
 <PageLayout>
 	<div class="mb-5 flex items-center justify-between gap-3">
-		<div>
-			<h1 class="text-xl font-semibold">Movimientos de insumos</h1>
-		</div>
+		<h1 class="text-xl font-semibold">Movimientos de insumos</h1>
 		<a class="btn btn-ghost btn-sm" href={resolve('/insumos')}>Volver</a>
 	</div>
 
 	<section class="border-b border-base-300 pb-6">
-		<h2 class="mb-4 font-semibold">Registrar movimiento</h2>
 		{#if puedeEditarInsumos}
-			<form class="grid gap-4 md:grid-cols-2 xl:grid-cols-3" onsubmit={guardarMovimiento}>
-				<FormFieldWrapper label="Tipo de movimiento" id="tipo_movimiento" required>
-					<select class="select" bind:value={tipo}>
-						<option value="consumo">Consumo</option>
-						<option value="ingreso">Ingreso al stock</option>
-					</select>
-				</FormFieldWrapper>
-				<FormFieldWrapper label="Insumo" id="insumo_id" required>
-					<select class="select" bind:value={insumoId} required>
-						<option value="">Seleccionar...</option>
-						{#each insumos.data as insumo (insumo.id)}
-							<option value={String(insumo.id)}>
-								{insumo.codigo} · {insumo.nombre} · {formatearCantidad(insumo.stock)}
-								{insumo.unidad}
-							</option>
-						{/each}
-					</select>
-				</FormFieldWrapper>
-				<FormFieldWrapper label="Cantidad" id="cantidad" required>
-					<input
-						class="input"
-						type="number"
-						min="0.000001"
-						step="any"
-						bind:value={cantidad}
-						required
+			<div role="tablist" class="tabs-box mb-4 tabs w-fit">
+				<button
+					role="tab"
+					class={['tab', vista === 'consumo' && 'tab-active']}
+					onclick={() => (vista = 'consumo')}>Consumo</button
+				>
+				<button
+					role="tab"
+					class={['tab', vista === 'ingreso' && 'tab-active']}
+					onclick={() => (vista = 'ingreso')}>Ingreso al stock</button
+				>
+			</div>
+
+			{#if vista === 'consumo'}
+				<ConsumoLote
+					insumos={insumos.data}
+					{empleados}
+					ordenes={ordenes.ordenes}
+					ordenId={Number(page.url.searchParams.get('orden')) || null}
+					onRegistrado={refrescar}
+				/>
+			{:else}
+				<form class="grid gap-4 md:grid-cols-2 xl:grid-cols-4" onsubmit={registrarIngreso}>
+					<SearchSelect
+						label="Insumo"
+						id="ingreso-insumo"
+						placeholder="Buscar insumo..."
+						field={{ value: () => insumoId, set: (valor: string) => (insumoId = valor) }}
+						options={insumos.data.map((insumo) => ({
+							value: String(insumo.id),
+							label: `${insumo.codigo} - ${insumo.nombre}`
+						}))}
+						onChange={(valor: string) => (insumoId = valor)}
 					/>
-				</FormFieldWrapper>
-				<FormFieldWrapper label="Empleado responsable" id="empleado_id" required>
-					<select class="select" bind:value={empleadoId} required>
-						<option value="">Seleccionar...</option>
-						{#each empleados as empleado (empleado.id)}
-							<option value={String(empleado.id)}>{empleado.nombre} {empleado.apellido}</option>
-						{/each}
-					</select>
-				</FormFieldWrapper>
-				{#if tipo === 'consumo' && puedeVincularOrden}
-					<FormFieldWrapper label="Orden de fabricación" id="orden_id">
-						<select class="select" bind:value={ordenId}>
-							<option value="">Sin orden asociada</option>
-							{#each ordenes.ordenes as orden (orden.id)}
-								<option value={String(orden.id)}>OF-{orden.id} · {orden.nombre_trabajo}</option>
+					<FormFieldWrapper label="Cantidad" id="ingreso-cantidad" required>
+						<input
+							id="ingreso-cantidad"
+							class="input w-full"
+							inputmode="decimal"
+							bind:value={cantidad}
+							required
+						/>
+					</FormFieldWrapper>
+					<FormFieldWrapper label="Recibido por" id="ingreso-empleado" required>
+						<select id="ingreso-empleado" class="select w-full" bind:value={empleadoId} required>
+							<option value="">Seleccionar...</option>
+							{#each empleados as empleado (empleado.id)}
+								<option value={String(empleado.id)}>{empleado.nombre} {empleado.apellido}</option>
 							{/each}
 						</select>
 					</FormFieldWrapper>
-				{/if}
-				<FormFieldWrapper label="Para qué / motivo" id="motivo" required>
-					<input
-						class="input"
-						bind:value={motivo}
-						maxlength="500"
-						placeholder="Ej.: reparación de bomba, OF-123..."
-						required
-					/>
-				</FormFieldWrapper>
-				<div class="flex items-end">
-					<button
-						class="btn btn-primary"
-						type="submit"
-						disabled={guardando || !insumoId || !empleadoId}
-					>
-						{guardando
-							? 'Guardando...'
-							: tipo === 'ingreso'
-								? 'Registrar ingreso'
-								: 'Registrar consumo'}
-					</button>
-				</div>
-			</form>
+					<FormFieldWrapper label="Origen / remito" id="ingreso-motivo" required>
+						<input
+							id="ingreso-motivo"
+							class="input w-full"
+							bind:value={motivo}
+							maxlength="500"
+							placeholder="Ej.: compra a proveedor, remito 0001-123"
+							required
+						/>
+					</FormFieldWrapper>
+					<div class="flex justify-end md:col-span-2 xl:col-span-4">
+						<button
+							class="btn btn-primary"
+							type="submit"
+							disabled={guardando ||
+								!insumoId ||
+								!empleadoId ||
+								!Number(cantidad.replace(',', '.'))}
+						>
+							{guardando ? 'Guardando...' : 'Registrar ingreso'}
+						</button>
+					</div>
+				</form>
+			{/if}
 		{:else}
 			<p class="text-sm text-base-content/60">
 				No tenés permiso para registrar movimientos de insumos.

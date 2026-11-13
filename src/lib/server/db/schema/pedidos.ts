@@ -1,6 +1,7 @@
 import { sql } from 'drizzle-orm';
 import {
 	boolean,
+	check,
 	index,
 	integer,
 	jsonb,
@@ -17,8 +18,10 @@ import {
 	empresa,
 	fecha,
 	importe,
+	moneda,
 	porcentaje,
-	precioUnitario
+	precioUnitario,
+	tipoCambio
 } from './base';
 import { usuarios } from './acceso';
 import { contactos } from './contactos';
@@ -51,6 +54,8 @@ export const pedidos = pgTable(
 		estado_id: integer('estado_id')
 			.references(() => estados.id, { onDelete: 'restrict' })
 			.notNull(),
+		moneda: moneda(),
+		tipo_cambio: tipoCambio('tipo_cambio'),
 		precio_total: importe('precio_total'),
 		anticipo: importe('anticipo'),
 		creado_por: integer('creado_por').references(() => usuarios.id, { onDelete: 'set null' }),
@@ -60,6 +65,8 @@ export const pedidos = pgTable(
 	},
 	(t) => [
 		uniqueIndex('idx_pedidos_empresa_numero').on(t.empresa_id, t.numero_pedido),
+		check('pedidos_moneda_valida', sql`${t.moneda} IN ('USD', 'ARS')`),
+		check('pedidos_ars_con_cambio', sql`${t.moneda} = 'USD' OR ${t.tipo_cambio} > 0`),
 		aislamiento()
 	]
 );

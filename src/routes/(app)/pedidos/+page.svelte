@@ -30,7 +30,7 @@
 		if (!total) return null;
 		if (saldo <= 0) return { texto: 'Pagado', clase: 'text-success' };
 		if (!pedido.pagado) return { texto: 'Sin cobrar', clase: 'secundario' };
-		return { texto: `Saldo ${formatearMoneda(saldo)}`, clase: 'text-warning' };
+		return { texto: `Saldo ${formatearMoneda(saldo, pedido.moneda)}`, clase: 'text-warning' };
 	}
 </script>
 
@@ -125,7 +125,7 @@
 		</td>
 		{#if veImportes}
 			<td class="numero">
-				<span class="font-medium">{formatearMoneda(pedido.total)}</span>
+				<span class="font-medium">{formatearMoneda(pedido.total, pedido.moneda)}</span>
 				{#if pago}<p class={['text-xs font-medium', pago.clase]}>{pago.texto}</p>{/if}
 			</td>
 		{/if}

@@ -51,11 +51,11 @@ import {
 	reservarStockParaLineaTx
 } from '$lib/modulos/stock/stock.server';
 import { siguienteNumero } from '$lib/server/db/numeracion';
-import {
-	formatearDosDecimales,
-	normalizarPrecioPendiente,
-	redondearPrecio
-} from '$lib/utils/precios';
+import type { MaterialSnapshot } from '$lib/modulos/ventas/tipos';
+import { historialAuditoria } from '$lib/server/auditoria';
+import { monedaParaDocumento } from '$lib/modulos/ventas/moneda.server';
+import { MONEDAS, aUsd, factorDesdeUsd } from '$lib/utils/moneda';
+import { formatearMoneda, normalizarPrecioPendiente, redondearPrecio } from '$lib/utils/precios';
 
 const idOpcional = v.pipe(
 	v.optional(v.union([v.string(), v.number()])),
@@ -119,6 +119,8 @@ export const PedidoSchema = v.object({
 	),
 	fecha_entrega_prometida: v.optional(v.string()),
 	anticipo: v.optional(v.pipe(v.number(), v.toMinValue(0)), 0),
+	moneda: v.optional(v.picklist(MONEDAS), 'USD'),
+	tipo_cambio: v.optional(v.pipe(v.number(), v.minValue(0))),
 	observaciones: v.optional(v.string())
 });
 
@@ -147,10 +149,18 @@ export async function obtenerPedidoDetalle(id: number) {
 				razon_social: contactos.razon_social
 			},
 			fecha: pedidos.fecha_pedido,
+			fecha_entrega_prometida: pedidos.fecha_entrega_prometida,
 			observaciones: pedidos.observaciones,
 			anticipo: pedidos.anticipo,
 			total: pedidos.precio_total,
-			estado: { id: pedidos.estado_id, nombre: estados.nombre, color: estados.color }
+			moneda: pedidos.moneda,
+			tipo_cambio: pedidos.tipo_cambio,
+			estado: {
+				id: pedidos.estado_id,
+				nombre: estados.nombre,
+				color: estados.color,
+				es_final: estados.es_final
+			}
 		})
 		.from(pedidos)
 		.leftJoin(contactos, eq(pedidos.contacto_id, contactos.id))
@@ -172,6 +182,7 @@ export async function obtenerPedidoDetalle(id: number) {
 				margen_porcentaje: lineas_pedido.margen_porcentaje,
 				costo_materiales: lineas_pedido.costo_materiales,
 				subtotal: lineas_pedido.subtotal,
+				insumos_snapshot: sql<MaterialSnapshot[] | null>`${lineas_pedido.insumos_snapshot}`,
 				es_personalizado: lineas_pedido.es_personalizado,
 				descripcion_personalizada: lineas_pedido.descripcion_personalizada,
 				producto_id: lineas_pedido.producto_id,
@@ -283,6 +294,7 @@ export async function getPedidosListado({
 				fecha_entrega: pedidos.fecha_entrega_prometida,
 				fecha_entrega_real: pedidos.fecha_entrega_real,
 				total: pedidos.precio_total,
+				moneda: pedidos.moneda,
 				pagado: pagadoPedido,
 				articulos: sql<number>`(
 					select coalesce(sum(${lineas_pedido.cantidad}), 0) from ${lineas_pedido}
@@ -331,7 +343,7 @@ export async function getPedidosListado({
 
 type EventoHistorial = {
 	id: string;
-	tipo: 'estado' | 'pago' | 'envio' | 'entrega';
+	tipo: 'estado' | 'pago' | 'envio' | 'entrega' | 'edicion';
 	titulo: string;
 	fecha: Date | null;
 	detalle: string | null;
@@ -349,7 +361,7 @@ const unir = (...partes: (string | null | undefined | false)[]) =>
 	partes.filter(Boolean).join(' · ');
 
 export async function getHistorialPedidoServicio(pedidoId: number) {
-	const [cambiosEstado, pagosPedido, enviosPedido, [pedido]] = await Promise.all([
+	const [cambiosEstado, pagosPedido, enviosPedido, [pedido], auditoria] = await Promise.all([
 		historialEstados('pedido', [pedidoId]),
 		db.select().from(pagos).where(eq(pagos.pedido_id, pedidoId)),
 		db
@@ -367,12 +379,28 @@ export async function getHistorialPedidoServicio(pedidoId: number) {
 			.innerJoin(transportistas, eq(envios.transportista_id, transportistas.id))
 			.where(eq(envios.pedido_id, pedidoId)),
 		db
-			.select({ anticipo: pedidos.anticipo, created_at: pedidos.created_at })
+			.select({
+				anticipo: pedidos.anticipo,
+				created_at: pedidos.created_at,
+				moneda: pedidos.moneda
+			})
 			.from(pedidos)
-			.where(eq(pedidos.id, pedidoId))
+			.where(eq(pedidos.id, pedidoId)),
+		historialAuditoria('pedido', [pedidoId])
 	]);
+	const moneda = pedido?.moneda ?? 'USD';
 
 	const eventos: EventoHistorial[] = [
+		...auditoria.map((registro) =>
+			evento({
+				id: `auditoria-${registro.id}`,
+				tipo: 'edicion',
+				titulo: registro.titulo,
+				fecha: registro.fecha,
+				detalle: registro.detalle,
+				empleado: registro.empleado
+			})
+		),
 		...cambiosEstado.map((cambio) =>
 			evento({
 				...cambio,
@@ -389,7 +417,7 @@ export async function getHistorialPedidoServicio(pedidoId: number) {
 						tipo: 'pago',
 						titulo: 'Anticipo inicial',
 						fecha: pedido.created_at,
-						detalle: `$${formatearDosDecimales(pedido.anticipo)}`
+						detalle: formatearMoneda(pedido.anticipo, moneda)
 					})
 				]
 			: []),
@@ -399,7 +427,7 @@ export async function getHistorialPedidoServicio(pedidoId: number) {
 				tipo: 'pago',
 				titulo: 'Pago registrado',
 				fecha: pago.fecha_pago ?? pago.created_at,
-				detalle: unir(`$${formatearDosDecimales(pago.monto)}`, pago.metodo_pago, pago.observaciones)
+				detalle: unir(formatearMoneda(pago.monto, moneda), pago.metodo_pago, pago.observaciones)
 			})
 		),
 		...enviosPedido.flatMap((envio) => {
@@ -437,6 +465,9 @@ export async function getHistorialPedidoServicio(pedidoId: number) {
 export async function crearPedidoServicio(data: NuevoPedido, usuarioId: number) {
 	const estadoInicial = await estadoPorSlug('pedido', PEDIDO_SLUG.PENDIENTE);
 
+	const documento = await monedaParaDocumento(data.moneda, data.tipo_cambio);
+	const factor = factorDesdeUsd(documento);
+
 	return db.transaction(async (tx) => {
 		const lineas = [];
 		for (const [orden_linea, linea] of data.lineas.entries()) {
@@ -447,7 +478,8 @@ export async function crearPedidoServicio(data: NuevoPedido, usuarioId: number) 
 					precio_unitario: linea.precio_lista ?? linea.precio,
 					precio_lista_unitario: linea.precio_lista ?? linea.precio
 				},
-				'PED'
+				'PED',
+				factor
 			);
 			lineas.push({ ...resuelta, orden_linea, stock_ubicacion_id: linea.stock_ubicacion_id });
 		}
@@ -482,6 +514,8 @@ export async function crearPedidoServicio(data: NuevoPedido, usuarioId: number) 
 					: null,
 				estado_id: estadoInicial.id,
 				precio_total: precioTotal,
+				moneda: documento.moneda,
+				tipo_cambio: documento.tipo_cambio,
 				anticipo,
 				observaciones: data.observaciones
 			})
@@ -558,7 +592,7 @@ async function aplicarEfectosEstado(
 		return {};
 	}
 
-	const comision = Number(pedido.monto_comision_distribuidor ?? 0);
+	const comision = aUsd(Number(pedido.monto_comision_distribuidor ?? 0), pedido);
 	const descuentaComision =
 		pedido.contacto_distribuidor_id && !pedido.comision_distribuidor_descontada && comision > 0;
 	if (descuentaComision) {
@@ -668,6 +702,7 @@ export async function getPedidosActivosServicio({ semana }: { semana?: boolean }
 			estado_color: estados.color,
 			fecha_entrega_prometida: pedidos.fecha_entrega_prometida,
 			total: pedidos.precio_total,
+			moneda: pedidos.moneda,
 			saldo_pendiente:
 				sql<number>`greatest(coalesce(${pedidos.precio_total}, 0) - coalesce(${pedidos.monto_credito_distribuidor}, 0) - ${pagadoPedido}, 0)`.mapWith(
 					Number
