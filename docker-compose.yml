@@ -44,8 +44,43 @@ services:
         max-size: '10m'
         max-file: '5'
 
+  dozzle:
+    image: amir20/dozzle:v11
+    restart: unless-stopped
+    ports:
+      - '127.0.0.1:8080:8080'
+    environment:
+      DOZZLE_NO_ANALYTICS: 'true'
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    mem_limit: 96m
+
+  beszel:
+    image: henrygd/beszel:0.21
+    restart: unless-stopped
+    ports:
+      - '127.0.0.1:8090:8090'
+    volumes:
+      - beszel_data:/beszel_data
+      - beszel_socket:/beszel_socket
+    mem_limit: 128m
+
+  beszel-agent:
+    image: henrygd/beszel-agent:0.21
+    restart: unless-stopped
+    network_mode: host
+    environment:
+      LISTEN: /beszel_socket/beszel.sock
+      KEY: ${BESZEL_KEY:-}
+    volumes:
+      - beszel_socket:/beszel_socket
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    mem_limit: 64m
+
 volumes:
   postgres_data:
+  beszel_data:
+  beszel_socket:
   cotizacion_uploads:
   pedido_uploads:
   fabricacion_uploads:

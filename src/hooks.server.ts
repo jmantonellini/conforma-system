@@ -1,24 +1,23 @@
 import { calentarMotorPdf } from '$lib/server/pdf/base';
 import { precargarCotizacionDolarBNA } from '$lib/server/integraciones/tipo-cambio-bna';
 import { programarLimpiezaNotificaciones } from '$lib/modulos/notificaciones/notificaciones.server';
-import { reportarError } from '$lib/server/monitoreo/reportar-error';
+import { iniciarMonitoreo } from '$lib/server/monitoreo/sentry';
 import { usuarioDeSesion } from '$lib/server/auth/permissions';
-import type { HandleServerError, HandleValidationError } from '@sveltejs/kit';
-
-import type { Handle, ServerInit } from '@sveltejs/kit';
+import * as Sentry from '@sentry/sveltekit';
+import { sequence } from '@sveltejs/kit/hooks';
+import type { Handle, HandleServerError, HandleValidationError, ServerInit } from '@sveltejs/kit';
 
 export const init: ServerInit = () => {
+	iniciarMonitoreo();
 	programarLimpiezaNotificaciones();
 	void calentarMotorPdf();
 	precargarCotizacionDolarBNA();
 	process.on('unhandledRejection', (motivo) => {
 		console.error('[unhandledRejection]', motivo);
-		reportarError(motivo, { ruta: 'unhandledRejection' });
 	});
 	process.on('uncaughtException', (error) => {
 		console.error('[uncaughtException]', error);
-		reportarError(error, { ruta: 'uncaughtException' });
-		setTimeout(() => process.exit(1), 3000).unref();
+		void Promise.resolve(Sentry.flush(2000)).finally(() => process.exit(1));
 	});
 };
 
@@ -70,7 +69,30 @@ function remotaInvocada(url: URL) {
 	return url.searchParams.get('/remote');
 }
 
-export const handle: Handle = async ({ event, resolve }) => {
+const RUTAS_SIN_REGISTRO = new Set(['/salud']);
+
+const registrarRequest: Handle = async ({ event, resolve }) => {
+	if (RUTAS_SIN_REGISTRO.has(event.url.pathname)) return resolve(event);
+	const inicio = performance.now();
+	const usuario = await usuarioDeSesion().catch(() => null);
+	if (usuario) Sentry.setUser({ id: String(usuario.id), username: usuario.username });
+	let estado = 500;
+	try {
+		const respuesta = await resolve(event);
+		estado = respuesta.status;
+		return respuesta;
+	} finally {
+		const remota = remotaInvocada(new URL(event.request.url));
+		const destino = remota ? `remota ${remota.split('/').pop()}` : event.url.pathname;
+		const ms = Math.round(performance.now() - inicio);
+		const linea = `[http] ${event.request.method} ${destino} ${estado} ${ms}ms ${usuario?.username ?? '-'}`;
+		if (estado >= 500) console.error(linea);
+		else if (estado >= 400) console.warn(linea);
+		else console.info(linea);
+	}
+};
+
+const protegerYTraducirErrores: Handle = async ({ event, resolve }) => {
 	const remota = remotaInvocada(new URL(event.request.url));
 	if (
 		remota &&
@@ -114,6 +136,8 @@ export const handle: Handle = async ({ event, resolve }) => {
 	}
 };
 
+export const handle = sequence(Sentry.sentryHandle(), registrarRequest, protegerYTraducirErrores);
+
 function getRootCause(error: unknown): Record<string, unknown> {
 	let current = error;
 	const seen = new Set<object>();
@@ -131,13 +155,8 @@ function getRootCause(error: unknown): Record<string, unknown> {
 		: { message: String(current) };
 }
 
-export const handleError: HandleServerError = ({ error, event, status, message }) => {
-	if (status < 500) {
-		if (status !== 404) {
-			console.warn(`HTTP ${status} ${event.request.method} ${event.url.pathname}: ${message}`);
-		}
-		return { message };
-	}
+const registrarError: HandleServerError = ({ error, event, status, message }) => {
+	if (status < 500) return { message };
 
 	const cause = getRootCause(error);
 	const causeMessage = typeof cause.message === 'string' ? cause.message : message;
@@ -153,14 +172,11 @@ export const handleError: HandleServerError = ({ error, event, status, message }
 		typeof cause.stack === 'string' ? cause.stack : undefined
 	].filter((line): line is string => Boolean(line));
 	console.error(details.join('\n'));
-	reportarError(error, {
-		ruta: event.url.pathname,
-		metodo: event.request.method,
-		estado: status
-	});
 
 	return { message: 'Error interno del servidor' };
 };
+
+export const handleError = Sentry.handleErrorWithSentry(registrarError);
 
 export const handleValidationError: HandleValidationError = ({ issues, event }) => {
 	console.warn(

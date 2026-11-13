@@ -2,10 +2,27 @@ import { defineConfig } from 'vitest/config';
 import { playwright } from '@vitest/browser-playwright';
 import tailwindcss from '@tailwindcss/vite';
 import { sveltekit } from '@sveltejs/kit/vite';
+import { sentrySvelteKit } from '@sentry/sveltekit/vite';
+
+const subirSourcemaps = Boolean(process.env.SENTRY_AUTH_TOKEN);
 
 export default defineConfig({
 	cacheDir: process.env.VITE_CACHE_DIR ?? 'node_modules/.vite',
-	plugins: [tailwindcss(), sveltekit()],
+	plugins: [
+		sentrySvelteKit({
+			adapter: 'node',
+			autoInstrument: false,
+			autoUploadSourceMaps: subirSourcemaps,
+			sourcemaps: { disable: !subirSourcemaps },
+			org: process.env.SENTRY_ORG,
+			project: process.env.SENTRY_PROJECT,
+			authToken: process.env.SENTRY_AUTH_TOKEN,
+			release: { name: process.env.SENTRY_RELEASE },
+			telemetry: false
+		}),
+		tailwindcss(),
+		sveltekit()
+	],
 	test: {
 		expect: { requireAssertions: true },
 		projects: [

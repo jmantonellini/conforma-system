@@ -68,6 +68,7 @@
 		"@pdfme/common": "^6.1.12",
 		"@pdfme/generator": "^6.1.12",
 		"@pdfme/schemas": "^6.1.12",
+		"@sentry/sveltekit": "^11.12.0",
 		"bcryptjs": "^3.0.3",
 		"dotenv": "^17.4.2",
 		"drizzle-orm": "^0.45.2",

@@ -14,10 +14,23 @@ import { ROLES } from '$lib/utils/permissions';
 
 type UsuarioConRol = { rol?: { id?: number | null; nombre?: string | null } | null };
 
-export async function usuarioDeSesion() {
-	const sessionId = getRequestEvent().cookies.get('session');
-	if (!sessionId) return null;
+const sesionesPorRequest = new WeakMap<
+	object,
+	{ sessionId: string; usuario: ReturnType<typeof buscarUsuarioDeSesion> }
+>();
 
+export function usuarioDeSesion() {
+	const event = getRequestEvent();
+	const sessionId = event.cookies.get('session');
+	if (!sessionId) return Promise.resolve(null);
+	const cache = sesionesPorRequest.get(event);
+	if (cache?.sessionId === sessionId) return cache.usuario;
+	const usuario = buscarUsuarioDeSesion(sessionId);
+	sesionesPorRequest.set(event, { sessionId, usuario });
+	return usuario;
+}
+
+async function buscarUsuarioDeSesion(sessionId: string) {
 	const [user] = await db
 		.select({
 			id: usuarios.id,

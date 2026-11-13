@@ -54,6 +54,12 @@ jobs:
             ${{ env.IMAGEN }}:${{ github.sha }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
+          build-args: |
+            SENTRY_RELEASE=${{ github.sha }}
+            SENTRY_ORG=${{ vars.SENTRY_ORG }}
+            SENTRY_PROJECT=${{ vars.SENTRY_PROJECT }}
+          secrets: |
+            sentry_token=${{ secrets.SENTRY_AUTH_TOKEN }}
 
   desplegar:
     name: Desplegar
@@ -102,7 +108,7 @@ jobs:
 
             echo ">>> Healthcheck"
             for intento in $(seq 1 20); do
-              if curl -fsS -o /dev/null http://localhost:3000/login; then
+              if curl -fsS -o /dev/null http://localhost:3000/salud; then
                 echo ">>> Deploy OK"
                 exit 0
               fi
