@@ -1,4 +1,4 @@
-FROM node:22-alpine AS build
+FROM node:25-alpine AS build
 WORKDIR /app
 RUN corepack enable && corepack prepare pnpm@10.13.1 --activate
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
@@ -12,7 +12,7 @@ RUN --mount=type=secret,id=sentry_token \
     SENTRY_RELEASE="$SENTRY_RELEASE" SENTRY_ORG="$SENTRY_ORG" SENTRY_PROJECT="$SENTRY_PROJECT" \
     pnpm run build
 
-FROM node:22-alpine AS production
+FROM node:25-alpine AS production
 WORKDIR /app
 ARG SENTRY_RELEASE=""
 ENV NODE_ENV=production \
