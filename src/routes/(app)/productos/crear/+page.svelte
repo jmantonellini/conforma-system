@@ -256,6 +256,40 @@
 						</div>
 
 						<div class="grid grid-cols-1 gap-4 md:grid-cols-2">
+							<FormFieldWrapper
+								label="Año desde"
+								id="anio_desde"
+								error={crearProducto.fields.anio_desde.issues()?.[0]?.message}
+							>
+								<input
+									{...crearProducto.fields.anio_desde.as('number')}
+									id="anio_desde"
+									class="input w-full input-sm"
+									min="1900"
+									max="2100"
+									step="1"
+									placeholder="Ej: 2010"
+								/>
+							</FormFieldWrapper>
+							<FormFieldWrapper
+								label="Año hasta"
+								id="anio_hasta"
+								ayuda="Vacío si sigue vigente"
+								error={crearProducto.fields.anio_hasta.issues()?.[0]?.message}
+							>
+								<input
+									{...crearProducto.fields.anio_hasta.as('number')}
+									id="anio_hasta"
+									class="input w-full input-sm"
+									min="1900"
+									max="2100"
+									step="1"
+									placeholder="Ej: 2016"
+								/>
+							</FormFieldWrapper>
+						</div>
+
+						<div class="grid grid-cols-1 gap-4 md:grid-cols-2">
 							<FormFieldWrapper label="Tipo de uso" id="tipo_uso_id">
 								<select
 									{...crearProducto.fields.tipo_uso_id.as('select')}

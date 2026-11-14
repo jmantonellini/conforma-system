@@ -136,6 +136,8 @@ export const productos = pgTable(
 		tipo_vehiculo_id: integer('tipo_vehiculo_id').references(() => tipos_vehiculo.id),
 		marca_id: integer('marca_id').references(() => marcas.id),
 		modelo_id: integer('modelo_id').references(() => modelos.id),
+		anio_desde: integer('anio_desde'),
+		anio_hasta: integer('anio_hasta'),
 		tipo_uso_id: integer('tipo_uso_id').references(() => tipos_uso.id),
 		categoria_competencia_id: integer('categoria_competencia_id').references(
 			() => categorias_competencia.id
@@ -151,6 +153,10 @@ export const productos = pgTable(
 		check(
 			'productos_margen_porcentaje_range',
 			sql`${t.margen_porcentaje} >= 0 AND ${t.margen_porcentaje} < 100`
+		),
+		check(
+			'productos_anios_orden',
+			sql`${t.anio_desde} IS NULL OR ${t.anio_hasta} IS NULL OR ${t.anio_desde} <= ${t.anio_hasta}`
 		),
 		aislamiento()
 	]

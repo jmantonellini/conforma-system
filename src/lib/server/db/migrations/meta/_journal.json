@@ -50,6 +50,13 @@
 			"when": 1794610431075,
 			"tag": "0006_mano_de_obra",
 			"breakpoints": true
+		},
+		{
+			"idx": 7,
+			"version": "7",
+			"when": 1794628606381,
+			"tag": "0007_anios_producto",
+			"breakpoints": true
 		}
 	]
 }

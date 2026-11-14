@@ -27,6 +27,7 @@
 	import { calcularPrecioVenta, formatearMoneda, redondearPrecio } from '$lib/utils/precios';
 	import type { PageProps } from './$types';
 	import { CATEGORIAS_PRODUCTO, TIPOS_USO_PRODUCTO } from '$lib/modulos/productos/tipos';
+	import { formatearAnios } from '$lib/modulos/productos/anios';
 
 	let { data }: PageProps = $props();
 
@@ -164,7 +165,8 @@
 	const vehiculo = $derived(
 		[
 			nombreDe(tiposVehiculo, data.producto.tipo_vehiculo_id),
-			nombreDe(marcas, data.producto.marca_id)
+			nombreDe(marcas, data.producto.marca_id),
+			formatearAnios(data.producto.anio_desde, data.producto.anio_hasta)
 		]
 			.filter(Boolean)
 			.join(' · ')
@@ -354,6 +356,40 @@
 									<option value={String(mod.id)}>{mod.nombre}</option>
 								{/each}
 							</select>
+						</FormFieldWrapper>
+					</div>
+
+					<div class="grid gap-4 sm:grid-cols-2">
+						<FormFieldWrapper
+							label="Año desde"
+							id="anio_desde"
+							error={form.fields.anio_desde.issues()?.[0]?.message}
+						>
+							<input
+								{...form.fields.anio_desde.as('number', data.producto.anio_desde ?? '')}
+								id="anio_desde"
+								class="input w-full"
+								min="1900"
+								max="2100"
+								step="1"
+								placeholder="Ej: 2010"
+							/>
+						</FormFieldWrapper>
+						<FormFieldWrapper
+							label="Año hasta"
+							id="anio_hasta"
+							ayuda="Vacío si sigue vigente"
+							error={form.fields.anio_hasta.issues()?.[0]?.message}
+						>
+							<input
+								{...form.fields.anio_hasta.as('number', data.producto.anio_hasta ?? '')}
+								id="anio_hasta"
+								class="input w-full"
+								min="1900"
+								max="2100"
+								step="1"
+								placeholder="Ej: 2016"
+							/>
 						</FormFieldWrapper>
 					</div>
 

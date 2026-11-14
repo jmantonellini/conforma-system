@@ -17,6 +17,7 @@
 	} from '$lib/modulos/productos/productos.remote';
 	import { confirmarYEjecutar } from '$lib/ui/confirmar.svelte';
 	import { formatearMoneda } from '$lib/utils/precios';
+	import { formatearAnios } from '$lib/modulos/productos/anios';
 	import type { PageProps } from './$types';
 
 	let { data }: PageProps = $props();
@@ -33,7 +34,7 @@
 	total={resultado.total}
 	pagina={resultado.currentPage}
 	paginas={resultado.totalPages}
-	buscar="Código, nombre, marca, modelo..."
+	buscar="Código, nombre, marca, modelo, año..."
 	vacio="No hay productos para estos filtros"
 >
 	{#snippet acciones()}
@@ -76,7 +77,13 @@
 		<td class="text-base-content/70">{categorias.get(producto.categoria_id ?? 0) ?? '-'}</td>
 		<td>
 			<Highlight
-				text={[producto.marca?.nombre, producto.modelo?.nombre].filter(Boolean).join(' · ') || '-'}
+				text={[
+					producto.marca?.nombre,
+					producto.modelo?.nombre,
+					formatearAnios(producto.anio_desde, producto.anio_hasta)
+				]
+					.filter(Boolean)
+					.join(' · ') || '-'}
 				query={busqueda}
 			/>
 		</td>

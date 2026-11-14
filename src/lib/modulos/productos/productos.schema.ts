@@ -1,6 +1,22 @@
 import * as v from 'valibot';
 
-export const ProductoSchema = v.object({
+const anio = v.optional(
+	v.pipe(
+		v.number(),
+		v.integer('El año debe ser un número entero'),
+		v.minValue(1900, 'El año debe ser 1900 o posterior'),
+		v.maxValue(2100, 'El año debe ser 2100 o anterior')
+	)
+);
+
+type Anios = { anio_desde?: number; anio_hasta?: number };
+
+const aniosOrdenados = ({ anio_desde, anio_hasta }: Anios) =>
+	anio_desde == null || anio_hasta == null || anio_desde <= anio_hasta;
+
+const MENSAJE_ANIOS = 'El año hasta no puede ser anterior al año desde';
+
+const camposProducto = {
 	codigo: v.optional(v.pipe(v.string(), v.trim()), ''),
 	nombre: v.pipe(v.string(), v.nonEmpty('Nombre requerido')),
 	categoria_id: v.optional(v.pipe(v.string(), v.transform(Number), v.number())),
@@ -19,15 +35,29 @@ export const ProductoSchema = v.object({
 	categoria_competencia_id: v.optional(v.pipe(v.string(), v.transform(Number), v.number())),
 	marca_id: v.optional(v.pipe(v.string(), v.transform(Number), v.number())),
 	modelo_id: v.optional(v.pipe(v.string(), v.transform(Number), v.number())),
+	anio_desde: anio,
+	anio_hasta: anio,
 	receta: v.optional(v.string())
-});
+};
 
-export const ProductoSchemaUpdate = v.object({
-	...ProductoSchema.entries,
-	id: v.string(),
-	codigo: v.optional(v.pipe(v.string(), v.trim()), ''),
-	receta: v.optional(v.string())
-});
+export const ProductoSchema = v.pipe(
+	v.object(camposProducto),
+	v.forward(v.partialCheck([['anio_desde'], ['anio_hasta']], aniosOrdenados, MENSAJE_ANIOS), [
+		'anio_hasta'
+	])
+);
+
+export const ProductoSchemaUpdate = v.pipe(
+	v.object({
+		...camposProducto,
+		id: v.string(),
+		codigo: v.optional(v.pipe(v.string(), v.trim()), ''),
+		receta: v.optional(v.string())
+	}),
+	v.forward(v.partialCheck([['anio_desde'], ['anio_hasta']], aniosOrdenados, MENSAJE_ANIOS), [
+		'anio_hasta'
+	])
+);
 
 export type DatosProducto = v.InferOutput<typeof ProductoSchema>;
 export type DatosProductoActualizado = v.InferOutput<typeof ProductoSchemaUpdate>;

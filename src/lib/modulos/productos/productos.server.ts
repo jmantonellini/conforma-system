@@ -16,7 +16,20 @@ import {
 	unidadInsumo,
 	tipoInsumo
 } from '$lib/server/db/schema';
-import { eq, count, and, asc, desc, ilike, or, sql } from 'drizzle-orm';
+import {
+	eq,
+	count,
+	and,
+	asc,
+	desc,
+	gte,
+	ilike,
+	isNotNull,
+	isNull,
+	lte,
+	or,
+	sql
+} from 'drizzle-orm';
 import { requirePermission } from '$lib/server/auth/permissions';
 import {
 	parsearRecetaProducto,
@@ -26,6 +39,7 @@ import {
 import { generarCodigoProductoUnico } from '$lib/modulos/productos/codigo.server';
 import { calcularPrecioVenta, redondearPrecio } from '$lib/utils/precios';
 import { limpiarValores } from './atributos';
+import { anioDeBusqueda } from './anios';
 import type { DatosProducto, DatosProductoActualizado } from './productos.schema';
 
 export async function calcularCostoMaterialesProducto(
@@ -120,6 +134,15 @@ export const recetaPendiente = sql<boolean>`(
 	and not exists (select 1 from ${producto_componentes} where ${producto_componentes.producto_id} = ${productos.id})
 )`;
 
+function coincideAnio(anio: number | null) {
+	if (anio === null) return undefined;
+	return and(
+		or(isNotNull(productos.anio_desde), isNotNull(productos.anio_hasta)),
+		or(isNull(productos.anio_desde), lte(productos.anio_desde, anio)),
+		or(isNull(productos.anio_hasta), gte(productos.anio_hasta, anio))
+	);
+}
+
 export async function getProductosListado({
 	search,
 	categoriaId,
@@ -147,7 +170,8 @@ export async function getProductosListado({
 				ilike(productos.nombre, searchTerm),
 				ilike(productos.codigo, searchTerm),
 				ilike(marcas.nombre, searchTerm),
-				ilike(modelos.nombre, searchTerm)
+				ilike(modelos.nombre, searchTerm),
+				coincideAnio(anioDeBusqueda(search))
 			)
 		);
 	}
@@ -166,6 +190,8 @@ export async function getProductosListado({
 			nombre: productos.nombre,
 			categoria_id: productos.categoria_id,
 			margen_porcentaje: productos.margen_porcentaje,
+			anio_desde: productos.anio_desde,
+			anio_hasta: productos.anio_hasta,
 			receta_pendiente: recetaPendiente,
 			portada_id: sql<number | null>`(
 				select ${adjuntos.id} from ${adjuntos}
@@ -448,6 +474,8 @@ export async function actualizarProductoServicio(data: DatosProductoActualizado)
 			.update(productos)
 			.set({
 				...updateData,
+				anio_desde: updateData.anio_desde ?? null,
+				anio_hasta: updateData.anio_hasta ?? null,
 				...(atributos && { atributos: limpiarValores(atributos, definiciones) }),
 				updated_at: new Date()
 			})
