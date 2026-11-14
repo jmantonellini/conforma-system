@@ -114,25 +114,11 @@ export async function cambiarMonedaTx(tx: Tx, cambio: CambioMoneda, usuarioId: n
 		error(409, 'No se puede cambiar la moneda de un pedido finalizado');
 	}
 
-	const factor =
-		cambio.modo === 'corregir' || actual.moneda === cambio.moneda
-			? 1
-			: cambio.moneda === 'ARS'
-				? cambio.tipo_cambio
-				: 1 / cambio.tipo_cambio;
+	const factor = factorCambio(actual.moneda, cambio);
 
 	if (factor !== 1) {
 		if (cambio.documento === 'cotizacion') {
-			await escalarLineas(
-				tx,
-				lineas_cotizacion,
-				eq(lineas_cotizacion.cotizacion_id, cambio.id),
-				factor
-			);
-			await tx
-				.update(cotizaciones)
-				.set({ precio_total: escalar(cotizaciones.precio_total, factor) })
-				.where(eq(cotizaciones.id, cambio.id));
+			await escalarCotizacion(tx, cambio.id, factor);
 		} else {
 			await escalarLineas(tx, lineas_pedido, eq(lineas_pedido.pedido_id, cambio.id), factor);
 			await tx
@@ -170,4 +156,54 @@ export async function cambiarMonedaTx(tx: Tx, cambio: CambioMoneda, usuarioId: n
 		accion: 'moneda',
 		detalle: describirCambio(actual.moneda, cambio)
 	});
+
+	if (cambio.documento === 'pedido') await alinearCotizacionesDelPedido(tx, cambio, usuarioId);
+}
+
+function factorCambio(monedaActual: Moneda, cambio: CambioMoneda) {
+	if (cambio.modo === 'corregir' || monedaActual === cambio.moneda) return 1;
+	return cambio.moneda === 'ARS' ? cambio.tipo_cambio : 1 / cambio.tipo_cambio;
+}
+
+async function escalarCotizacion(tx: Tx, cotizacionId: number, factor: number) {
+	await escalarLineas(
+		tx,
+		lineas_cotizacion,
+		eq(lineas_cotizacion.cotizacion_id, cotizacionId),
+		factor
+	);
+	await tx
+		.update(cotizaciones)
+		.set({ precio_total: escalar(cotizaciones.precio_total, factor) })
+		.where(eq(cotizaciones.id, cotizacionId));
+}
+
+async function alinearCotizacionesDelPedido(tx: Tx, cambio: CambioMoneda, usuarioId: number) {
+	const origenes = await tx
+		.select({
+			id: cotizaciones.id,
+			moneda: cotizaciones.moneda,
+			tipo_cambio: cotizaciones.tipo_cambio
+		})
+		.from(cotizaciones)
+		.where(eq(cotizaciones.pedido_id, cambio.id))
+		.for('update');
+	for (const origen of origenes) {
+		if (origen.moneda === cambio.moneda && Number(origen.tipo_cambio) === cambio.tipo_cambio) {
+			continue;
+		}
+		const factor = factorCambio(origen.moneda, cambio);
+		if (factor !== 1) await escalarCotizacion(tx, origen.id, factor);
+		await tx
+			.update(cotizaciones)
+			.set({ moneda: cambio.moneda, tipo_cambio: cambio.tipo_cambio })
+			.where(eq(cotizaciones.id, origen.id));
+		await registrarAuditoria(tx, {
+			entidad: 'cotizacion',
+			entidadId: origen.id,
+			usuarioId,
+			accion: 'moneda',
+			detalle: `${describirCambio(origen.moneda, cambio)} (desde su pedido)`
+		});
+	}
 }

@@ -190,7 +190,7 @@
 </script>
 
 <div class={[`relative ${className || ''}`, { 'z-50': isOpen }]}>
-	<FormFieldWrapper {label} {id}>
+	<FormFieldWrapper {label} {id} required={!!restProps.required}>
 		<div class="relative" {@attach (nodo) => void (ancla = nodo)}>
 			<input
 				{id}

@@ -46,6 +46,12 @@
 		untrack(() => (filasIniciales.length ? desdeIniciales() : [filaVacia()]))
 	);
 	let empleadoId = $state(untrack(() => empleadoInicial));
+	const opcionesEmpleados = $derived(
+		empleados.map((empleado) => ({
+			value: String(empleado.id),
+			label: [empleado.nombre, empleado.apellido].filter(Boolean).join(' ')
+		}))
+	);
 	let ordenSeleccionada = $state('');
 	let motivo = $state('');
 	let guardando = $state(false);
@@ -108,14 +114,16 @@
 
 <form class="flex flex-col gap-4" onsubmit={registrar}>
 	<div class="grid gap-4 md:grid-cols-3">
-		<FormFieldWrapper label="Empleado responsable" id="lote-empleado" required>
-			<select id="lote-empleado" class="select w-full" bind:value={empleadoId} required>
-				<option value="">Seleccionar...</option>
-				{#each empleados as empleado (empleado.id)}
-					<option value={String(empleado.id)}>{empleado.nombre} {empleado.apellido ?? ''}</option>
-				{/each}
-			</select>
-		</FormFieldWrapper>
+		<SearchSelect
+			label="Empleado responsable"
+			id="lote-empleado"
+			placeholder="Buscar empleado..."
+			required
+			disabled={guardando}
+			field={{ value: () => empleadoId, set: (valor: string) => (empleadoId = valor) }}
+			options={opcionesEmpleados}
+			onChange={(valor: string) => (empleadoId = valor)}
+		/>
 		{#if ordenId === null && ordenes.length}
 			<FormFieldWrapper label="Orden de fabricación" id="lote-orden">
 				<select id="lote-orden" class="select w-full" bind:value={ordenSeleccionada}>
