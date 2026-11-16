@@ -102,7 +102,7 @@ async function ventas(contexto: Contexto): Promise<Omit<Reporte, keyof Contexto 
 			.innerJoin(estadoPedido, eq(estadoPedido.id, pedidos.estado_id))
 			.where(pedidoVigente(rango));
 		const [cobros] = await db
-			.select({ monto: sum(usdPedido(pagos.monto)) })
+			.select({ monto: sum(usdPedido(pagos.monto_aplicado)) })
 			.from(pagos)
 			.innerJoin(pedidos, eq(pedidos.id, pagos.pedido_id))
 			.where(enRango(pagos.fecha_pago, rango));

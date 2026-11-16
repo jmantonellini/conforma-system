@@ -9,6 +9,7 @@ import {
 	type PermisoDestino
 } from '$lib/modulos/notificaciones/notificaciones.server';
 import { formatearMoneda } from '$lib/utils/precios';
+import type { Moneda } from '$lib/utils/moneda';
 import { PEDIDO_SLUG } from './tipos';
 
 const PRODUCCION: PermisoDestino = { modulo: 'fabricacion', accion: 'create' };
@@ -77,8 +78,8 @@ export const avisarCambioEstadoPedido = (
 	);
 };
 
-export const avisarPago = (pedidoId: number, monto: number, actor: number) =>
-	avisar(pedidoId, actor, ({ numero, cliente, moneda }) => ({
+export const avisarPago = (pedidoId: number, monto: number, moneda: Moneda, actor: number) =>
+	avisar(pedidoId, actor, ({ numero, cliente }) => ({
 		titulo: `Pago registrado en ${numero}`,
 		mensaje: `${formatearMoneda(monto, moneda)} de ${cliente ?? 'el cliente'}.`
 	}));

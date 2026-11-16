@@ -67,7 +67,7 @@ const precio = v.pipe(
 );
 
 const pagadoPedido = sql<number>`coalesce(${pedidos.anticipo}, 0) + coalesce((
-	select sum(${pagos.monto}) from ${pagos} where ${pagos.pedido_id} = ${pedidos.id}
+	select sum(${pagos.monto_aplicado}) from ${pagos} where ${pagos.pedido_id} = ${pedidos.id}
 ), 0)`.mapWith(Number);
 
 export const LineaPedidoSchema = v.object({
@@ -151,6 +151,7 @@ export async function obtenerPedidoDetalle(id: number) {
 			fecha: pedidos.fecha_pedido,
 			fecha_entrega_prometida: pedidos.fecha_entrega_prometida,
 			observaciones: pedidos.observaciones,
+			factura: pedidos.factura,
 			anticipo: pedidos.anticipo,
 			total: pedidos.precio_total,
 			moneda: pedidos.moneda,
@@ -427,7 +428,13 @@ export async function getHistorialPedidoServicio(pedidoId: number) {
 				tipo: 'pago',
 				titulo: 'Pago registrado',
 				fecha: pago.fecha_pago ?? pago.created_at,
-				detalle: unir(formatearMoneda(pago.monto, moneda), pago.metodo_pago, pago.observaciones)
+				detalle: unir(
+					formatearMoneda(pago.monto, pago.moneda),
+					pago.moneda !== moneda && `equivale a ${formatearMoneda(pago.monto_aplicado, moneda)}`,
+					pago.metodo_pago,
+					pago.recibo && `Recibo ${pago.recibo}`,
+					pago.observaciones
+				)
 			})
 		),
 		...enviosPedido.flatMap((envio) => {

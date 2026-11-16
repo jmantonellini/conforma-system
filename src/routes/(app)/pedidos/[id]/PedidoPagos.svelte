@@ -1,16 +1,36 @@
 <script lang="ts">
 	import { Can, EstadoBadge, FormErrors, Modal, FormFieldWrapper, Seccion } from '$lib/ui';
 	import { getPagosByPedido, registrarPago } from '$lib/modulos/pedidos/facturacion.remote';
+	import { getDolarBNA } from '$lib/modulos/ventas/moneda.remote';
+	import { montoAplicado, requiereTipoCambio, saldoEnMoneda } from '$lib/modulos/pedidos/pagos';
 	import { toast } from '$lib/ui/toast.svelte';
 	import { formatearFecha } from '$lib/utils/fechas';
-	import { formatearMoneda, redondearPrecio } from '$lib/utils/precios';
+	import { formatearDosDecimales, formatearMoneda } from '$lib/utils/precios';
+	import { NOMBRE_MONEDA, SIMBOLO_MONEDA, type Moneda } from '$lib/utils/moneda';
 	import { ESTADO_PAGO, METODO_PAGO } from '$lib/modulos/pedidos/tipos';
 
 	let { pedidoId }: { pedidoId: number } = $props();
 
 	let facturacion = $derived(await getPagosByPedido(pedidoId));
+	let dolar = $derived(await getDolarBNA());
 	let showModal = $state(false);
 	const form = registrarPago;
+
+	const monedaPedido = $derived(facturacion.moneda);
+	const monedaPago = $derived((form.fields.moneda.value() || 'ARS') as Moneda);
+	const conCambio = $derived(requiereTipoCambio(monedaPago, monedaPedido));
+	const cambioSugerido = $derived(dolar?.venta ?? facturacion.tipo_cambio_pedido ?? undefined);
+	const tipoCambio = $derived(Number(form.fields.tipo_cambio.value()) || cambioSugerido);
+	const saldoEnPesos = $derived(
+		monedaPedido === 'USD' && cambioSugerido
+			? saldoEnMoneda(facturacion.saldo, 'USD', 'ARS', cambioSugerido)
+			: null
+	);
+	const equivalente = $derived.by(() => {
+		const monto = Number(form.fields.monto.value());
+		if (!conCambio || !monto || !tipoCambio) return null;
+		return montoAplicado({ monto, moneda: monedaPago, tipo_cambio: tipoCambio }, monedaPedido);
+	});
 
 	function cerrar() {
 		showModal = false;
@@ -18,7 +38,13 @@
 	}
 
 	function completarSaldoRestante() {
-		form.fields.monto.set(redondearPrecio(Math.max(facturacion.saldo, 0)));
+		const saldo = saldoEnMoneda(
+			Math.max(facturacion.saldo, 0),
+			monedaPedido,
+			monedaPago,
+			conCambio ? tipoCambio : null
+		);
+		if (saldo !== null) form.fields.monto.set(saldo);
 	}
 
 	const items = $derived(facturacion.pagos ?? []);
@@ -36,24 +62,40 @@
 			<button class="btn btn-sm" onclick={() => (showModal = true)}>+ Registrar</button>
 		</Can>
 	{/snippet}
-	<div class="flex items-center justify-between gap-2">
+	<div class="flex items-start justify-between gap-2">
 		<EstadoBadge estado={ESTADOS[facturacion.estado]} />
 		{#if facturacion.saldo > 0}
-			<span class="text-sm text-base-content/70"
-				>Saldo {formatearMoneda(facturacion.saldo, facturacion.moneda)}</span
-			>
+			<div class="text-right text-sm text-base-content/70">
+				<p>Saldo {formatearMoneda(facturacion.saldo, monedaPedido)}</p>
+				{#if saldoEnPesos !== null}
+					<p class="text-xs text-base-content/60">
+						≈ {formatearMoneda(saldoEnPesos, 'ARS')} al dólar {formatearDosDecimales(
+							cambioSugerido
+						)}
+					</p>
+				{/if}
+			</div>
 		{/if}
 	</div>
 	{#if items.length}
 		<ul class="list -mx-4 sm:-mx-5">
 			{#each items as pago (pago.id)}
 				<li class="list-row">
-					<div class="numero font-medium">{formatearMoneda(pago.monto, facturacion.moneda)}</div>
-					<div class="text-sm text-base-content/70">
+					<div>
+						<p class="font-medium tabular-nums">{formatearMoneda(pago.monto, pago.moneda)}</p>
+						{#if pago.moneda !== monedaPedido}
+							<p class="text-xs text-base-content/60 tabular-nums">
+								= {formatearMoneda(pago.monto_aplicado, monedaPedido)}
+								{#if pago.tipo_cambio}· TC {formatearDosDecimales(pago.tipo_cambio)}{/if}
+							</p>
+						{/if}
+					</div>
+					<div class="list-col-wrap text-sm text-base-content/70">
 						<p class="capitalize">
 							{pago.metodo_pago === METODO_PAGO.CUOTAS
 								? `Tarjeta · ${pago.cantidad_cuotas} cuotas`
 								: pago.metodo_pago || 'Sin método'}
+							{#if pago.recibo}<span class="normal-case"> · Recibo {pago.recibo}</span>{/if}
 						</p>
 						<p class="text-xs">{formatearFecha(pago.fecha_pago)} {pago.observaciones ?? ''}</p>
 					</div>
@@ -81,26 +123,60 @@
 		id="pago-form"
 	>
 		<input type="hidden" name="pedido_id" value={pedidoId} />
-		<FormFieldWrapper label="Monto" id="monto" required>
-			<div class="join w-full">
+		<div class="grid gap-4 sm:grid-cols-[8rem_1fr]">
+			<FormFieldWrapper label="Moneda" id="moneda">
+				<select id="moneda" class="select" {...form.fields.moneda.as('select', 'ARS')}>
+					<option value="ARS">{NOMBRE_MONEDA.ARS}</option>
+					<option value="USD">{NOMBRE_MONEDA.USD}</option>
+				</select>
+			</FormFieldWrapper>
+			<FormFieldWrapper label={`Monto (${SIMBOLO_MONEDA[monedaPago]})`} id="monto" required>
+				<div class="join w-full">
+					<input
+						id="monto"
+						class="input join-item min-w-0 flex-1"
+						step="0.01"
+						{...form.fields.monto.as('number')}
+					/>
+					<button
+						type="button"
+						class="btn join-item"
+						disabled={facturacion.saldo <= 0 || (conCambio && !tipoCambio)}
+						onclick={completarSaldoRestante}
+					>
+						Saldo restante
+					</button>
+				</div>
+			</FormFieldWrapper>
+		</div>
+		{#if conCambio}
+			<FormFieldWrapper
+				label="Tipo de cambio (US$ 1 = $)"
+				id="tipo_cambio"
+				required
+				ayuda={equivalente !== null
+					? `Se descuentan ${formatearMoneda(equivalente, monedaPedido)} del saldo del pedido`
+					: dolar
+						? `Dólar BNA vendedor del ${dolar.fecha}`
+						: undefined}
+			>
 				<input
-					class="input join-item min-w-0 flex-1"
-					step="0.01"
-					{...form.fields.monto.as('number')}
+					id="tipo_cambio"
+					class="input w-full"
+					step="0.0001"
+					min="0"
+					required
+					{...form.fields.tipo_cambio.as('number', cambioSugerido ?? '')}
 				/>
-				<button
-					type="button"
-					class="btn join-item"
-					disabled={facturacion.saldo <= 0}
-					onclick={completarSaldoRestante}
-				>
-					Saldo restante
-				</button>
-			</div>
-		</FormFieldWrapper>
+			</FormFieldWrapper>
+		{/if}
 		<div class="grid gap-4 sm:grid-cols-2">
 			<FormFieldWrapper label="Método" id="metodo_pago">
-				<select class="select" {...form.fields.metodo_pago.as('select', METODO_PAGO.EFECTIVO)}>
+				<select
+					id="metodo_pago"
+					class="select"
+					{...form.fields.metodo_pago.as('select', METODO_PAGO.EFECTIVO)}
+				>
 					<option value={METODO_PAGO.EFECTIVO}>Efectivo</option>
 					<option value={METODO_PAGO.TRANSFERENCIA}>Transferencia</option>
 					<option value={METODO_PAGO.CHEQUE}>Cheque</option>
@@ -110,6 +186,7 @@
 			{#if form.fields.metodo_pago.value() === METODO_PAGO.CUOTAS}
 				<FormFieldWrapper label="Cuotas" id="cantidad_cuotas" required>
 					<input
+						id="cantidad_cuotas"
 						class="input"
 						min="1"
 						step="1"
@@ -119,8 +196,25 @@
 				</FormFieldWrapper>
 			{/if}
 		</div>
+		<FormFieldWrapper
+			label="Recibo"
+			id="recibo"
+			ayuda="Código del recibo en el sistema de facturación"
+		>
+			<input
+				id="recibo"
+				class="input w-full"
+				maxlength="100"
+				placeholder="Ej: X-0001-00000456"
+				{...form.fields.recibo.as('text')}
+			/>
+		</FormFieldWrapper>
 		<FormFieldWrapper label="Observaciones" id="observaciones">
-			<textarea class="textarea" rows="2" {...form.fields.observaciones.as('text')}></textarea>
+			<textarea
+				id="observaciones"
+				class="textarea"
+				rows="2"
+				{...form.fields.observaciones.as('text')}></textarea>
 		</FormFieldWrapper>
 		<FormErrors {form} />
 	</form>

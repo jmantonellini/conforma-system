@@ -22,6 +22,7 @@
 	import { can } from '$lib/utils/permissions';
 	import PedidoEnvios from './PedidoEnvios.svelte';
 	import PedidoPagos from './PedidoPagos.svelte';
+	import FacturaDialog from './FacturaDialog.svelte';
 	import ArchivosAdjuntos from '$lib/modulos/adjuntos/componentes/ArchivosAdjuntos.svelte';
 	import CambiarMonedaDialog from '$lib/modulos/ventas/componentes/CambiarMonedaDialog.svelte';
 	import { getPagosByPedido } from '$lib/modulos/pedidos/facturacion.remote';
@@ -39,6 +40,7 @@
 			!pedido.estado.es_final
 	);
 	let dialogoMoneda = $state<CambiarMonedaDialog>();
+	let dialogoFactura = $state<FacturaDialog>();
 	const contacto = $derived(
 		[pedido.cliente?.nombre, pedido.cliente?.apellido].filter(Boolean).join(' ')
 	);
@@ -155,6 +157,19 @@
 					<dd>{formatearMoneda(pedido.anticipo, pedido.moneda)}</dd>
 				</div>
 			{/if}
+			<div>
+				<dt>Factura</dt>
+				<dd class="flex items-center gap-2">
+					<span class={[!pedido.factura && 'text-base-content/60']}>
+						{pedido.factura ?? 'Sin factura'}
+					</span>
+					<Can modulo="pedidos" accion="edit">
+						<button class="btn btn-ghost btn-xs" onclick={() => dialogoFactura?.abrir()}>
+							{pedido.factura ? 'Cambiar' : 'Cargar'}
+						</button>
+					</Can>
+				</dd>
+			</div>
 			{#if pedido.observaciones}
 				<div class="col-span-full">
 					<dt>Observaciones</dt>
@@ -268,6 +283,8 @@
 		</div>
 	</div>
 </PageLayout>
+
+<FacturaDialog bind:this={dialogoFactura} pedidoId={pedido.id} factura={pedido.factura} />
 
 {#if veImportes}
 	<CambiarMonedaDialog

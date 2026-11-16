@@ -23,6 +23,7 @@ import {
 	precioUnitario,
 	tipoCambio
 } from './base';
+import { MONEDAS } from '$lib/utils/moneda';
 import { usuarios } from './acceso';
 import { contactos } from './contactos';
 import { lineas_cotizacion } from './cotizaciones';
@@ -60,6 +61,7 @@ export const pedidos = pgTable(
 		anticipo: importe('anticipo'),
 		creado_por: integer('creado_por').references(() => usuarios.id, { onDelete: 'set null' }),
 		observaciones: text('observaciones'),
+		factura: text('factura'),
 		created_at: creado(),
 		updated_at: actualizado()
 	},
@@ -133,13 +135,22 @@ export const pagos = pgTable(
 			.references(() => pedidos.id, { onDelete: 'cascade' })
 			.notNull(),
 		monto: importe('monto').notNull(),
+		moneda: text('moneda', { enum: MONEDAS }).notNull().default('ARS'),
+		tipo_cambio: tipoCambio('tipo_cambio'),
+		monto_aplicado: importe('monto_aplicado').notNull(),
+		recibo: text('recibo'),
 		cantidad_cuotas: integer('cantidad_cuotas'),
 		fecha_pago: fecha('fecha_pago').defaultNow(),
 		metodo_pago: text('metodo_pago'),
 		observaciones: text('observaciones'),
 		created_at: creado()
 	},
-	() => [aislamiento()]
+	(t) => [
+		index('idx_pagos_pedido').on(t.pedido_id),
+		check('pagos_moneda_valida', sql`${t.moneda} IN ('USD', 'ARS')`),
+		check('pagos_tipo_cambio_positivo', sql`${t.tipo_cambio} IS NULL OR ${t.tipo_cambio} > 0`),
+		aislamiento()
+	]
 );
 
 export const transportistas = pgTable(

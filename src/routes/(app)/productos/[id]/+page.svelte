@@ -467,10 +467,10 @@
 								options={opcionesComponentes}
 							/>
 							<input
-								class="input w-16 input-sm"
+								class="input w-20 input-sm"
 								type="number"
 								min="0"
-								step="0.01"
+								step="0.0001"
 								value={linea.cantidad}
 								oninput={(event) =>
 									actualizarLinea(indice, {

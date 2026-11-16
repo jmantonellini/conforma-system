@@ -1,5 +1,5 @@
 import { error } from '@sveltejs/kit';
-import { eq, sql } from 'drizzle-orm';
+import { and, eq, isNull, sql } from 'drizzle-orm';
 import type { Tx } from '$lib/server/db';
 import {
 	cotizaciones,
@@ -130,10 +130,6 @@ export async function cambiarMonedaTx(tx: Tx, cambio: CambioMoneda, usuarioId: n
 				})
 				.where(eq(pedido_insumos.pedido_id, cambio.id));
 			await tx
-				.update(pagos)
-				.set({ monto: escalar(pagos.monto, factor) })
-				.where(eq(pagos.pedido_id, cambio.id));
-			await tx
 				.update(pedidos)
 				.set({
 					precio_total: escalar(pedidos.precio_total, factor),
@@ -149,6 +145,7 @@ export async function cambiarMonedaTx(tx: Tx, cambio: CambioMoneda, usuarioId: n
 		.update(tabla)
 		.set({ moneda: cambio.moneda, tipo_cambio: cambio.tipo_cambio })
 		.where(eq(tabla.id, cambio.id));
+	if (cambio.documento === 'pedido') await recalcularPagos(tx, actual.moneda, cambio);
 	await registrarAuditoria(tx, {
 		entidad: cambio.documento,
 		entidadId: cambio.id,
@@ -158,6 +155,28 @@ export async function cambiarMonedaTx(tx: Tx, cambio: CambioMoneda, usuarioId: n
 	});
 
 	if (cambio.documento === 'pedido') await alinearCotizacionesDelPedido(tx, cambio, usuarioId);
+}
+
+async function recalcularPagos(tx: Tx, monedaAnterior: Moneda, cambio: CambioMoneda) {
+	const delPedido = eq(pagos.pedido_id, cambio.id);
+	if (cambio.modo === 'corregir') {
+		await tx
+			.update(pagos)
+			.set({ moneda: cambio.moneda })
+			.where(and(delPedido, eq(pagos.moneda, monedaAnterior), isNull(pagos.tipo_cambio)));
+	}
+	const cambioPago = sql`coalesce(${pagos.tipo_cambio}, ${cambio.tipo_cambio}::numeric)`;
+	await tx
+		.update(pagos)
+		.set({
+			tipo_cambio: sql`CASE WHEN ${pagos.moneda} = ${cambio.moneda} THEN ${pagos.tipo_cambio} ELSE ${cambioPago} END`,
+			monto_aplicado: sql`CASE
+				WHEN ${pagos.moneda} = ${cambio.moneda} THEN ${pagos.monto}
+				WHEN ${pagos.moneda} = 'USD' THEN round(${pagos.monto} * ${cambioPago}, 2)
+				ELSE round(${pagos.monto} / ${cambioPago}, 2)
+			END`
+		})
+		.where(delPedido);
 }
 
 function factorCambio(monedaActual: Moneda, cambio: CambioMoneda) {

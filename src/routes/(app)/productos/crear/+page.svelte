@@ -382,7 +382,7 @@
 								class="input w-full min-w-0 text-right input-sm"
 								type="number"
 								min="0"
-								step="0.01"
+								step="0.0001"
 								bind:value={linea.cantidad}
 							/>
 							<span class="label truncate whitespace-nowrap">
