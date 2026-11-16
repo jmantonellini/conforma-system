@@ -4,6 +4,7 @@ import {
 	calcularIva21,
 	calcularCostoComposicion,
 	calcularPrecioConDescuento,
+	calcularMargenDesdePrecio,
 	calcularPrecioVenta,
 	formatearDosDecimales,
 	parsearNumeroDecimal,
@@ -18,6 +19,23 @@ describe('quotation pricing', () => {
 
 	it('calculates the sale price from cost and margin', () => {
 		expect(calcularPrecioVenta(100, 25)).toBe(133.33);
+	});
+
+	it('calculates the margin that reproduces a typed list price', () => {
+		expect(calcularMargenDesdePrecio(100, 250)).toBe(60);
+		for (const [costo, precio] of [
+			[123.45, 300],
+			[987.65, 1499.99],
+			[3.33, 7.77]
+		]) {
+			const margen = calcularMargenDesdePrecio(costo, precio)!;
+			expect(calcularPrecioVenta(costo, margen)).toBe(precio);
+		}
+	});
+
+	it('rejects list prices below cost or without cost', () => {
+		expect(calcularMargenDesdePrecio(100, 90)).toBeNull();
+		expect(calcularMargenDesdePrecio(0, 90)).toBeNull();
 	});
 
 	it('formats values with exactly two locale decimals', () => {

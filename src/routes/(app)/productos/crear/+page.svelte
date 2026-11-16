@@ -13,7 +13,8 @@
 	import { page } from '$app/state';
 	import { afterNavigate, goto, invalidateAll } from '$app/navigation';
 	import { resolve } from '$app/paths';
-	import { calcularPrecioVenta, formatearMoneda, redondearPrecio } from '$lib/utils/precios';
+	import { formatearMoneda, redondearPrecio } from '$lib/utils/precios';
+	import MargenPrecio from '$lib/modulos/productos/componentes/MargenPrecio.svelte';
 	import { CATEGORIAS_PRODUCTO, TIPOS_USO_PRODUCTO } from '$lib/modulos/productos/tipos';
 	import AtributosCampos from '$lib/modulos/productos/componentes/AtributosCampos.svelte';
 	import type { ValoresAtributos } from '$lib/modulos/productos/atributos';
@@ -38,7 +39,6 @@
 			}, 0)
 		)
 	);
-	let margenPorcentaje = $derived(Number(crearProducto.fields.margen_porcentaje.value() ?? 0));
 	let categoriaSeleccionada = $derived(
 		categorias.find(
 			(categoria) => String(categoria.id) === crearProducto.fields.categoria_id.value()
@@ -53,7 +53,6 @@
 	let tipoUsoSeleccionado = $derived(
 		tiposDeUso.find((tipoUso) => String(tipoUso.id) === crearProducto.fields.tipo_uso_id.value())
 	);
-	let precioVenta = $derived(calcularPrecioVenta(costoReceta, margenPorcentaje));
 
 	let solicitudInsumos = 0;
 	let solicitudProductos = 0;
@@ -178,27 +177,13 @@
 							{/each}
 						</select>
 					</FormFieldWrapper>
-					<FormFieldWrapper label="Margen bruto (%)" id="margen_porcentaje">
-						<input
-							class="input input-sm"
-							min="0"
-							max="99.99"
-							step="0.01"
-							{...crearProducto.fields.margen_porcentaje.as('number')}
-						/>
-					</FormFieldWrapper>
 					<div class="stat rounded-box border border-base-300 bg-base-100 p-3">
 						<div class="stat-title">Costo de receta</div>
 						<div class="stat-value text-xl">
 							{formatearMoneda(costoReceta)}
 						</div>
 					</div>
-					<div class="stat rounded-box border border-primary/30 bg-primary/5 p-3">
-						<div class="stat-title">Precio de lista</div>
-						<div class="stat-value text-xl text-primary">
-							{formatearMoneda(precioVenta)}
-						</div>
-					</div>
+					<MargenPrecio field={crearProducto.fields.margen_porcentaje} costo={costoReceta} />
 				</div>
 			</fieldset>
 
@@ -338,9 +323,7 @@
 				<legend class="fieldset-legend">Receta del producto</legend>
 				<div class="flex flex-col gap-2">
 					{#each receta as linea, indice (indice)}
-						<div
-							class="mb-1 grid grid-cols-[minmax(0,1fr)_repeat(3,minmax(0,50px))] gap-2 sm:items-center"
-						>
+						<div class="mb-1 grid grid-cols-[minmax(0,1fr)_6rem_5rem_2rem] gap-1 sm:items-center">
 							<SearchSelect
 								compacto
 								label=""

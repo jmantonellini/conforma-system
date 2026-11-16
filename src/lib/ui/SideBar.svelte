@@ -43,7 +43,7 @@
 		{@render children()}
 	</div>
 
-	<div class="drawer-side z-30 is-drawer-close:overflow-visible">
+	<div class="drawer-side z-30 lg:top-16 lg:h-[calc(100dvh-4rem)] is-drawer-close:overflow-visible">
 		<label for="menu-lateral" aria-label="Cerrar menú" class="drawer-overlay"></label>
 		<aside
 			class="flex min-h-full flex-col border-r border-base-300 bg-base-100 is-drawer-close:w-16 is-drawer-open:w-60"

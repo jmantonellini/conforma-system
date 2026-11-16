@@ -24,7 +24,14 @@
 	import { goto, invalidateAll } from '$app/navigation';
 	import { page } from '$app/state';
 	import { resolve } from '$app/paths';
-	import { calcularPrecioVenta, formatearMoneda, redondearPrecio } from '$lib/utils/precios';
+	import {
+		MARGEN_MAX_PORCENTAJE,
+		calcularPrecioVenta,
+		formatearDosDecimales,
+		formatearMoneda,
+		redondearPrecio
+	} from '$lib/utils/precios';
+	import MargenPrecio from '$lib/modulos/productos/componentes/MargenPrecio.svelte';
 	import type { PageProps } from './$types';
 	import { CATEGORIAS_PRODUCTO, TIPOS_USO_PRODUCTO } from '$lib/modulos/productos/tipos';
 	import { formatearAnios } from '$lib/modulos/productos/anios';
@@ -150,7 +157,11 @@
 	let margenPorcentajeActual = $derived(
 		Number(form.fields.margen_porcentaje.value() ?? data.producto.margen_porcentaje ?? 0)
 	);
-	let precioVenta = $derived(calcularPrecioVenta(costoReceta, margenPorcentajeActual));
+	let precioVenta = $derived(
+		margenPorcentajeActual >= 0 && margenPorcentajeActual <= MARGEN_MAX_PORCENTAJE
+			? calcularPrecioVenta(costoReceta, margenPorcentajeActual)
+			: null
+	);
 
 	function agregarInsumo() {
 		receta = [...receta, { insumo_id: '', producto_id: '', cantidad: 1 }];
@@ -246,7 +257,9 @@
 				</div>
 				<div>
 					<dt class="secundario">Margen</dt>
-					<dd class="text-lg font-semibold tabular-nums">{margenPorcentajeActual}%</dd>
+					<dd class="text-lg font-semibold tabular-nums">
+						{formatearDosDecimales(margenPorcentajeActual)}%
+					</dd>
 				</div>
 				<div>
 					<dt class="secundario">Precio de lista</dt>
@@ -443,7 +456,7 @@
 						{@const unidad =
 							data.insumos.find((insumo) => String(insumo.id) === linea.insumo_id)?.unidad ??
 							(linea.producto_id ? 'Producto' : '-')}
-						<div class="mb-1 grid grid-cols-[minmax(0,1fr)_4rem_5rem_2rem] gap-1 sm:items-center">
+						<div class="mb-1 grid grid-cols-[minmax(0,1fr)_6rem_5rem_2rem] gap-1 sm:items-center">
 							<SearchSelect
 								compacto
 								label=""
@@ -467,7 +480,7 @@
 								options={opcionesComponentes}
 							/>
 							<input
-								class="input w-20 input-sm"
+								class="input w-full min-w-0 text-right input-sm"
 								type="number"
 								min="0"
 								step="0.0001"
@@ -497,16 +510,13 @@
 					<button class="btn btn-sm" type="button" onclick={agregarInsumo}>
 						<Icono nombre="mas_simple" /> Agregar componente
 					</button>
-					<FormFieldWrapper label="Margen (%)" id="margen_porcentaje" class="ml-auto w-32">
-						<input
-							id="margen_porcentaje"
-							class="input input-sm"
-							min="0"
-							max="99.99"
-							step="0.01"
-							{...form.fields.margen_porcentaje.as('number', data.producto.margen_porcentaje ?? 0)}
+					<div class="ml-auto grid w-80 grid-cols-2 gap-2">
+						<MargenPrecio
+							field={form.fields.margen_porcentaje}
+							costo={costoReceta}
+							inicial={data.producto.margen_porcentaje ?? 0}
 						/>
-					</FormFieldWrapper>
+					</div>
 				</div>
 			</Seccion>
 
