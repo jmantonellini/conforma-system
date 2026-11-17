@@ -18,7 +18,7 @@ import {
 } from '$lib/server/db/schema';
 import { aliasedTable, and, asc, desc, eq, ilike, or, sql } from 'drizzle-orm';
 import { requirePermission } from '$lib/server/auth/permissions';
-import { historialEstados, listarEstados } from '$lib/server/estados';
+import { historialEstados, listarEstados, prioridadPorEstado } from '$lib/server/estados';
 import { listarAdjuntosRelacionados } from '$lib/modulos/adjuntos/adjuntos.server';
 import { estadoDeOrden, resumenOrdenes } from '$lib/modulos/fabricacion/fabricacion.server';
 import {
@@ -108,7 +108,11 @@ export const getOrdenesFabricacion = query(
 
 		const filas = await consulta
 			.where(where)
-			.orderBy(desc(ordenes_fabricacion.prioridad), desc(ordenes_fabricacion.id))
+			.orderBy(
+				prioridadPorEstado(estadoOrden.slug, ['preparando_material', 'en_produccion']),
+				desc(ordenes_fabricacion.prioridad),
+				desc(ordenes_fabricacion.id)
+			)
 			.limit(limit)
 			.offset((page - 1) * limit);
 		const total = filas[0]?.total_filas ?? 0;

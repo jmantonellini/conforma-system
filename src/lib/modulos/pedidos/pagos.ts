@@ -26,3 +26,10 @@ export function saldoEnMoneda(
 	if (!tipoCambio || tipoCambio <= 0) return null;
 	return convertirEntreMonedas(saldo, monedaPedido, monedaPago, tipoCambio);
 }
+
+export const TIPOS_AJUSTE = ['recargo', 'descuento'] as const;
+export type TipoAjuste = (typeof TIPOS_AJUSTE)[number];
+
+export function totalAjustado(total: number, tipo: TipoAjuste, monto: number) {
+	return redondearPrecio(Math.max(tipo === 'recargo' ? total + monto : total - monto, 0));
+}

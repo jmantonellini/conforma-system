@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { ajustarAlSaldo, montoAplicado, saldoEnMoneda } from './pagos';
+import { ajustarAlSaldo, montoAplicado, saldoEnMoneda, totalAjustado } from './pagos';
 
 describe('montoAplicado', () => {
 	it('usa el monto tal cual si la moneda coincide con la del pedido', () => {
@@ -38,5 +38,16 @@ describe('saldoEnMoneda', () => {
 
 	it('devuelve null si falta el tipo de cambio', () => {
 		expect(saldoEnMoneda(1000, 'USD', 'ARS', null)).toBeNull();
+	});
+});
+
+describe('totalAjustado', () => {
+	it('suma recargos y resta descuentos al total', () => {
+		expect(totalAjustado(1000, 'recargo', 85.5)).toBe(1085.5);
+		expect(totalAjustado(1000, 'descuento', 0.37)).toBe(999.63);
+	});
+
+	it('nunca deja el total negativo', () => {
+		expect(totalAjustado(100, 'descuento', 150)).toBe(0);
 	});
 });

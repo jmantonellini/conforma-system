@@ -18,7 +18,12 @@ import {
 import { and, count, desc, eq, ilike, or, sql } from 'drizzle-orm';
 import { ocultar, puedeVerImportes, requirePermission } from '$lib/server/auth/permissions';
 import { historialAuditoria } from '$lib/server/auditoria';
-import { historialEstados, listarEstados, transicionesDesde } from '$lib/server/estados';
+import {
+	historialEstados,
+	listarEstados,
+	prioridadPorEstado,
+	transicionesDesde
+} from '$lib/server/estados';
 import { listarAdjuntosRelacionados } from '$lib/modulos/adjuntos/adjuntos.server';
 import type { MaterialSnapshot } from '$lib/modulos/cotizaciones/tipos';
 
@@ -88,7 +93,16 @@ export const getCotizaciones = query(
 			.leftJoin(estados, eq(cotizaciones.estado_id, estados.id))
 			.leftJoin(empleados, eq(cotizaciones.asignada_a, empleados.id))
 			.where(where)
-			.orderBy(desc(cotizaciones.id))
+			.orderBy(
+				prioridadPorEstado(estados.slug, [
+					'ingresada',
+					'asignada',
+					'en_cotizacion',
+					'lista_para_enviar',
+					'enviada'
+				]),
+				desc(cotizaciones.id)
+			)
 			.limit(limit)
 			.offset(offset);
 

@@ -3,11 +3,12 @@ import { db, type Tx } from '$lib/server/db';
 import { empleados, logs_sistema, usuarios } from '$lib/server/db/schema';
 
 export type EntidadAuditada = 'cotizacion' | 'pedido';
-export type AccionAuditada = 'edicion' | 'moneda';
+export type AccionAuditada = 'edicion' | 'moneda' | 'ajuste';
 
 export const TITULO_ACCION: Record<AccionAuditada, string> = {
 	edicion: 'Datos editados',
-	moneda: 'Moneda cambiada'
+	moneda: 'Moneda cambiada',
+	ajuste: 'Precio ajustado'
 };
 
 export async function registrarAuditoria(

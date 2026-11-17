@@ -1,5 +1,5 @@
 import { error } from '@sveltejs/kit';
-import { aliasedTable, and, asc, desc, eq, inArray } from 'drizzle-orm';
+import { aliasedTable, and, asc, desc, eq, inArray, sql, type AnyColumn } from 'drizzle-orm';
 import { db, type Tx } from '$lib/server/db';
 import {
 	empleados,
@@ -21,6 +21,12 @@ const ENTIDAD_LOG = {
 	FlujoEstado,
 	(typeof logs_cambios_estado.entidad_tipo.enumValues)[number]
 >;
+
+export const prioridadPorEstado = (slug: AnyColumn, primeros: readonly string[]) =>
+	sql`case ${sql.join(
+		primeros.map((valor, indice) => sql`when ${slug} = ${valor} then ${indice}`),
+		sql` `
+	)} else ${primeros.length} end`;
 
 export const listarEstados = (flujo: FlujoEstado) =>
 	db.select().from(estados).where(eq(estados.flujo, flujo)).orderBy(asc(estados.orden));

@@ -8,12 +8,14 @@
 	import { formatearDosDecimales, formatearMoneda } from '$lib/utils/precios';
 	import { NOMBRE_MONEDA, SIMBOLO_MONEDA, type Moneda } from '$lib/utils/moneda';
 	import { ESTADO_PAGO, METODO_PAGO } from '$lib/modulos/pedidos/tipos';
+	import AjustePrecioDialog from './AjustePrecioDialog.svelte';
 
 	let { pedidoId }: { pedidoId: number } = $props();
 
 	let facturacion = $derived(await getPagosByPedido(pedidoId));
 	let dolar = $derived(await getDolarBNA());
 	let showModal = $state(false);
+	let dialogoAjuste = $state<AjustePrecioDialog>();
 	const form = registrarPago;
 
 	const monedaPedido = $derived(facturacion.moneda);
@@ -30,6 +32,13 @@
 		const monto = Number(form.fields.monto.value());
 		if (!conCambio || !monto || !tipoCambio) return null;
 		return montoAplicado({ monto, moneda: monedaPago, tipo_cambio: tipoCambio }, monedaPedido);
+	});
+	const diferencia = $derived.by(() => {
+		const monto = Number(form.fields.monto.value());
+		const aplicado = conCambio ? equivalente : monto;
+		if (!monto || aplicado === null) return 0;
+		const resto = facturacion.saldo - aplicado;
+		return resto > 0.01 ? resto : 0;
 	});
 
 	function cerrar() {
@@ -59,6 +68,9 @@
 <Seccion titulo="Pagos">
 	{#snippet acciones()}
 		<Can modulo="pedidos" accion="edit">
+			<button class="btn btn-ghost btn-sm" onclick={() => dialogoAjuste?.abrir()}>
+				Ajustar precio
+			</button>
 			<button class="btn btn-sm" onclick={() => (showModal = true)}>+ Registrar</button>
 		</Can>
 	{/snippet}
@@ -196,6 +208,20 @@
 				</FormFieldWrapper>
 			{/if}
 		</div>
+		{#if diferencia > 0}
+			<label class="label items-start gap-2 text-sm whitespace-normal">
+				<input
+					class="checkbox mt-0.5 checkbox-sm"
+					{...form.fields.bonificar_diferencia.as('checkbox')}
+				/>
+				<span>
+					Bonificar la diferencia de <strong>{formatearMoneda(diferencia, monedaPedido)}</strong>
+					<span class="block text-xs text-base-content/60">
+						Se descuenta del total y el pedido queda pagado, sin deuda.
+					</span>
+				</span>
+			</label>
+		{/if}
 		<FormFieldWrapper
 			label="Recibo"
 			id="recibo"
@@ -219,3 +245,11 @@
 		<FormErrors {form} />
 	</form>
 </Modal>
+
+<AjustePrecioDialog
+	bind:this={dialogoAjuste}
+	{pedidoId}
+	moneda={monedaPedido}
+	total={facturacion.total}
+	saldo={facturacion.saldo}
+/>

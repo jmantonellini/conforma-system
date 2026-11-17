@@ -2,15 +2,13 @@
 	import { onMount } from 'svelte';
 	import { getDolarBNA } from '$lib/modulos/ventas/moneda.remote';
 	import { formatearDosDecimales } from '$lib/utils/precios';
+	import { refrescarCada } from '$lib/utils/refresco';
 
 	const REFRESCO_MS = 15 * 60 * 1000;
 
 	const dolar = $derived(await getDolarBNA());
 
-	onMount(() => {
-		const intervalo = setInterval(() => getDolarBNA().refresh(), REFRESCO_MS);
-		return () => clearInterval(intervalo);
-	});
+	onMount(() => refrescarCada(() => getDolarBNA().refresh(), REFRESCO_MS));
 </script>
 
 {#if dolar}

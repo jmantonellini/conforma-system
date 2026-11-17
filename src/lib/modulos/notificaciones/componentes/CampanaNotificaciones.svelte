@@ -5,6 +5,7 @@
 	import Icono from '$lib/ui/Icono.svelte';
 	import { estiloNotificacion } from '../estilos';
 	import { haceCuanto } from '$lib/utils/fechas';
+	import { refrescarCada } from '$lib/utils/refresco';
 	import {
 		getNotificaciones,
 		marcarNotificacionLeida,
@@ -20,10 +21,7 @@
 	let soloSinLeer = $state(false);
 	const visibles = $derived(soloSinLeer ? notificaciones.filter((n) => !n.leida) : notificaciones);
 
-	$effect(() => {
-		const intervalo = setInterval(() => getNotificaciones().refresh(), 60_000);
-		return () => clearInterval(intervalo);
-	});
+	$effect(() => refrescarCada(() => getNotificaciones().refresh(), 60_000));
 
 	async function abrir(notificacion: Notificacion) {
 		panel?.hidePopover();

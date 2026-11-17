@@ -36,6 +36,7 @@ import { PEDIDO_SLUG } from '$lib/modulos/pedidos/tipos';
 import {
 	estadoPorSlug,
 	historialEstados,
+	prioridadPorEstado,
 	registrarCambioEstado,
 	transicionesDesde,
 	validarTransicion
@@ -329,7 +330,7 @@ export async function getPedidosListado({
 			.leftJoin(distribuidor, eq(pedidos.contacto_distribuidor_id, distribuidor.id))
 			.leftJoin(estados, eq(pedidos.estado_id, estados.id))
 			.where(where)
-			.orderBy(desc(pedidos.id))
+			.orderBy(prioridadPorEstado(estados.slug, ['pendiente', 'en_produccion']), desc(pedidos.id))
 			.limit(limit)
 			.offset((page - 1) * limit),
 		db
