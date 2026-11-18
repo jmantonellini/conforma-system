@@ -276,7 +276,7 @@
 
 		<div class="flex min-w-0 flex-col gap-4 sm:gap-6">
 			{#if veImportes}<PedidoPagos pedidoId={pedido.id} />{/if}
-			<PedidoEnvios pedidoId={pedido.id} />
+			<Can modulo="envios"><PedidoEnvios pedidoId={pedido.id} /></Can>
 			<Seccion titulo="Historial">
 				<Historial eventos={historial} />
 			</Seccion>

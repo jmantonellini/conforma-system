@@ -237,15 +237,18 @@ function costoConFlete(costo: number, flete = 0) {
 }
 
 export const getInsumos = query(
-	v.object({
-		search: v.optional(v.string()),
-		tipo: v.optional(v.string()),
-		categoriaId: v.optional(v.number()),
-		sort: v.optional(v.picklist(['nombre', 'codigo', 'costo_unitario']), 'nombre'),
-		direction: v.optional(v.picklist(['asc', 'desc']), 'asc'),
-		page: v.optional(v.pipe(v.number(), v.toMinValue(1)), 1),
-		limit: v.optional(v.pipe(v.number(), v.minValue(1), v.maxValue(100)), 20)
-	}),
+	v.optional(
+		v.object({
+			search: v.optional(v.string()),
+			tipo: v.optional(v.string()),
+			categoriaId: v.optional(v.number()),
+			sort: v.optional(v.picklist(['nombre', 'codigo', 'costo_unitario']), 'nombre'),
+			direction: v.optional(v.picklist(['asc', 'desc']), 'asc'),
+			page: v.optional(v.pipe(v.number(), v.toMinValue(1)), 1),
+			limit: v.optional(v.pipe(v.number(), v.minValue(1), v.maxValue(100)), 20)
+		}),
+		{}
+	),
 	async ({
 		search,
 		tipo,

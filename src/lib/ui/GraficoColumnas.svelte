@@ -23,6 +23,7 @@
 
 	let ancho = $state(640);
 	let activo = $state<number | null>(null);
+	const seleccionado = $derived(activo === null ? undefined : puntos[activo]);
 
 	function escala(maximo: number) {
 		if (maximo <= 0) return { tope: 4, marcas: [0, 1, 2, 3, 4] };
@@ -113,8 +114,8 @@
 		{/each}
 	</div>
 
-	{#if activo !== null}
-		{@const punto = puntos[activo]}
+	{#if activo !== null && seleccionado}
+		{@const punto = seleccionado}
 		<div
 			class="pointer-events-none absolute z-10 -translate-x-1/2 -translate-y-full rounded-box border border-base-300 bg-base-100 px-3 py-2 text-xs shadow-md"
 			style:left="{centro(activo)}px"

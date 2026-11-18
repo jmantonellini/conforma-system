@@ -132,7 +132,8 @@
 				class="absolute inset-0 cursor-pointer opacity-0"
 				disabled={subiendo}
 				onchange={(e) => {
-					void subir(e.currentTarget.files).then(() => (e.currentTarget.value = ''));
+					const entrada = e.currentTarget;
+					void subir(entrada.files).then(() => (entrada.value = ''));
 				}}
 			/>
 		</label>

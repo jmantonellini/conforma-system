@@ -25,7 +25,7 @@
 
 <Seccion titulo="Envíos">
 	{#snippet acciones()}
-		<Can modulo="pedidos" accion="edit">
+		<Can modulo="envios" accion="edit">
 			<button class="btn btn-sm" onclick={() => (showModal = true)}>+ Registrar</button>
 		</Can>
 	{/snippet}
@@ -49,7 +49,7 @@
 							estado={{ nombre: envio.estado, color: entregado ? 'success' : 'warning' }}
 						/>
 						{#if !entregado}
-							<Can modulo="pedidos" accion="edit">
+							<Can modulo="envios" accion="edit">
 								<button
 									class="btn btn-xs"
 									onclick={async () => {

@@ -250,14 +250,17 @@ const ImportarContactosSchema = v.pipe(
 );
 
 export const obtenerContactos = query(
-	v.object({
-		search: v.optional(v.string()),
-		rol: v.optional(v.picklist(['todos', 'distribuidor', 'cliente', 'proveedor']), 'todos'),
-		sort: v.optional(v.picklist(['razon_social', 'cuit', 'email', 'created_at']), 'razon_social'),
-		direction: v.optional(v.picklist(['asc', 'desc']), 'asc'),
-		page: v.optional(v.pipe(v.number(), v.toMinValue(1)), 1),
-		limit: v.optional(v.pipe(v.number(), v.minValue(1), v.maxValue(100)), 50)
-	}),
+	v.optional(
+		v.object({
+			search: v.optional(v.string()),
+			rol: v.optional(v.picklist(['todos', 'distribuidor', 'cliente', 'proveedor']), 'todos'),
+			sort: v.optional(v.picklist(['razon_social', 'cuit', 'email', 'created_at']), 'razon_social'),
+			direction: v.optional(v.picklist(['asc', 'desc']), 'asc'),
+			page: v.optional(v.pipe(v.number(), v.toMinValue(1)), 1),
+			limit: v.optional(v.pipe(v.number(), v.minValue(1), v.maxValue(100)), 50)
+		}),
+		{}
+	),
 	async ({
 		search,
 		rol = 'todos',

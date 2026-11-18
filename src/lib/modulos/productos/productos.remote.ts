@@ -39,15 +39,18 @@ const normalizarProductoPayload = <T extends Record<string, unknown>>(data: T) =
 });
 
 export const getProductos = query(
-	v.object({
-		search: v.optional(v.string()),
-		categoriaId: v.optional(v.number()),
-		sort: v.optional(v.picklist(['nombre', 'codigo']), 'nombre'),
-		direction: v.optional(v.picklist(['asc', 'desc']), 'asc'),
-		page: v.optional(v.pipe(v.number(), v.toMinValue(1)), 1),
-		limit: v.optional(v.pipe(v.number(), v.minValue(1), v.maxValue(100)), 20),
-		incluirPrecios: v.optional(v.boolean(), true)
-	}),
+	v.optional(
+		v.object({
+			search: v.optional(v.string()),
+			categoriaId: v.optional(v.number()),
+			sort: v.optional(v.picklist(['nombre', 'codigo']), 'nombre'),
+			direction: v.optional(v.picklist(['asc', 'desc']), 'asc'),
+			page: v.optional(v.pipe(v.number(), v.toMinValue(1)), 1),
+			limit: v.optional(v.pipe(v.number(), v.minValue(1), v.maxValue(100)), 20),
+			incluirPrecios: v.optional(v.boolean(), true)
+		}),
+		{}
+	),
 	async ({
 		search,
 		categoriaId,

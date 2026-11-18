@@ -103,7 +103,18 @@
 		>
 			<Icono nombre="mensaje" class="size-5" />
 		</button>
-		<CampanaNotificaciones />
+		<svelte:boundary>
+			<CampanaNotificaciones />
+			{#snippet pending()}{/snippet}
+			{#snippet failed(_, reintentar)}
+				<span
+					{@attach () => {
+						const espera = setTimeout(reintentar, 60_000);
+						return () => clearTimeout(espera);
+					}}
+				></span>
+			{/snippet}
+		</svelte:boundary>
 
 		<MenuDesplegable alFinal class="btn gap-2 btn-ghost px-1.5 btn-sm" titulo="Mi cuenta">
 			{#snippet etiqueta()}
