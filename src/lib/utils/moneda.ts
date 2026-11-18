@@ -1,10 +1,21 @@
-import { redondearPrecio } from './precios';
+import { parsearNumeroDecimal, redondearPrecio } from './precios';
 
 export const MONEDAS = ['USD', 'ARS'] as const;
 export type Moneda = (typeof MONEDAS)[number];
 
 export const SIMBOLO_MONEDA: Record<Moneda, string> = { USD: 'US$', ARS: '$' };
 export const NOMBRE_MONEDA: Record<Moneda, string> = { USD: 'Dólares', ARS: 'Pesos' };
+
+export const TIPO_CAMBIO_MINIMO = 100;
+export const MENSAJE_TIPO_CAMBIO = 'El tipo de cambio va en pesos por dólar (ej: 1.575 o 1575)';
+
+export function parsearTipoCambio(valor: string): number | null {
+	const texto = valor.trim();
+	const numero = /^\d{1,3}(\.\d{3})+$/.test(texto)
+		? Number(texto.replace(/\./g, ''))
+		: parsearNumeroDecimal(texto);
+	return numero !== null && numero >= TIPO_CAMBIO_MINIMO ? numero : null;
+}
 
 export type MonedaDocumento = { moneda: Moneda; tipo_cambio: number | null };
 

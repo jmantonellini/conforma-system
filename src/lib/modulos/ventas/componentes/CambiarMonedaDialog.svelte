@@ -2,8 +2,15 @@
 	import { Modal } from '$lib/ui';
 	import { toast } from '$lib/ui/toast.svelte';
 	import { mensajeError } from '$lib/utils/errores';
-	import { MONEDAS, NOMBRE_MONEDA, convertirEntreMonedas, type Moneda } from '$lib/utils/moneda';
-	import { formatearDosDecimales, formatearMoneda, parsearNumeroDecimal } from '$lib/utils/precios';
+	import {
+		MENSAJE_TIPO_CAMBIO,
+		MONEDAS,
+		NOMBRE_MONEDA,
+		convertirEntreMonedas,
+		parsearTipoCambio,
+		type Moneda
+	} from '$lib/utils/moneda';
+	import { formatearDosDecimales, formatearMoneda } from '$lib/utils/precios';
 	import { getDolarBNA } from '$lib/modulos/ventas/moneda.remote';
 
 	type Cambio = { moneda: Moneda; modo: 'convertir' | 'corregir'; tipo_cambio: number };
@@ -26,8 +33,8 @@
 	let tipoCambioTexto = $state('');
 	let guardando = $state(false);
 
-	const tipoCambioNumero = $derived(parsearNumeroDecimal(tipoCambioTexto));
-	const valido = $derived(tipoCambioNumero !== null && tipoCambioNumero > 0);
+	const tipoCambioNumero = $derived(parsearTipoCambio(tipoCambioTexto));
+	const valido = $derived(tipoCambioNumero !== null);
 	const mismaMoneda = $derived(destino === moneda);
 	const totalResultante = $derived(
 		total === null || !valido
@@ -128,7 +135,11 @@
 				bind:value={tipoCambioTexto}
 				placeholder="Ej.: 1.415,00"
 			/>
-			<span class="label">Por defecto, el del documento o el dólar BNA vendedor de hoy.</span>
+			{#if tipoCambioTexto.trim() && !valido}
+				<span class="label text-error">{MENSAJE_TIPO_CAMBIO}</span>
+			{:else}
+				<span class="label">Por defecto, el del documento o el dólar BNA vendedor de hoy.</span>
+			{/if}
 		</label>
 
 		{#if total !== null && totalResultante !== null && !mismaMoneda}

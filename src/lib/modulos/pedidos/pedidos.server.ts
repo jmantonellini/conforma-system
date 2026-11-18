@@ -160,6 +160,7 @@ export async function obtenerPedidoDetalle(id: number) {
 			estado: {
 				id: pedidos.estado_id,
 				nombre: estados.nombre,
+				slug: estados.slug,
 				color: estados.color,
 				es_final: estados.es_final
 			}

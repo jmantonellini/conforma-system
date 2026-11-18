@@ -1,9 +1,9 @@
 import { avisarPago } from './avisos.server';
 import { error, invalid } from '@sveltejs/kit';
-import { form, query } from '$app/server';
+import { command, form, query } from '$app/server';
 import { db, type Tx } from '$lib/server/db';
 import { estados, pagos, pedidos } from '$lib/server/db/schema';
-import { desc, eq, sum } from 'drizzle-orm';
+import { and, desc, eq, sum } from 'drizzle-orm';
 import * as v from 'valibot';
 import { getCurrentUser } from '../configuracion/usuarios.remote';
 import { getHistorialPedido, getPedidoById } from './pedidos.remote';
@@ -19,16 +19,21 @@ import {
 	type TipoAjuste
 } from './pagos';
 import { dolarBNA } from '../ventas/moneda.server';
-import { MONEDAS, type Moneda } from '$lib/utils/moneda';
-import { formatearMoneda, redondearPrecio } from '$lib/utils/precios';
+import { MENSAJE_TIPO_CAMBIO, MONEDAS, TIPO_CAMBIO_MINIMO, type Moneda } from '$lib/utils/moneda';
+import { fechaDesdeInput, fechaInput, formatearFecha } from '$lib/utils/fechas';
+import { formatearDosDecimales, formatearMoneda, redondearPrecio } from '$lib/utils/precios';
 
 const textoOpcional = v.optional(v.pipe(v.string(), v.trim(), v.maxLength(100)));
 
+const idTexto = v.pipe(v.string(), v.transform(Number), v.number());
+
 const RegistrarPagoSchema = v.object({
-	pedido_id: v.pipe(v.string(), v.transform(Number), v.number()),
+	pedido_id: idTexto,
+	pago_id: v.optional(idTexto),
 	monto: v.pipe(v.number(), v.gtValue(0, 'El monto debe ser mayor a cero')),
 	moneda: v.optional(v.picklist(MONEDAS), 'ARS'),
-	tipo_cambio: v.optional(v.pipe(v.number(), v.gtValue(0, 'El tipo de cambio debe ser positivo'))),
+	tipo_cambio: v.optional(v.pipe(v.number(), v.minValue(TIPO_CAMBIO_MINIMO, MENSAJE_TIPO_CAMBIO))),
+	fecha_pago: v.optional(v.pipe(v.string(), v.isoDate('Ingresá una fecha válida'))),
 	recibo: textoOpcional,
 	metodo_pago: v.optional(
 		v.picklist([
@@ -44,14 +49,14 @@ const RegistrarPagoSchema = v.object({
 });
 
 const AjustePrecioSchema = v.object({
-	pedido_id: v.pipe(v.string(), v.transform(Number), v.number()),
+	pedido_id: idTexto,
 	tipo: v.picklist(TIPOS_AJUSTE),
 	monto: v.pipe(v.number(), v.gtValue(0, 'El monto debe ser mayor a cero')),
 	motivo: v.pipe(v.string(), v.trim(), v.nonEmpty('Indicá el motivo'), v.maxLength(200))
 });
 
 const FacturaSchema = v.object({
-	pedido_id: v.pipe(v.string(), v.transform(Number), v.number()),
+	pedido_id: idTexto,
 	factura: textoOpcional
 });
 
@@ -149,6 +154,40 @@ function refrescarPedido(pedidoId: number) {
 	getHistorialPedido(pedidoId).refresh();
 }
 
+type PagoGuardado = Pick<
+	typeof pagos.$inferSelect,
+	'monto' | 'moneda' | 'tipo_cambio' | 'metodo_pago' | 'cantidad_cuotas' | 'recibo' | 'fecha_pago'
+>;
+
+function describirPago(pago: PagoGuardado) {
+	return [
+		formatearMoneda(pago.monto, pago.moneda),
+		pago.tipo_cambio && pago.moneda === 'ARS' && `TC ${formatearDosDecimales(pago.tipo_cambio)}`,
+		pago.metodo_pago === METODO_PAGO.CUOTAS
+			? `tarjeta en ${pago.cantidad_cuotas} cuotas`
+			: pago.metodo_pago,
+		pago.recibo && `Recibo ${pago.recibo}`,
+		pago.fecha_pago && formatearFecha(pago.fecha_pago)
+	]
+		.filter(Boolean)
+		.join(' · ');
+}
+
+function fechaDelPago(valor: string | undefined, anterior: Date | null | undefined) {
+	if (anterior && (!valor || valor === fechaInput(anterior))) return anterior;
+	return valor ? fechaDesdeInput(valor) : new Date();
+}
+
+async function pagoDelPedido(tx: Tx, pagoId: number, pedidoId: number) {
+	const [pago] = await tx
+		.select()
+		.from(pagos)
+		.where(and(eq(pagos.id, pagoId), eq(pagos.pedido_id, pedidoId)))
+		.for('update');
+	if (!pago) error(404, 'Pago no encontrado');
+	return pago;
+}
+
 export const registrarPago = form(RegistrarPagoSchema, async (data) => {
 	await requirePermission('pedidos', 'edit');
 	await requirePermission('importes', 'view');
@@ -174,28 +213,48 @@ export const registrarPago = form(RegistrarPagoSchema, async (data) => {
 	await db.transaction(async (tx) => {
 		const pedido = await bloquearPedidoConSaldo(tx, data.pedido_id);
 		if (pedido.estado === PEDIDO_SLUG.CANCELADO) invalid('El pedido está cancelado');
+		const anterior = data.pago_id ? await pagoDelPedido(tx, data.pago_id, data.pedido_id) : null;
+		const saldo = redondearPrecio(pedido.saldo + (anterior?.monto_aplicado ?? 0));
 		const aplicado = ajustarAlSaldo(
 			montoAplicado(
 				{ monto: data.monto, moneda: data.moneda, tipo_cambio: tipoCambio },
 				pedido.moneda
 			),
-			pedido.saldo
+			saldo
 		);
-		if (aplicado > pedido.saldo) invalid('El pago excede el saldo del pedido');
+		if (aplicado > saldo) invalid('El pago excede el saldo del pedido');
 
-		await tx.insert(pagos).values({
-			pedido_id: data.pedido_id,
+		const valores = {
 			monto: data.monto,
 			moneda: data.moneda,
 			tipo_cambio: tipoCambio,
 			monto_aplicado: aplicado,
 			recibo: data.recibo || null,
-			metodo_pago: data.metodo_pago,
-			cantidad_cuotas: data.metodo_pago === 'cuotas' ? data.cantidad_cuotas : null,
-			observaciones: data.observaciones
-		});
+			metodo_pago: data.metodo_pago ?? null,
+			cantidad_cuotas: data.metodo_pago === 'cuotas' ? (data.cantidad_cuotas ?? null) : null,
+			observaciones: data.observaciones || null,
+			fecha_pago: fechaDelPago(data.fecha_pago, anterior?.fecha_pago)
+		};
 
-		const diferencia = redondearPrecio(pedido.saldo - aplicado);
+		if (anterior) {
+			await tx.update(pagos).set(valores).where(eq(pagos.id, anterior.id));
+			const antes = describirPago(anterior);
+			const despues = describirPago(valores);
+			if (antes !== despues || anterior.observaciones !== valores.observaciones) {
+				await registrarAuditoria(tx, {
+					entidad: 'pedido',
+					entidadId: pedido.id,
+					usuarioId: user.id,
+					accion: 'pago',
+					detalle:
+						antes === despues ? `${despues}. Observaciones editadas` : `${antes} → ${despues}`
+				});
+			}
+		} else {
+			await tx.insert(pagos).values({ pedido_id: data.pedido_id, ...valores });
+		}
+
+		const diferencia = redondearPrecio(saldo - aplicado);
 		if (data.bonificar_diferencia && diferencia > 0) {
 			await ajustarTotalTx(
 				tx,
@@ -206,10 +265,34 @@ export const registrarPago = form(RegistrarPagoSchema, async (data) => {
 		}
 	});
 
-	await avisarPago(data.pedido_id, data.monto, data.moneda, user.id);
+	if (!data.pago_id) await avisarPago(data.pedido_id, data.monto, data.moneda, user.id);
 	refrescarPedido(data.pedido_id);
 	return { success: true };
 });
+
+export const eliminarPago = command(
+	v.object({ pedido_id: v.number(), pago_id: v.number() }),
+	async ({ pedido_id, pago_id }) => {
+		const user = await requirePermission('pedidos', 'edit');
+		await requirePermission('importes', 'view');
+
+		await db.transaction(async (tx) => {
+			const pedido = await bloquearPedidoConSaldo(tx, pedido_id);
+			if (pedido.estado === PEDIDO_SLUG.CANCELADO) error(409, 'El pedido está cancelado');
+			const pago = await pagoDelPedido(tx, pago_id, pedido_id);
+			await tx.delete(pagos).where(eq(pagos.id, pago.id));
+			await registrarAuditoria(tx, {
+				entidad: 'pedido',
+				entidadId: pedido_id,
+				usuarioId: user.id,
+				accion: 'pago_eliminado',
+				detalle: describirPago(pago)
+			});
+		});
+
+		refrescarPedido(pedido_id);
+	}
+);
 
 export const ajustarPrecio = form(AjustePrecioSchema, async (data) => {
 	const user = await requirePermission('pedidos', 'edit');

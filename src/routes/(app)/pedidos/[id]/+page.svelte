@@ -39,6 +39,11 @@
 			can(page.data.user, page.data.permisos, 'pedidos', 'edit') &&
 			!pedido.estado.es_final
 	);
+	const puedeCambiarMoneda = $derived(
+		veImportes &&
+			can(page.data.user, page.data.permisos, 'pedidos', 'edit') &&
+			pedido.estado.slug !== PEDIDO_SLUG.CANCELADO
+	);
 	let dialogoMoneda = $state<CambiarMonedaDialog>();
 	let dialogoFactura = $state<FacturaDialog>();
 	const contacto = $derived(
@@ -141,7 +146,7 @@
 								</span>
 							{/if}
 						</span>
-						{#if editable}
+						{#if puedeCambiarMoneda}
 							<button class="btn btn-ghost btn-xs" onclick={() => dialogoMoneda?.abrir()}>
 								Cambiar
 							</button>

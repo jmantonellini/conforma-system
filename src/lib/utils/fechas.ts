@@ -75,3 +75,11 @@ export function haceCuanto(fecha: string | Date | null, ahora = new Date()) {
 	if (dias > -7) return `Hace ${-dias} días`;
 	return formatearFecha(fecha);
 }
+
+const ZONA_AR = 'America/Argentina/Buenos_Aires';
+
+export function fechaInput(fecha: string | Date = new Date()): string {
+	return new Date(fecha).toLocaleDateString('en-CA', { timeZone: ZONA_AR });
+}
+
+export const fechaDesdeInput = (valor: string) => new Date(`${valor}T12:00:00-03:00`);

@@ -15,6 +15,7 @@ import { registrarAuditoria } from '$lib/server/auditoria';
 import { NOMBRE_MONEDA, SIMBOLO_MONEDA, type Moneda } from '$lib/utils/moneda';
 import { formatearDosDecimales, redondearPrecio } from '$lib/utils/precios';
 import type { MaterialSnapshot } from './tipos';
+import { PEDIDO_SLUG } from '$lib/modulos/pedidos/tipos';
 
 export async function dolarBNA() {
 	try {
@@ -95,7 +96,7 @@ export async function cambiarMonedaTx(tx: Tx, cambio: CambioMoneda, usuarioId: n
 		.select({
 			moneda: tabla.moneda,
 			tipo_cambio: tabla.tipo_cambio,
-			es_final: estados.es_final,
+			estado: estados.slug,
 			...(cambio.documento === 'cotizacion' && { pedido_id: cotizaciones.pedido_id })
 		})
 		.from(tabla)
@@ -110,8 +111,8 @@ export async function cambiarMonedaTx(tx: Tx, cambio: CambioMoneda, usuarioId: n
 	if ('pedido_id' in actual && actual.pedido_id) {
 		error(409, 'La cotización ya tiene un pedido: cambiá la moneda desde el pedido');
 	}
-	if (cambio.documento === 'pedido' && actual.es_final) {
-		error(409, 'No se puede cambiar la moneda de un pedido finalizado');
+	if (cambio.documento === 'pedido' && actual.estado === PEDIDO_SLUG.CANCELADO) {
+		error(409, 'No se puede cambiar la moneda de un pedido cancelado');
 	}
 
 	const factor = factorCambio(actual.moneda, cambio);
