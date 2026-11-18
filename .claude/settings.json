@@ -10,5 +10,5 @@
 	"enabledPlugins": {
 		"svelte@svelte": true
 	},
-	"enabledMcpjsonServers": ["svelte"]
+	"enabledMcpjsonServers": ["svelte", "sentry"]
 }

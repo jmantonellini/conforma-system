@@ -35,6 +35,15 @@ jobs:
       contents: read
       packages: write
     steps:
+      - name: Avisar si faltan datos de Sentry
+        env:
+          SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
+          SENTRY_ORG: ${{ vars.SENTRY_ORG }}
+          SENTRY_PROJECT: ${{ vars.SENTRY_PROJECT }}
+        run: |
+          if [ -z "$SENTRY_AUTH_TOKEN" ] || [ -z "$SENTRY_ORG" ] || [ -z "$SENTRY_PROJECT" ]; then
+            echo "::warning title=Sentry::Faltan SENTRY_AUTH_TOKEN, SENTRY_ORG o SENTRY_PROJECT: no se suben sourcemaps y los errores no se agrupan entre deploys"
+          fi
       - uses: actions/checkout@v7
       - uses: docker/setup-buildx-action@v4
       - uses: docker/login-action@v4
@@ -114,3 +123,26 @@ jobs:
             done
             docker compose logs app --no-color | tail -40
             exit 1
+
+  registrar-release:
+    name: Registrar release en Sentry
+    needs: desplegar
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    env:
+      SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
+      SENTRY_ORG: ${{ vars.SENTRY_ORG }}
+      SENTRY_PROJECT: ${{ vars.SENTRY_PROJECT }}
+    steps:
+      - uses: actions/checkout@v7
+        if: env.SENTRY_AUTH_TOKEN != ''
+        with:
+          fetch-depth: 0
+      - uses: getsentry/action-release@v3
+        if: env.SENTRY_AUTH_TOKEN != ''
+        with:
+          release: ${{ github.sha }}
+          environment: produccion
+          set_commits: auto
+          ignore_missing: true
+          ignore_empty: true

@@ -1,7 +1,7 @@
 import { calentarMotorPdf } from '$lib/server/pdf/base';
 import { precargarCotizacionDolarBNA } from '$lib/server/integraciones/tipo-cambio-bna';
 import { programarLimpiezaNotificaciones } from '$lib/modulos/notificaciones/notificaciones.server';
-import { iniciarMonitoreo } from '$lib/server/monitoreo/sentry';
+import { causaRaiz, iniciarMonitoreo } from '$lib/server/monitoreo/sentry';
 import { usuarioDeSesion } from '$lib/server/auth/permissions';
 import * as Sentry from '@sentry/sveltekit';
 import { sequence } from '@sveltejs/kit/hooks';
@@ -77,6 +77,8 @@ const REMOTAS_DE_SONDEO = new Set(['getNotificaciones']);
 const registrarRequest: Handle = async ({ event, resolve }) => {
 	if (RUTAS_SIN_REGISTRO.has(event.url.pathname)) return resolve(event);
 	const inicio = performance.now();
+	const remota = remotaInvocada(new URL(event.request.url))?.split('/').pop();
+	if (remota) Sentry.setTag('remota', remota);
 	const usuario = await usuarioDeSesion().catch(() => null);
 	if (usuario) Sentry.setUser({ id: String(usuario.id), username: usuario.username });
 	let estado = 500;
@@ -85,7 +87,6 @@ const registrarRequest: Handle = async ({ event, resolve }) => {
 		estado = respuesta.status;
 		return respuesta;
 	} finally {
-		const remota = remotaInvocada(new URL(event.request.url))?.split('/').pop();
 		const destino = remota ? `remota ${remota}` : event.url.pathname;
 		const ms = Math.round(performance.now() - inicio);
 		const linea = `[http] ${event.request.method} ${destino} ${estado} ${ms}ms ${usuario?.username ?? '-'}`;
@@ -141,27 +142,10 @@ const protegerYTraducirErrores: Handle = async ({ event, resolve }) => {
 
 export const handle = sequence(Sentry.sentryHandle(), registrarRequest, protegerYTraducirErrores);
 
-function getRootCause(error: unknown): Record<string, unknown> {
-	let current = error;
-	const seen = new Set<object>();
-
-	while (current && typeof current === 'object' && 'cause' in current) {
-		if (seen.has(current)) break;
-		seen.add(current);
-		const cause = current.cause;
-		if (!cause || typeof cause !== 'object') break;
-		current = cause;
-	}
-
-	return current && typeof current === 'object'
-		? (current as Record<string, unknown>)
-		: { message: String(current) };
-}
-
 const registrarError: HandleServerError = ({ error, event, status, message }) => {
 	if (status < 500) return { message };
 
-	const cause = getRootCause(error);
+	const cause = causaRaiz(error);
 	const causeMessage = typeof cause.message === 'string' ? cause.message : message;
 	const databaseLocation = [cause.schema, cause.table, cause.column]
 		.filter((value): value is string => typeof value === 'string')
