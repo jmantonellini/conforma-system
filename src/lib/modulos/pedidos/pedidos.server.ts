@@ -193,6 +193,7 @@ export async function obtenerPedidoDetalle(id: number) {
 				subtotal: lineas_pedido.subtotal,
 				insumos_snapshot: sql<MaterialSnapshot[] | null>`${lineas_pedido.insumos_snapshot}`,
 				es_personalizado: lineas_pedido.es_personalizado,
+				es_flete_recepcion: lineas_pedido.es_flete_recepcion,
 				descripcion_personalizada: lineas_pedido.descripcion_personalizada,
 				producto_id: lineas_pedido.producto_id,
 				producto_codigo: productos.codigo,
@@ -309,12 +310,12 @@ export async function getPedidosListado({
 				pagado: pagadoPedido,
 				articulos: sql<number>`(
 					select coalesce(sum(${lineas_pedido.cantidad}), 0) from ${lineas_pedido}
-					where ${lineas_pedido.pedido_id} = ${pedidos.id}
+					where ${lineas_pedido.pedido_id} = ${pedidos.id} and not ${lineas_pedido.es_flete_recepcion}
 				)`.mapWith(Number),
 				primer_articulo: sql<string | null>`(
 					select coalesce(${productos.nombre}, ${lineas_pedido.descripcion_personalizada})
 					from ${lineas_pedido} left join ${productos} on ${productos.id} = ${lineas_pedido.producto_id}
-					where ${lineas_pedido.pedido_id} = ${pedidos.id}
+					where ${lineas_pedido.pedido_id} = ${pedidos.id} and not ${lineas_pedido.es_flete_recepcion}
 					order by ${lineas_pedido.orden_linea} nulls last, ${lineas_pedido.id} limit 1
 				)`,
 				unidades: sql<{ total: number; terminadas: number }>`(
@@ -774,6 +775,7 @@ export function getLineasPedidoSinOrdenServicio({
 			and(
 				isNull(ordenes_fabricacion.id),
 				isNull(reservas_stock.id),
+				eq(lineas_pedido.es_flete_recepcion, false),
 				pedido_id ? eq(lineas_pedido.pedido_id, pedido_id) : undefined
 			)
 		)

@@ -261,6 +261,19 @@ export const cotizarCotizacion = command(
 				error(409, 'No se puede modificar una cotización convertida en pedido');
 			}
 			const factor = factorDesdeUsd(cotizacion);
+			const fletes = new Set(
+				(
+					await tx
+						.select({ descripcion: lineas_cotizacion.descripcion })
+						.from(lineas_cotizacion)
+						.where(
+							and(
+								eq(lineas_cotizacion.cotizacion_id, cotizacion_id),
+								eq(lineas_cotizacion.es_flete_recepcion, true)
+							)
+						)
+				).map((fila) => fila.descripcion)
+			);
 
 			const filas = [];
 			for (const [orden_linea, linea] of lineas.entries()) {
@@ -295,7 +308,8 @@ export const cotizarCotizacion = command(
 							: 0,
 					costo_materiales: costo,
 					insumos_snapshot: resuelta.insumos_snapshot,
-					orden_linea
+					orden_linea,
+					es_flete_recepcion: resuelta.es_personalizado && fletes.has(resuelta.descripcion)
 				});
 			}
 
@@ -414,7 +428,8 @@ export const convertirCotizacionAPedido = command(v.number(), async (cotizacionI
 			.orderBy(lineas_cotizacion.orden_linea);
 		const productivas = lineas.filter(({ linea }) => linea.visible_cliente && !linea.insumo_id);
 		const deInsumos = lineas.filter(({ linea }) => linea.insumo_id && !linea.producto_id);
-		if (!productivas.length) error(400, 'La cotización no tiene líneas visibles para producir');
+		if (!productivas.some(({ linea }) => !linea.es_flete_recepcion))
+			error(400, 'La cotización no tiene líneas visibles para producir');
 
 		const precioTotal =
 			cotizacion.precio_total ??
@@ -453,7 +468,8 @@ export const convertirCotizacionAPedido = command(v.number(), async (cotizacionI
 				margen_porcentaje: linea.margen_porcentaje,
 				costo_materiales: linea.costo_materiales,
 				insumos_snapshot: linea.insumos_snapshot,
-				orden_linea: linea.orden_linea
+				orden_linea: linea.orden_linea,
+				es_flete_recepcion: linea.es_flete_recepcion
 			}))
 		);
 		if (deInsumos.length) {

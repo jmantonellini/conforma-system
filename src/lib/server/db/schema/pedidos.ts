@@ -88,6 +88,7 @@ export const lineas_pedido = pgTable(
 		producto_id: integer('producto_id').references(() => productos.id, { onDelete: 'set null' }),
 		es_personalizado: boolean('es_personalizado').default(false),
 		descripcion_personalizada: text('descripcion_personalizada'),
+		es_flete_recepcion: boolean('es_flete_recepcion').notNull().default(false),
 		fecha_envio_parcial: fecha('fecha_envio_parcial'),
 		atributos: jsonb('atributos').$type<ValoresAtributos>().notNull().default({}),
 		cantidad: integer('cantidad').notNull().default(1),

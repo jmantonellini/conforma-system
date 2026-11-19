@@ -1,7 +1,16 @@
 import { sql } from 'drizzle-orm';
 import { MONEDAS } from '$lib/utils/moneda';
-import { TIPOS_TRABAJO } from '$lib/modulos/ventas/trabajo';
-import { integer, numeric, pgPolicy, pgTable, serial, text, timestamp } from 'drizzle-orm/pg-core';
+import { MODALIDADES_ENTREGA, TIPOS_TRABAJO } from '$lib/modulos/ventas/trabajo';
+import {
+	boolean,
+	integer,
+	numeric,
+	pgPolicy,
+	pgTable,
+	serial,
+	text,
+	timestamp
+} from 'drizzle-orm/pg-core';
 
 export const fecha = (nombre: string) => timestamp(nombre, { withTimezone: true, mode: 'date' });
 export const creado = () => fecha('created_at').defaultNow();
@@ -23,7 +32,12 @@ export const datosEntrega = () => ({
 	entrega_direccion: text('entrega_direccion'),
 	entrega_localidad: text('entrega_localidad'),
 	entrega_recibe: text('entrega_recibe'),
-	entrega_telefono: text('entrega_telefono')
+	entrega_telefono: text('entrega_telefono'),
+	entrega_modalidad: text('entrega_modalidad', { enum: MODALIDADES_ENTREGA }),
+	entrega_provincia: text('entrega_provincia'),
+	entrega_codigo_postal: text('entrega_codigo_postal'),
+	entrega_indicaciones: text('entrega_indicaciones'),
+	entrega_consumidor_final: boolean('entrega_consumidor_final').notNull().default(false)
 });
 
 export const tipoTrabajo = () =>

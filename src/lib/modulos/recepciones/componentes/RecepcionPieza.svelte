@@ -7,6 +7,7 @@
 	import { getRecepcion, guardarRecepcion } from '$lib/modulos/recepciones/recepciones.remote';
 	import { fechaInput, formatearFecha } from '$lib/utils/fechas';
 	import { can } from '$lib/utils/permissions';
+	import { formatearMoneda } from '$lib/utils/precios';
 	import { toast } from '$lib/ui/toast.svelte';
 
 	type Dueno = { tipo: 'cotizacion' | 'pedido'; id: number };
@@ -45,6 +46,7 @@
 					can(page.data.user, page.data.permisos, 'cotizaciones', 'create'))
 	);
 	const visible = $derived(esperada || Boolean(recepcion) || fotos.length > 0);
+	const veImportes = $derived(can(page.data.user, page.data.permisos, 'importes', 'view'));
 
 	let abierto = $state(false);
 	const form = guardarRecepcion;
@@ -91,6 +93,15 @@
 						</dd>
 					</div>
 				{/if}
+				{#if recepcion.flete_pagado}
+					<div>
+						<dt>Flete pagado al recibir</dt>
+						<dd>
+							{formatearMoneda(recepcion.flete_pagado, 'ARS')}
+							<span class="secundario">· sumado al trabajo</span>
+						</dd>
+					</div>
+				{/if}
 				<div class="col-span-full">
 					<dt>Estado de la pieza</dt>
 					<dd class="whitespace-pre-wrap">{recepcion.estado_pieza}</dd>
@@ -130,6 +141,7 @@
 				if (await f.submit()) {
 					await consulta.refresh();
 					toast.success('Llegada de la pieza registrada');
+					if (form.result?.flete) toast.info(form.result.flete);
 					cerrar();
 				}
 			})}
@@ -173,6 +185,21 @@
 						{...form.fields.numero_guia.as('text', recepcion?.numero_guia ?? '')}
 					/>
 				</FormFieldWrapper>
+				{#if veImportes}
+					<FormFieldWrapper
+						label="Flete pagado al recibir ($)"
+						id="recepcion-flete"
+						ayuda="Si llegó con flete a pagar, se suma solo como ítem al trabajo para cobrárselo. Borralo para quitarlo."
+					>
+						<input
+							id="recepcion-flete"
+							class="input w-full"
+							inputmode="decimal"
+							placeholder="Ej: 15000"
+							{...form.fields.flete_pagado.as('text', recepcion?.flete_pagado?.toString() ?? '')}
+						/>
+					</FormFieldWrapper>
+				{/if}
 			</div>
 			<FormFieldWrapper
 				label="Estado en que llegó"

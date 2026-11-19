@@ -1,18 +1,22 @@
 <script lang="ts">
-	import { Can, EstadoBadge, FormErrors, Modal, FormFieldWrapper, Seccion } from '$lib/ui';
+	import { Can, EstadoBadge, FormErrors, Icono, Modal, FormFieldWrapper, Seccion } from '$lib/ui';
 	import {
 		crearEnvio,
 		marcarEntregado,
-		getTransportistas,
 		getEnviosByPedido
 	} from '$lib/modulos/pedidos/envios.remote';
+	import SelectTransportista from '$lib/modulos/pedidos/componentes/SelectTransportista.svelte';
+	import {
+		ETIQUETA_MODALIDAD,
+		localidadCompleta,
+		type DatosEntrega
+	} from '$lib/modulos/ventas/trabajo';
 	import { toast } from '$lib/ui/toast.svelte';
 	import { ESTADO_ENVIO } from '$lib/modulos/pedidos/tipos';
 
-	let { pedidoId, transportista }: { pedidoId: number; transportista: string | null } = $props();
+	let { pedidoId, entrega }: { pedidoId: number; entrega: DatosEntrega } = $props();
 
 	let envios = $derived(await getEnviosByPedido(pedidoId));
-	let transportistas = $derived(await getTransportistas());
 
 	let showModal = $state(false);
 	const form = crearEnvio;
@@ -84,24 +88,51 @@
 		id="envio-form"
 	>
 		<input type="hidden" name="pedido_id" value={pedidoId} />
-		<FormFieldWrapper
-			label="Transportista"
-			id="transportista"
-			required
-			ayuda="Elegí uno existente o escribí uno nuevo."
-		>
-			<input
-				id="transportista"
-				class="input"
-				list="transportistas-lista"
-				autocomplete="off"
-				{...form.fields.transportista.as('text', transportista ?? '')}
-			/>
-			<datalist id="transportistas-lista">
-				{#each transportistas as t (t.id)}
-					<option value={t.nombre}></option>
-				{/each}
-			</datalist>
+		{#if entrega.consumidor_final}
+			<div role="alert" class="mb-3 alert flex items-start alert-soft py-2 text-sm alert-info">
+				<Icono nombre="camion" class="size-4" />
+				<span><strong>Declarar el envío como consumidor final.</strong></span>
+			</div>
+		{/if}
+		{#if entrega.indicaciones || entrega.localidad || entrega.direccion}
+			<dl class="mb-3 flex flex-col gap-1 rounded-box bg-base-200 p-3 text-sm">
+				{#if entrega.localidad || entrega.direccion}
+					<div>
+						<dt class="secundario inline">Destino:</dt>
+						<dd class="inline">
+							{[
+								entrega.modalidad && ETIQUETA_MODALIDAD[entrega.modalidad],
+								entrega.direccion,
+								localidadCompleta(entrega)
+							]
+								.filter(Boolean)
+								.join(' · ')}
+						</dd>
+					</div>
+				{/if}
+				{#if entrega.recibe || entrega.telefono}
+					<div>
+						<dt class="secundario inline">Recibe:</dt>
+						<dd class="inline">{[entrega.recibe, entrega.telefono].filter(Boolean).join(' · ')}</dd>
+					</div>
+				{/if}
+				{#if entrega.indicaciones}
+					<div>
+						<dt class="secundario inline">Indicaciones:</dt>
+						<dd class="inline whitespace-pre-line">{entrega.indicaciones}</dd>
+					</div>
+				{/if}
+			</dl>
+		{/if}
+		<FormFieldWrapper label="Transportista" id="transportista" required>
+			{#if showModal}
+				<SelectTransportista
+					id="transportista"
+					campo={form.fields.transportista as never}
+					inicial={entrega.transportista ?? ''}
+					requerido
+				/>
+			{/if}
 		</FormFieldWrapper>
 		<div class="grid gap-4 sm:grid-cols-2">
 			<FormFieldWrapper label="N° de guía" id="numero_guia">

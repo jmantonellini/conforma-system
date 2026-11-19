@@ -18,6 +18,7 @@ export const contactos = pgTable(
 		nombre: text('nombre'),
 		apellido: text('apellido'),
 		cuit: text('cuit'),
+		dni: text('dni'),
 		email: text('email'),
 		telefono: text('telefono'),
 		pais: text('pais').default('Argentina'),

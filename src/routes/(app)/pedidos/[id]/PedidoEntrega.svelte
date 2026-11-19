@@ -1,7 +1,14 @@
 <script lang="ts">
 	import { page } from '$app/state';
 	import { Icono, Seccion } from '$lib/ui';
-	import type { DatosEntrega, OrigenEntrega } from '$lib/modulos/ventas/trabajo';
+	import {
+		ETIQUETA_FALTANTE,
+		ETIQUETA_MODALIDAD,
+		localidadCompleta,
+		type DatosEntrega,
+		type FaltanteEntrega,
+		type OrigenEntrega
+	} from '$lib/modulos/ventas/trabajo';
 	import { can } from '$lib/utils/permissions';
 	import EntregaDialog from './EntregaDialog.svelte';
 
@@ -11,7 +18,7 @@
 		finalizado
 	}: {
 		pedidoId: number;
-		entrega: { datos: DatosEntrega; origen: OrigenEntrega; faltan: string[] };
+		entrega: { datos: DatosEntrega; origen: OrigenEntrega; faltan: FaltanteEntrega[] };
 		finalizado: boolean;
 	} = $props();
 
@@ -21,10 +28,15 @@
 			can(page.data.user, page.data.permisos, 'envios', 'edit')
 	);
 	const datos = $derived(entrega.datos);
-	const ETIQUETA_FALTANTE: Record<string, string> = {
-		transportista: 'transportista',
-		destino: 'destino'
-	};
+	const destino = $derived(
+		[
+			datos.modalidad && ETIQUETA_MODALIDAD[datos.modalidad],
+			datos.direccion,
+			localidadCompleta(datos)
+		]
+			.filter(Boolean)
+			.join(' · ')
+	);
 </script>
 
 <Seccion titulo="Entrega">
@@ -39,10 +51,15 @@
 		<div role="alert" class="mb-3 alert flex items-start alert-soft py-2 text-sm alert-warning">
 			<Icono nombre="alerta" class="size-4" />
 			<span>
-				Faltan datos de entrega ({entrega.faltan
-					.map((f) => ETIQUETA_FALTANTE[f] ?? f)
-					.join(' y ')}). Pedíselos al cliente ahora para despachar apenas esté terminado.
+				Faltan datos de entrega ({entrega.faltan.map((f) => ETIQUETA_FALTANTE[f]).join(' y ')}).
+				Pedíselos al cliente ahora para despachar apenas esté terminado.
 			</span>
+		</div>
+	{/if}
+	{#if datos.consumidor_final}
+		<div role="alert" class="mb-3 alert flex items-start alert-soft py-2 text-sm alert-info">
+			<Icono nombre="camion" class="size-4" />
+			<span><strong>Despachar declarado como consumidor final.</strong></span>
 		</div>
 	{/if}
 	{#if entrega.origen}
@@ -53,16 +70,22 @@
 					<dd class="font-medium">{datos.transportista}</dd>
 				</div>
 			{/if}
-			{#if datos.direccion || datos.localidad}
+			{#if destino}
 				<div>
 					<dt class="secundario">Destino</dt>
-					<dd>{[datos.direccion, datos.localidad].filter(Boolean).join(', ')}</dd>
+					<dd>{destino}</dd>
 				</div>
 			{/if}
 			{#if datos.recibe || datos.telefono}
 				<div>
 					<dt class="secundario">Recibe</dt>
 					<dd>{[datos.recibe, datos.telefono].filter(Boolean).join(' · ')}</dd>
+				</div>
+			{/if}
+			{#if datos.indicaciones}
+				<div>
+					<dt class="secundario">Indicaciones</dt>
+					<dd class="whitespace-pre-line">{datos.indicaciones}</dd>
 				</div>
 			{/if}
 		</dl>

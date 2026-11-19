@@ -7,6 +7,7 @@ import { requirePermission, tienePermiso } from '$lib/server/auth/permissions';
 import { consultarCuitARCA } from '$lib/server/integraciones/arca-padron';
 import { listarContactosCliente } from '$lib/modulos/contactos/contactos.server';
 import { esCuitValido } from '$lib/utils/cuit';
+import { MODALIDADES_ENTREGA } from '$lib/modulos/ventas/trabajo';
 import { redirect, error } from '@sveltejs/kit';
 import { resolve } from '$app/paths';
 
@@ -24,6 +25,14 @@ const ContactoBaseSchema = {
 			)
 		)
 	),
+	dni: v.optional(
+		v.pipe(
+			v.string(),
+			v.trim(),
+			v.maxLength(20),
+			v.transform((valor) => valor.replace(/\D/g, '') || null)
+		)
+	),
 	email: v.optional(v.string()),
 	telefono: v.optional(v.string())
 };
@@ -37,14 +46,6 @@ const textoEntrega = v.optional(
 	)
 );
 
-const CamposEntregaContactoSchema = {
-	entrega_transportista: textoEntrega,
-	entrega_direccion: textoEntrega,
-	entrega_localidad: textoEntrega,
-	entrega_recibe: textoEntrega,
-	entrega_telefono: textoEntrega
-};
-
 const CheckboxBooleanSchema = v.optional(
 	v.union([
 		v.boolean(),
@@ -55,6 +56,31 @@ const CheckboxBooleanSchema = v.optional(
 	]),
 	false
 );
+
+const CamposEntregaContactoSchema = {
+	entrega_transportista: textoEntrega,
+	entrega_modalidad: v.optional(
+		v.pipe(
+			v.union([v.literal(''), v.picklist(MODALIDADES_ENTREGA)]),
+			v.transform((valor) => valor || null)
+		)
+	),
+	entrega_direccion: textoEntrega,
+	entrega_localidad: textoEntrega,
+	entrega_provincia: textoEntrega,
+	entrega_codigo_postal: textoEntrega,
+	entrega_recibe: textoEntrega,
+	entrega_telefono: textoEntrega,
+	entrega_indicaciones: v.optional(
+		v.pipe(
+			v.string(),
+			v.trim(),
+			v.maxLength(1000),
+			v.transform((valor) => valor || null)
+		)
+	),
+	entrega_consumidor_final: CheckboxBooleanSchema
+};
 
 export const obtenerDatosCuitARCA = query(
 	v.pipe(v.string(), v.check(esCuitValido, 'Ingresá un CUIT válido de 11 dígitos')),
@@ -115,6 +141,7 @@ const seleccionContactoBase = {
 	id: contactos.id,
 	razon_social: contactos.razon_social,
 	cuit: contactos.cuit,
+	dni: contactos.dni,
 	email: contactos.email,
 	telefono: contactos.telefono,
 	pais: contactos.pais,
@@ -162,6 +189,7 @@ const construirCondicionContactoBase = ({
 				OR ${contactos.apellido} ILIKE ${patron}
 				OR ${contactos.nombre} ILIKE ${patron}
 				OR ${contactos.cuit} ILIKE ${patron}
+				OR ${contactos.dni} ILIKE ${patron}
 				OR ${contactos.email} ILIKE ${patron}
 			)`
 		);

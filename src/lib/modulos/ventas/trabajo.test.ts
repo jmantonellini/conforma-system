@@ -17,6 +17,19 @@ describe('faltantesEntrega', () => {
 		).toEqual([]);
 	});
 
+	it('pide la dirección cuando la entrega es a domicilio', () => {
+		expect(
+			faltantesEntrega(
+				entrega({ transportista: 'Vía Cargo', localidad: 'Rafaela', modalidad: 'domicilio' })
+			)
+		).toEqual(['direccion']);
+		expect(
+			faltantesEntrega(
+				entrega({ transportista: 'Vía Cargo', localidad: 'Rafaela', modalidad: 'sucursal' })
+			)
+		).toEqual([]);
+	});
+
 	it('no pide destino si retira en fábrica', () => {
 		expect(faltantesEntrega(entrega({ transportista: 'retira en fábrica' }))).toEqual([]);
 	});
@@ -36,6 +49,17 @@ describe('resolverEntrega', () => {
 			datos: cliente,
 			faltan: []
 		});
+	});
+
+	it('cuenta consumidor final como dato propio del pedido', () => {
+		const propia = { ...ENTREGA_VACIA, consumidor_final: true };
+		expect(resolverEntrega(propia, cliente).origen).toBe('pedido');
+	});
+
+	it('trata consumidor final nulo como falso', () => {
+		expect(
+			resolverEntrega({ ...ENTREGA_VACIA, consumidor_final: null }, null).datos.consumidor_final
+		).toBe(false);
 	});
 
 	it('marca faltantes si nadie tiene datos', () => {

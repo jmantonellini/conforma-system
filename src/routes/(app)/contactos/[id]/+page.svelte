@@ -113,6 +113,15 @@
 							{...form.fields.cuit.as('text', contacto.cuit || '')}
 						/>
 					</FormFieldWrapper>
+					<FormFieldWrapper id="dni" label="DNI" ayuda="Para clientes sin CUIT.">
+						<input
+							id="dni"
+							class="input"
+							inputmode="numeric"
+							disabled={!editando}
+							{...form.fields.dni.as('text', contacto.dni || '')}
+						/>
+					</FormFieldWrapper>
 					<FormFieldWrapper id="email" label="Email">
 						<input
 							class="input"

@@ -1,15 +1,17 @@
 import * as v from 'valibot';
 import { error } from '@sveltejs/kit';
 import { command, form, query, requested } from '$app/server';
-import { asc, eq } from 'drizzle-orm';
+import { asc, eq, sql } from 'drizzle-orm';
 import { db } from '$lib/server/db';
 import { contactos, cotizaciones, pedidos, transportistas } from '$lib/server/db/schema';
 import { requirePermission, tienePermiso, usuarioDeSesion } from '$lib/server/auth/permissions';
 import { registrarAuditoria } from '$lib/server/auditoria';
 import { CamposEntregaSchema } from '$lib/modulos/ventas/entrega.schema';
 import {
+	ETIQUETA_MODALIDAD,
 	ETIQUETA_TIPO_TRABAJO,
 	RETIRA_EN_FABRICA,
+	localidadCompleta,
 	TIPOS_TRABAJO,
 	tieneDatosEntrega,
 	type DatosEntrega
@@ -21,10 +23,13 @@ const describirEntrega = (entrega: DatosEntrega) =>
 	tieneDatosEntrega(entrega)
 		? [
 				entrega.transportista,
+				entrega.modalidad && ETIQUETA_MODALIDAD[entrega.modalidad],
 				entrega.direccion,
-				entrega.localidad,
+				localidadCompleta(entrega),
 				entrega.recibe && `Recibe ${entrega.recibe}`,
-				entrega.telefono
+				entrega.telefono,
+				entrega.consumidor_final && 'Declarar como consumidor final',
+				entrega.indicaciones
 			]
 				.filter(Boolean)
 				.join(' · ')
@@ -46,8 +51,9 @@ export const guardarEntregaPedido = form(
 		...CamposEntregaSchema,
 		guardar_en_contacto: v.optional(v.boolean(), false)
 	}),
-	async ({ pedido_id, guardar_en_contacto, ...entrega }) => {
+	async ({ pedido_id, guardar_en_contacto, modalidad, ...campos }) => {
 		const user = await requierePermisoEntrega();
+		const entrega = { ...campos, modalidad: modalidad || null };
 		const valores = valoresEntrega(entrega);
 
 		await db.transaction(async (tx) => {
@@ -123,3 +129,34 @@ export const getNombresTransportistas = query(async () => {
 		? nombres
 		: [...nombres, RETIRA_EN_FABRICA];
 });
+
+export const agregarTransportista = command(
+	v.pipe(v.string(), v.trim(), v.nonEmpty('Escribí el nombre del transportista'), v.maxLength(100)),
+	async (nombre) => {
+		const user = await usuarioDeSesion();
+		if (!user) error(401, 'No autorizado');
+		const permisos = await Promise.all([
+			tienePermiso(user, 'contactos', 'edit'),
+			tienePermiso(user, 'contactos', 'create'),
+			tienePermiso(user, 'pedidos', 'edit'),
+			tienePermiso(user, 'envios', 'edit')
+		]);
+		if (!permisos.some(Boolean)) error(403, 'No tenés permiso para agregar transportistas');
+		if (nombre.toLowerCase() === RETIRA_EN_FABRICA.toLowerCase()) return RETIRA_EN_FABRICA;
+		const [existente] = await db
+			.select({ id: transportistas.id, nombre: transportistas.nombre })
+			.from(transportistas)
+			.where(sql`lower(${transportistas.nombre}) = lower(${nombre})`)
+			.limit(1);
+		if (existente) {
+			await db
+				.update(transportistas)
+				.set({ activo: true })
+				.where(eq(transportistas.id, existente.id));
+		} else {
+			await db.insert(transportistas).values({ nombre });
+		}
+		getNombresTransportistas().refresh();
+		return existente?.nombre ?? nombre;
+	}
+);

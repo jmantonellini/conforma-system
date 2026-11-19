@@ -83,6 +83,7 @@ export const lineas_cotizacion = pgTable(
 		insumo_id: integer('insumo_id').references(() => insumos.id, { onDelete: 'set null' }),
 		es_personalizado: boolean('es_personalizado').default(false),
 		visible_cliente: boolean('visible_cliente').notNull().default(true),
+		es_flete_recepcion: boolean('es_flete_recepcion').notNull().default(false),
 		descripcion: text('descripcion').notNull(),
 		cantidad: integer('cantidad').notNull().default(1),
 		precio_unitario: precioUnitario('precio_unitario').notNull(),

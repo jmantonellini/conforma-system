@@ -243,7 +243,11 @@
 				<td>
 					<p>{linea.producto_nombre || linea.descripcion_personalizada || '-'}</p>
 					<p class="font-mono text-xs text-base-content/60">
-						{linea.es_personalizado ? 'Personalizado' : linea.producto_codigo}
+						{linea.es_flete_recepcion
+							? 'Cargo'
+							: linea.es_personalizado
+								? 'Personalizado'
+								: linea.producto_codigo}
 					</p>
 				</td>
 				<td class="numero">{linea.cantidad}</td>
@@ -254,7 +258,9 @@
 					<td class="numero font-medium">{formatearMoneda(linea.subtotal, pedido.moneda)}</td>
 				{/if}
 				<td>
-					{#if linea.reserva_stock}
+					{#if linea.es_flete_recepcion}
+						<span class="secundario">No se fabrica</span>
+					{:else if linea.reserva_stock}
 						<span class="badge badge-soft badge-sm badge-info">
 							{ETIQUETA_RESERVA[linea.reserva_stock.estado] ??
 								`Reservado · ${linea.reserva_stock.ubicacion_nombre}`}
@@ -351,7 +357,7 @@
 				finalizado={pedido.estado.es_final ?? false}
 			/>
 			<Can modulo="envios">
-				<PedidoEnvios pedidoId={pedido.id} transportista={pedido.entrega.datos.transportista} />
+				<PedidoEnvios pedidoId={pedido.id} entrega={pedido.entrega.datos} />
 			</Can>
 			<Seccion titulo="Historial">
 				<Historial eventos={historial} />

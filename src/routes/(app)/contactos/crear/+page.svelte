@@ -168,6 +168,9 @@
 						onblur={consultarCuit}
 					/>
 				</FormFieldWrapper>
+				<FormFieldWrapper id="dni" label="DNI" ayuda="Para clientes sin CUIT.">
+					<input id="dni" class="input" inputmode="numeric" {...form.fields.dni.as('text', '')} />
+				</FormFieldWrapper>
 				<FormFieldWrapper id="razon_social" label="Razón social" required>
 					<input id="razon_social" class="input" {...form.fields.razon_social.as('text', '')} />
 				</FormFieldWrapper>

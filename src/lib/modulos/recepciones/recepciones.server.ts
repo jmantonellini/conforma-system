@@ -19,6 +19,7 @@ export async function buscarRecepcion({ cotizacionId, pedidoId }: DuenoRecepcion
 			llego_por: recepciones_pieza.llego_por,
 			numero_guia: recepciones_pieza.numero_guia,
 			estado_pieza: recepciones_pieza.estado_pieza,
+			flete_pagado: recepciones_pieza.flete_pagado,
 			recibido_por: empleados.nombre,
 			usuario: usuarios.username
 		})

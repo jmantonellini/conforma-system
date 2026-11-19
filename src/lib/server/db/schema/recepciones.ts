@@ -1,6 +1,6 @@
 import { sql } from 'drizzle-orm';
 import { check, integer, pgTable, serial, text, uniqueIndex } from 'drizzle-orm/pg-core';
-import { actualizado, aislamiento, creado, empresa, fecha } from './base';
+import { actualizado, aislamiento, creado, empresa, fecha, importe } from './base';
 import { usuarios } from './acceso';
 import { cotizaciones } from './cotizaciones';
 import { pedidos } from './pedidos';
@@ -19,6 +19,7 @@ export const recepciones_pieza = pgTable(
 		llego_por: text('llego_por'),
 		numero_guia: text('numero_guia'),
 		estado_pieza: text('estado_pieza').notNull(),
+		flete_pagado: importe('flete_pagado'),
 		created_at: creado(),
 		updated_at: actualizado()
 	},
