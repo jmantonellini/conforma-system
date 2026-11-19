@@ -67,10 +67,10 @@
 		<th>Pedido</th>
 		<th>Cliente</th>
 		<th class="hidden lg:table-cell">Artículos</th>
-		<th>Entrega</th>
+		<th>Estado</th>
 		<th class="hidden md:table-cell">Producción</th>
 		{#if veImportes}<th class="text-right">Total</th>{/if}
-		<th>Estado</th>
+		<th>Entrega</th>
 	{/snippet}
 	{#snippet row(pedido: Pedido)}
 		{@const aviso = entrega(pedido)}
@@ -106,14 +106,11 @@
 				<span class="secundario">Sin artículos</span>
 			{/if}
 		</td>
-		<td class="whitespace-nowrap">
-			{formatearFecha(pedido.fecha_entrega_real ?? pedido.fecha_entrega)}
-			{#if aviso}<p class={['text-xs font-medium', aviso.clase]}>{aviso.texto}</p>{/if}
-			{#if pedido.faltan_entrega.length && !pedido.estado_final}
-				<p class="flex items-center gap-1 text-xs font-medium text-warning">
-					<Icono nombre="camion" class="size-3.5" /> Sin datos de entrega
-				</p>
-			{/if}
+		<td>
+			<EstadoBadge
+				class="badge-sm"
+				estado={{ nombre: pedido.estado_nombre, color: pedido.estado_color }}
+			/>
 		</td>
 		<td class="hidden md:table-cell">
 			{#if unidades?.total}
@@ -140,11 +137,14 @@
 				{#if pago}<p class={['text-xs font-medium', pago.clase]}>{pago.texto}</p>{/if}
 			</td>
 		{/if}
-		<td>
-			<EstadoBadge
-				class="badge-sm"
-				estado={{ nombre: pedido.estado_nombre, color: pedido.estado_color }}
-			/>
+		<td class="whitespace-nowrap">
+			{formatearFecha(pedido.fecha_entrega_real ?? pedido.fecha_entrega)}
+			{#if aviso}<p class={['text-xs font-medium', aviso.clase]}>{aviso.texto}</p>{/if}
+			{#if pedido.faltan_entrega.length && !pedido.estado_final}
+				<p class="flex items-center gap-1 text-xs font-medium text-warning">
+					<Icono nombre="camion" class="size-3.5" /> Sin datos de entrega
+				</p>
+			{/if}
 		</td>
 	{/snippet}
 </Listado>
