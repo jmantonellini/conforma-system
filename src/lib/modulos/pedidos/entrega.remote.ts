@@ -1,16 +1,15 @@
 import * as v from 'valibot';
 import { error } from '@sveltejs/kit';
-import { command, form, query, requested } from '$app/server';
-import { asc, eq, sql } from 'drizzle-orm';
+import { command, form, requested } from '$app/server';
+import { eq } from 'drizzle-orm';
 import { db } from '$lib/server/db';
-import { contactos, cotizaciones, pedidos, transportistas } from '$lib/server/db/schema';
-import { requirePermission, tienePermiso, usuarioDeSesion } from '$lib/server/auth/permissions';
+import { contactos, cotizaciones, pedidos } from '$lib/server/db/schema';
+import { requirePermission, tienePermiso } from '$lib/server/auth/permissions';
 import { registrarAuditoria } from '$lib/server/auditoria';
 import { CamposEntregaSchema } from '$lib/modulos/ventas/entrega.schema';
 import {
 	ETIQUETA_MODALIDAD,
 	ETIQUETA_TIPO_TRABAJO,
-	RETIRA_EN_FABRICA,
 	localidadCompleta,
 	TIPOS_TRABAJO,
 	tieneDatosEntrega,
@@ -114,49 +113,5 @@ export const cambiarTipoTrabajoPedido = command(
 		getHistorialPedido(id).refresh();
 		requested(getPedidos, 1).refreshAll();
 		return { success: true };
-	}
-);
-
-export const getNombresTransportistas = query(async () => {
-	if (!(await usuarioDeSesion())) error(401, 'No autorizado');
-	const filas = await db
-		.select({ nombre: transportistas.nombre })
-		.from(transportistas)
-		.where(eq(transportistas.activo, true))
-		.orderBy(asc(transportistas.nombre));
-	const nombres = filas.map((fila) => fila.nombre);
-	return nombres.some((nombre) => nombre.toLowerCase() === RETIRA_EN_FABRICA.toLowerCase())
-		? nombres
-		: [...nombres, RETIRA_EN_FABRICA];
-});
-
-export const agregarTransportista = command(
-	v.pipe(v.string(), v.trim(), v.nonEmpty('Escribí el nombre del transportista'), v.maxLength(100)),
-	async (nombre) => {
-		const user = await usuarioDeSesion();
-		if (!user) error(401, 'No autorizado');
-		const permisos = await Promise.all([
-			tienePermiso(user, 'contactos', 'edit'),
-			tienePermiso(user, 'contactos', 'create'),
-			tienePermiso(user, 'pedidos', 'edit'),
-			tienePermiso(user, 'envios', 'edit')
-		]);
-		if (!permisos.some(Boolean)) error(403, 'No tenés permiso para agregar transportistas');
-		if (nombre.toLowerCase() === RETIRA_EN_FABRICA.toLowerCase()) return RETIRA_EN_FABRICA;
-		const [existente] = await db
-			.select({ id: transportistas.id, nombre: transportistas.nombre })
-			.from(transportistas)
-			.where(sql`lower(${transportistas.nombre}) = lower(${nombre})`)
-			.limit(1);
-		if (existente) {
-			await db
-				.update(transportistas)
-				.set({ activo: true })
-				.where(eq(transportistas.id, existente.id));
-		} else {
-			await db.insert(transportistas).values({ nombre });
-		}
-		getNombresTransportistas().refresh();
-		return existente?.nombre ?? nombre;
 	}
 );

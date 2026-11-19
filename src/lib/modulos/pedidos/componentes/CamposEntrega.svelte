@@ -54,14 +54,12 @@
 </script>
 
 <div class="grid gap-4 sm:grid-cols-2">
-	<FormFieldWrapper id={id('transportista')} label="Transportista">
-		<SelectTransportista
-			id={id('transportista')}
-			campo={campos.transportista as never}
-			inicial={inicial.transportista ?? ''}
-			{disabled}
-		/>
-	</FormFieldWrapper>
+	<SelectTransportista
+		id={id('transportista')}
+		campo={campos.transportista as never}
+		inicial={inicial.transportista ?? ''}
+		{disabled}
+	/>
 	{#if !retira}
 		<FormFieldWrapper id={id('modalidad')} label="Entrega en">
 			<select

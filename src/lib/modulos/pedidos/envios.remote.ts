@@ -7,7 +7,7 @@ import { eq, desc, count, sql } from 'drizzle-orm';
 import { requirePermission } from '$lib/server/auth/permissions';
 import { getHistorialPedido, getPedidoById } from './pedidos.remote';
 import { fijarEntregaDelCliente } from './entrega.server';
-import { getNombresTransportistas } from './entrega.remote';
+import { getNombresTransportistas, getTransportistasGestion } from './transportistas.remote';
 
 export const getTransportistas = query(async () => {
 	await requirePermission('envios', 'view');
@@ -101,6 +101,7 @@ async function transportistaPorNombre(nombre: string) {
 		.returning({ id: transportistas.id });
 	getTransportistas().refresh();
 	getNombresTransportistas().refresh();
+	getTransportistasGestion().refresh();
 	return nuevo.id;
 }
 

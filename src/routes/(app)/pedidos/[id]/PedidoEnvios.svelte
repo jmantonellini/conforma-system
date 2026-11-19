@@ -124,16 +124,14 @@
 				{/if}
 			</dl>
 		{/if}
-		<FormFieldWrapper label="Transportista" id="transportista" required>
-			{#if showModal}
-				<SelectTransportista
-					id="transportista"
-					campo={form.fields.transportista as never}
-					inicial={entrega.transportista ?? ''}
-					requerido
-				/>
-			{/if}
-		</FormFieldWrapper>
+		{#if showModal}
+			<SelectTransportista
+				id="transportista"
+				campo={form.fields.transportista as never}
+				inicial={entrega.transportista ?? ''}
+				requerido
+			/>
+		{/if}
 		<div class="grid gap-4 sm:grid-cols-2">
 			<FormFieldWrapper label="N° de guía" id="numero_guia">
 				<input class="input" {...form.fields.numero_guia.as('text')} />

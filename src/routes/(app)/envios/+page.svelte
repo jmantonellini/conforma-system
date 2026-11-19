@@ -1,14 +1,21 @@
 <script lang="ts">
-	import { EstadoBadge, Listado } from '$lib/ui';
+	import { Can, EstadoBadge, Listado } from '$lib/ui';
+	import GestionTransportistas from '$lib/modulos/pedidos/componentes/GestionTransportistas.svelte';
 	import { getEnvios, marcarEntregado } from '$lib/modulos/pedidos/envios.remote';
 	import { resolve } from '$app/paths';
 	import { toast } from '$lib/ui/toast.svelte';
 	import { formatearFecha } from '$lib/utils/fechas';
 
 	const envios = $derived(await getEnvios({ page: 1 }));
+	let gestion = $state<GestionTransportistas>();
 </script>
 
 <Listado titulo="Envíos" datos={envios.data} buscar={false} vacio="No hay envíos registrados">
+	{#snippet acciones()}
+		<Can modulo="envios" accion="edit">
+			<button class="btn btn-sm" onclick={() => gestion?.abrir()}>Transportistas</button>
+		</Can>
+	{/snippet}
 	{#snippet header()}
 		<th>Pedido</th>
 		<th>Transportista</th>
@@ -52,3 +59,7 @@
 		</td>
 	{/snippet}
 </Listado>
+
+<Can modulo="envios" accion="edit">
+	<GestionTransportistas bind:this={gestion} />
+</Can>

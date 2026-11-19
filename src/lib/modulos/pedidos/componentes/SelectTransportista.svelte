@@ -1,11 +1,15 @@
 <script lang="ts">
-	import { Icono } from '$lib/ui';
-	import { toast } from '$lib/ui/toast.svelte';
-	import { mensajeError } from '$lib/utils/errores';
-	import { agregarTransportista, getNombresTransportistas } from '../entrega.remote';
+	import { untrack } from 'svelte';
+	import { page } from '$app/state';
+	import { SearchSelect } from '$lib/ui';
+	import type { Option } from '$lib/ui/SearchSelect.svelte';
+	import { RETIRA_EN_FABRICA } from '$lib/modulos/ventas/trabajo';
+	import { can } from '$lib/utils/permissions';
+	import { getNombresTransportistas } from '../transportistas.remote';
+	import TransportistaRapido from './TransportistaRapido.svelte';
 
 	type Campo = {
-		as: (tipo: 'select', inicial: string) => Record<string, unknown>;
+		as: (tipo: 'select') => Record<string, unknown>;
 		set: (valor: string) => void;
 		value: () => unknown;
 	};
@@ -14,107 +18,51 @@
 		id,
 		campo,
 		inicial = '',
+		label = 'Transportista',
 		disabled = false,
 		requerido = false
 	}: {
 		id: string;
 		campo: Campo;
 		inicial?: string;
+		label?: string;
 		disabled?: boolean;
 		requerido?: boolean;
 	} = $props();
 
-	const NUEVO = '__nuevo__';
-	const nombres = $derived(await getNombresTransportistas());
-	const opciones = $derived.by(() => {
-		const actual = String(campo.value() ?? inicial ?? '').trim();
-		const existe = nombres.some((nombre) => nombre.toLowerCase() === actual.toLowerCase());
-		return actual && actual !== NUEVO && !existe ? [actual, ...nombres] : nombres;
+	let alta = $state<TransportistaRapido>();
+	untrack(() => {
+		if (campo.value() === undefined && inicial) campo.set(inicial);
 	});
-
-	let agregando = $state(false);
-	let guardando = $state(false);
-	let nuevo = $state('');
-	let anterior: string | undefined;
-
-	function elegir(evento: Event & { currentTarget: HTMLSelectElement }) {
-		const valor = evento.currentTarget.value;
-		if (valor !== NUEVO) {
-			anterior = valor;
-			return;
-		}
-		const previo = anterior ?? inicial;
-		evento.currentTarget.value = previo;
-		campo.set(previo);
-		agregando = true;
-	}
-
-	async function agregar() {
-		if (!nuevo.trim() || guardando) return;
-		guardando = true;
-		try {
-			const nombre = await agregarTransportista(nuevo);
-			campo.set(nombre);
-			anterior = nombre;
-			agregando = false;
-			nuevo = '';
-			toast.success(`${nombre} agregado a los transportistas`);
-		} catch (causa) {
-			toast.error(mensajeError(causa, 'No se pudo agregar el transportista'));
-		} finally {
-			guardando = false;
-		}
-	}
+	const nombres = $derived(await getNombresTransportistas());
+	const opciones = $derived.by<Option[]>(() => {
+		const lista: Option[] = [
+			...nombres.map((nombre) => ({ value: nombre, label: nombre })),
+			{ value: RETIRA_EN_FABRICA, label: RETIRA_EN_FABRICA, detalle: 'El cliente lo busca' }
+		];
+		const actual = String(campo.value() ?? '').trim();
+		const existe = lista.some((opcion) => opcion.value.toLowerCase() === actual.toLowerCase());
+		return actual && !existe ? [{ value: actual, label: actual }, ...lista] : lista;
+	});
+	const puedeCrear = $derived(
+		['contactos', 'pedidos', 'envios'].some((modulo) =>
+			can(page.data.user, page.data.permisos, modulo, 'edit')
+		) || can(page.data.user, page.data.permisos, 'contactos', 'create')
+	);
 </script>
 
-<select
+<SearchSelect
 	{id}
-	class="select w-full"
-	{disabled}
+	{label}
+	options={opciones}
+	field={campo}
+	placeholder="Buscá o elegí el transportista..."
 	required={requerido}
-	{...campo.as('select', inicial)}
-	onchange={elegir}
->
-	<option value="">{requerido ? 'Elegí el transportista' : 'Sin definir'}</option>
-	{#each opciones as nombre (nombre)}
-		<option value={nombre}>{nombre}</option>
-	{/each}
-	{#if !disabled}
-		<option value={NUEVO}>+ Agregar transportista...</option>
-	{/if}
-</select>
-{#if agregando}
-	<div class="join mt-2 w-full">
-		<input
-			class="input join-item w-full"
-			placeholder="Nombre del transportista"
-			aria-label="Nombre del transportista nuevo"
-			bind:value={nuevo}
-			{@attach (input) => input.focus()}
-			onkeydown={(evento) => {
-				if (evento.key === 'Enter') {
-					evento.preventDefault();
-					void agregar();
-				}
-				if (evento.key === 'Escape') agregando = false;
-			}}
-		/>
-		<button
-			type="button"
-			class="btn join-item btn-primary"
-			disabled={!nuevo.trim() || guardando}
-			onclick={agregar}
-		>
-			{#if guardando}<span class="loading loading-xs loading-spinner"></span>{/if}
-			Agregar
-		</button>
-		<button
-			type="button"
-			class="btn join-item btn-square btn-ghost"
-			aria-label="Cancelar"
-			onclick={() => (agregando = false)}
-		>
-			<Icono nombre="cerrar" />
-		</button>
-	</div>
+	{disabled}
+	onCreate={puedeCrear && !disabled ? (texto) => alta?.abrir(texto) : undefined}
+	createLabel="Agregar transportista"
+/>
+
+{#if puedeCrear && !disabled}
+	<TransportistaRapido bind:this={alta} onCreado={(nombre) => campo.set(nombre)} />
 {/if}

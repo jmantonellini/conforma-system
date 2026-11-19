@@ -3,7 +3,7 @@
 	import { FormErrors, FormFieldWrapper, Icono, Modal, Seccion } from '$lib/ui';
 	import ArchivosAdjuntos from '$lib/modulos/adjuntos/componentes/ArchivosAdjuntos.svelte';
 	import type { Adjunto } from '$lib/modulos/adjuntos/tipos';
-	import { getNombresTransportistas } from '$lib/modulos/pedidos/entrega.remote';
+	import { getNombresTransportistas } from '$lib/modulos/pedidos/transportistas.remote';
 	import { getRecepcion, guardarRecepcion } from '$lib/modulos/recepciones/recepciones.remote';
 	import { fechaInput, formatearFecha } from '$lib/utils/fechas';
 	import { can } from '$lib/utils/permissions';
