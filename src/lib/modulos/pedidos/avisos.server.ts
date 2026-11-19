@@ -11,6 +11,9 @@ import {
 import { formatearMoneda } from '$lib/utils/precios';
 import type { Moneda } from '$lib/utils/moneda';
 import { PEDIDO_SLUG } from './tipos';
+import { entregaDelPedido } from './entrega.server';
+
+const FALTA_ENTREGA = 'Faltan los datos de entrega: pedíselos al cliente.';
 
 const PRODUCCION: PermisoDestino = { modulo: 'fabricacion', accion: 'create' };
 const DESPACHO: PermisoDestino = { modulo: 'envios', accion: 'edit' };
@@ -31,7 +34,12 @@ async function datosPedido(pedidoId: number, ejecutor: Ejecutor) {
 async function avisar(
 	pedidoId: number,
 	actor: number,
-	armar: (pedido: { numero: string; cliente: string | null; moneda: 'USD' | 'ARS' }) => {
+	armar: (pedido: {
+		numero: string;
+		cliente: string | null;
+		moneda: 'USD' | 'ARS';
+		faltaEntrega: boolean;
+	}) => {
 		titulo: string;
 		mensaje: string;
 	},
@@ -39,10 +47,12 @@ async function avisar(
 ) {
 	const pedido = await datosPedido(pedidoId, ejecutor);
 	if (!pedido) return;
+	const { faltan } = await entregaDelPedido(ejecutor, pedidoId);
+	const contenido = armar({ ...pedido, faltaEntrega: faltan.length > 0 });
 	const destinatarios = combinar(await participantesPedido(pedidoId, ejecutor), { permisos });
 	await notificar(
 		destinatarios,
-		{ modulo: 'pedido', link: `/pedidos/${pedidoId}`, ...armar(pedido) },
+		{ modulo: 'pedido', link: `/pedidos/${pedidoId}`, ...contenido },
 		{ actor, ejecutor }
 	);
 }
@@ -51,9 +61,14 @@ export const avisarPedidoNuevo = (pedidoId: number, actor: number) =>
 	avisar(
 		pedidoId,
 		actor,
-		({ numero, cliente }) => ({
+		({ numero, cliente, faltaEntrega }) => ({
 			titulo: `Nuevo pedido ${numero}`,
-			mensaje: `${cliente ?? 'Sin cliente'} · listo para planificar la producción.`
+			mensaje: [
+				`${cliente ?? 'Sin cliente'} · listo para planificar la producción.`,
+				faltaEntrega && FALTA_ENTREGA
+			]
+				.filter(Boolean)
+				.join(' ')
 		}),
 		{ permisos: [PRODUCCION] }
 	);
@@ -68,10 +83,15 @@ export const avisarCambioEstadoPedido = (
 	return avisar(
 		pedidoId,
 		actor,
-		({ numero, cliente }) => ({
+		({ numero, cliente, faltaEntrega }) => ({
 			titulo: listo ? `Pedido ${numero} listo para entregar` : `Pedido ${numero}: ${estado.nombre}`,
 			mensaje: listo
-				? `Producción terminada. Coordiná la entrega con ${cliente ?? 'el cliente'}.`
+				? [
+						`Producción terminada. Coordiná la entrega con ${cliente ?? 'el cliente'}.`,
+						faltaEntrega && FALTA_ENTREGA
+					]
+						.filter(Boolean)
+						.join(' ')
 				: `${cliente ?? 'Sin cliente'} · cambió a «${estado.nombre}».`
 		}),
 		{ permisos: listo ? [DESPACHO] : [], ejecutor }

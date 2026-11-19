@@ -6,6 +6,7 @@
 		getOrdenesFabricacion
 	} from '$lib/modulos/fabricacion/fabricacion-consultas.remote';
 	import { ETIQUETA_PRIORIDAD } from '$lib/modulos/fabricacion/tipos';
+	import { ETIQUETA_TIPO_TRABAJO, TIPO_TRABAJO_COLOR } from '$lib/modulos/ventas/trabajo';
 	import { estaVencido, formatearFecha } from '$lib/utils/fechas';
 
 	const estados = await getEstadosFabricacion();
@@ -61,7 +62,14 @@
 			</a>
 		</td>
 		<td>
-			<p class="font-medium"><Highlight text={orden.nombre_trabajo} query={busqueda} /></p>
+			<p class="font-medium">
+				<Highlight text={orden.nombre_trabajo} query={busqueda} />
+				{#if orden.tipo_trabajo && orden.tipo_trabajo !== 'fabricacion'}
+					<span class={['badge badge-soft badge-xs', TIPO_TRABAJO_COLOR[orden.tipo_trabajo]]}>
+						{ETIQUETA_TIPO_TRABAJO[orden.tipo_trabajo]}
+					</span>
+				{/if}
+			</p>
 			<p class="secundario">
 				{orden.es_para_stock
 					? 'Stock interno'

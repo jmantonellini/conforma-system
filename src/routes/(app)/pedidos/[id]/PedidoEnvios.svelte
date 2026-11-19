@@ -9,7 +9,7 @@
 	import { toast } from '$lib/ui/toast.svelte';
 	import { ESTADO_ENVIO } from '$lib/modulos/pedidos/tipos';
 
-	let { pedidoId }: { pedidoId: number } = $props();
+	let { pedidoId, transportista }: { pedidoId: number; transportista: string | null } = $props();
 
 	let envios = $derived(await getEnviosByPedido(pedidoId));
 	let transportistas = $derived(await getTransportistas());
@@ -95,7 +95,7 @@
 				class="input"
 				list="transportistas-lista"
 				autocomplete="off"
-				{...form.fields.transportista.as('text')}
+				{...form.fields.transportista.as('text', transportista ?? '')}
 			/>
 			<datalist id="transportistas-lista">
 				{#each transportistas as t (t.id)}

@@ -63,6 +63,7 @@ function consultaOrdenes() {
 			cliente_nombre: contactos.razon_social,
 			pedido_id: pedidos.id,
 			pedido_numero: pedidos.numero_pedido,
+			tipo_trabajo: pedidos.tipo_trabajo,
 			producto_nombre: sql<string | null>`COALESCE(${productos.nombre}, ${productoStock.nombre})`,
 			empleado_nombre: empleados.nombre,
 			empleado_apellido: empleados.apellido,

@@ -8,6 +8,7 @@
 		PageLayout
 	} from '$lib/ui';
 	import FormDireccion from '$lib/ui/FormDireccion.svelte';
+	import FormEntregaContacto from '$lib/modulos/contactos/componentes/FormEntregaContacto.svelte';
 	import { crearContacto, obtenerDatosCuitARCA } from '$lib/modulos/contactos/contactos.remote';
 	import { toast } from '$lib/ui/toast.svelte';
 	import { page } from '$app/state';
@@ -247,6 +248,7 @@
 			</div>
 		</fieldset>
 		<FormDireccion {form} initialData={undefined} />
+		<FormEntregaContacto campos={form.fields} />
 		<FormErrors {form} />
 		<FormActions
 			cancelHref={resolve('/contactos')}

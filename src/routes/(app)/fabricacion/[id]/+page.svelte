@@ -25,6 +25,13 @@
 		Table
 	} from '$lib/ui';
 	import ArchivosAdjuntos from '$lib/modulos/adjuntos/componentes/ArchivosAdjuntos.svelte';
+	import RecepcionPieza from '$lib/modulos/recepciones/componentes/RecepcionPieza.svelte';
+	import { esFotoDeControl } from '$lib/modulos/adjuntos/tipos';
+	import {
+		ETIQUETA_TIPO_TRABAJO,
+		TIPO_TRABAJO_COLOR,
+		recibePiezaDelCliente
+	} from '$lib/modulos/ventas/trabajo';
 	import { toast } from '$lib/ui/toast.svelte';
 	import { goto } from '$app/navigation';
 	import { resolve } from '$app/paths';
@@ -146,6 +153,16 @@
 				<dt>Cliente</dt>
 				<dd>{orden.es_para_stock ? 'Stock interno' : (orden.cliente_nombre ?? '-')}</dd>
 			</div>
+			{#if orden.tipo_trabajo && orden.tipo_trabajo !== 'fabricacion'}
+				<div>
+					<dt>Tipo de trabajo</dt>
+					<dd>
+						<span class={['badge badge-soft', TIPO_TRABAJO_COLOR[orden.tipo_trabajo]]}>
+							{ETIQUETA_TIPO_TRABAJO[orden.tipo_trabajo]}
+						</span>
+					</dd>
+				</div>
+			{/if}
 			<div>
 				<dt>Prioridad</dt>
 				<dd><EstadoBadge estado={ETIQUETA_PRIORIDAD[orden.prioridad ?? 0]} /></dd>
@@ -280,7 +297,21 @@
 		</div>
 
 		<div class="flex min-w-0 flex-col gap-4 sm:gap-6">
-			<ArchivosAdjuntos tipo="fabricacion" entidadId={orden.id} adjuntos={orden.adjuntos} />
+			{#if orden.pedido_id}
+				<RecepcionPieza
+					cotizacionId={orden.navegacion.cotizacion_id}
+					pedidoId={orden.pedido_id}
+					dueno={{ tipo: 'pedido', id: orden.pedido_id }}
+					adjuntos={orden.adjuntos}
+					esperada={recibePiezaDelCliente(orden.tipo_trabajo)}
+					soloLectura
+				/>
+			{/if}
+			<ArchivosAdjuntos
+				tipo="fabricacion"
+				entidadId={orden.id}
+				adjuntos={orden.adjuntos.filter((adjunto) => !esFotoDeControl(adjunto))}
+			/>
 			<Seccion titulo="Historial">
 				<Historial eventos={historial} />
 			</Seccion>

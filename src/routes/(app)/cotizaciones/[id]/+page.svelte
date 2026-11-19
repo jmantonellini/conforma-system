@@ -27,9 +27,18 @@
 		asignarCotizacion,
 		cambiarEstadoCotizacion,
 		cambiarMonedaCotizacion,
+		cambiarTipoTrabajoCotizacion,
 		convertirCotizacionAPedido,
 		eliminarCotizacion
 	} from '$lib/modulos/cotizaciones/cotizaciones.remote';
+	import RecepcionPieza from '$lib/modulos/recepciones/componentes/RecepcionPieza.svelte';
+	import { esFotoDeControl } from '$lib/modulos/adjuntos/tipos';
+	import {
+		ETIQUETA_TIPO_TRABAJO,
+		TIPOS_TRABAJO,
+		recibePiezaDelCliente,
+		type TipoTrabajo
+	} from '$lib/modulos/ventas/trabajo';
 	import { getCotizaciones } from '$lib/modulos/cotizaciones/cotizaciones-consultas.remote';
 	import { CANALES_COTIZACION } from '$lib/modulos/cotizaciones/canales';
 	import { formatearFecha } from '$lib/utils/fechas';
@@ -62,6 +71,12 @@
 			ocupado = false;
 		}
 	}
+
+	const cambiarTipo = (tipo: TipoTrabajo) =>
+		ejecutar(
+			() => cambiarTipoTrabajoCotizacion({ id: cotizacion.id, tipo }),
+			`Marcada como ${ETIQUETA_TIPO_TRABAJO[tipo].toLowerCase()}`
+		);
 
 	const cambiarEstado = (estado_destino_id: number, comentario?: string) =>
 		ejecutar(
@@ -164,6 +179,26 @@
 			<div>
 				<dt>Canal</dt>
 				<dd>{CANALES_COTIZACION[cotizacion.canal] ?? cotizacion.canal}</dd>
+			</div>
+			<div>
+				<dt>Tipo de trabajo</dt>
+				<dd>
+					{#if puede('edit')}
+						<select
+							class="select w-auto select-sm"
+							aria-label="Tipo de trabajo"
+							value={cotizacion.tipo_trabajo}
+							disabled={ocupado}
+							onchange={(e) => cambiarTipo(e.currentTarget.value as TipoTrabajo)}
+						>
+							{#each TIPOS_TRABAJO as tipo (tipo)}
+								<option value={tipo}>{ETIQUETA_TIPO_TRABAJO[tipo]}</option>
+							{/each}
+						</select>
+					{:else}
+						{ETIQUETA_TIPO_TRABAJO[cotizacion.tipo_trabajo]}
+					{/if}
+				</dd>
 			</div>
 			<div>
 				<dt>Fecha</dt>
@@ -269,7 +304,18 @@
 
 	<div class="grid items-start gap-4 sm:gap-6 lg:grid-cols-3">
 		<div class="flex min-w-0 flex-col gap-4 sm:gap-6 lg:col-span-2">
-			<ArchivosAdjuntos tipo="cotizacion" entidadId={cotizacion.id} adjuntos={data.adjuntos} />
+			<RecepcionPieza
+				cotizacionId={cotizacion.id}
+				pedidoId={cotizacion.pedido_id}
+				dueno={{ tipo: 'cotizacion', id: cotizacion.id }}
+				adjuntos={data.adjuntos}
+				esperada={recibePiezaDelCliente(cotizacion.tipo_trabajo)}
+			/>
+			<ArchivosAdjuntos
+				tipo="cotizacion"
+				entidadId={cotizacion.id}
+				adjuntos={data.adjuntos.filter((adjunto) => !esFotoDeControl(adjunto))}
+			/>
 			<Seccion titulo="Seguimiento interno">
 				{#if puede('edit')}
 					<div class="flex flex-col gap-2">

@@ -20,7 +20,8 @@ import {
 	moneda,
 	porcentaje,
 	precioUnitario,
-	tipoCambio
+	tipoCambio,
+	tipoTrabajo
 } from './base';
 import { empleados, usuarios } from './acceso';
 import { contactos } from './contactos';
@@ -42,6 +43,7 @@ export const cotizaciones = pgTable(
 			onDelete: 'set null'
 		}),
 		canal: text('canal').notNull().default('whatsapp'),
+		tipo_trabajo: tipoTrabajo(),
 		descripcion: text('descripcion').notNull(),
 		estado_id: integer('estado_id')
 			.references(() => estados.id, { onDelete: 'restrict' })

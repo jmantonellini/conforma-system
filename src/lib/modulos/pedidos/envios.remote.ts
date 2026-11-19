@@ -5,7 +5,9 @@ import { db } from '$lib/server/db';
 import { envios, transportistas, pedidos, contactos } from '$lib/server/db/schema';
 import { eq, desc, count, sql } from 'drizzle-orm';
 import { requirePermission } from '$lib/server/auth/permissions';
-import { getHistorialPedido } from './pedidos.remote';
+import { getHistorialPedido, getPedidoById } from './pedidos.remote';
+import { fijarEntregaDelCliente } from './entrega.server';
+import { getNombresTransportistas } from './entrega.remote';
 
 export const getTransportistas = query(async () => {
 	await requirePermission('envios', 'view');
@@ -98,6 +100,7 @@ async function transportistaPorNombre(nombre: string) {
 		.values({ nombre })
 		.returning({ id: transportistas.id });
 	getTransportistas().refresh();
+	getNombresTransportistas().refresh();
 	return nuevo.id;
 }
 
@@ -110,19 +113,24 @@ const refrescarCachesEnvio = async (pedidoId?: number) => {
 
 export const crearEnvio = form(EnvioSchema, async (data) => {
 	const user = await requirePermission('envios', 'edit');
-	await db.insert(envios).values({
-		pedido_id: data.pedido_id,
-		transportista_id: await transportistaPorNombre(data.transportista),
-		numero_guia: data.numero_guia || null,
-		cantidad_bultos: data.cantidad_bultos,
-		observaciones: data.observaciones || null,
-		fecha_envio: new Date(),
-		estado: 'despachado'
+	const transportistaId = await transportistaPorNombre(data.transportista);
+	await db.transaction(async (tx) => {
+		await fijarEntregaDelCliente(tx, data.pedido_id);
+		await tx.insert(envios).values({
+			pedido_id: data.pedido_id,
+			transportista_id: transportistaId,
+			numero_guia: data.numero_guia || null,
+			cantidad_bultos: data.cantidad_bultos,
+			observaciones: data.observaciones || null,
+			fecha_envio: new Date(),
+			estado: 'despachado'
+		});
 	});
 
 	await avisarEnvio(data.pedido_id, false, user.id);
 	await refrescarCachesEnvio(data.pedido_id);
 	getHistorialPedido(data.pedido_id).refresh();
+	getPedidoById(data.pedido_id).refresh();
 
 	return { success: true };
 });

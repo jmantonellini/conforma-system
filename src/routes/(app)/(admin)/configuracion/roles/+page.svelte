@@ -1,7 +1,6 @@
 <script lang="ts">
 	import { invalidateAll } from '$app/navigation';
 	import { page } from '$app/state';
-	import { SvelteSet } from 'svelte/reactivity';
 	import { Can, FormFieldWrapper, Icono, MenuDesplegable, Modal, PageLayout } from '$lib/ui';
 	import { confirmarYEjecutar } from '$lib/ui/confirmar.svelte';
 	import { toast } from '$lib/ui/toast.svelte';
@@ -28,7 +27,7 @@
 
 	const clave = (modulo: string, accion: string) => `${modulo}.${accion}`;
 	const original = $derived(new Set(asignados.map((p) => clave(p.modulo, p.accion))));
-	let borrador = $derived(new SvelteSet(original));
+	let borrador = $derived(new Set(original));
 	const sinGuardar = $derived(
 		borrador.size !== original.size || [...borrador].some((c) => !original.has(c))
 	);
@@ -38,22 +37,18 @@
 	function alternar(modulo: string, accion: Accion) {
 		const c = clave(modulo, accion);
 		if (borrador.has(c)) {
-			borrador.delete(c);
-			if (accion === 'view') {
-				for (const otra of ACCIONES) borrador.delete(clave(modulo, otra.valor));
-			}
+			const quitar = accion === 'view' ? ACCIONES.map((a) => clave(modulo, a.valor)) : [c];
+			borrador = new Set([...borrador].filter((k) => !quitar.includes(k)));
 		} else {
-			borrador.add(c);
-			borrador.add(clave(modulo, 'view'));
+			borrador = new Set([...borrador, c, clave(modulo, 'view')]);
 		}
 	}
 
 	function alternarFila(modulo: string, acciones: readonly Accion[]) {
-		const completa = acciones.every((a) => borrador.has(clave(modulo, a)));
-		for (const accion of acciones) {
-			if (completa) borrador.delete(clave(modulo, accion));
-			else borrador.add(clave(modulo, accion));
-		}
+		const claves = acciones.map((a) => clave(modulo, a));
+		borrador = claves.every((k) => borrador.has(k))
+			? new Set([...borrador].filter((k) => !claves.includes(k)))
+			: new Set([...borrador, ...claves]);
 	}
 
 	const tiene = (modulo: string, accion: Accion) =>
@@ -272,7 +267,7 @@
 								<button
 									class="btn btn-ghost btn-sm"
 									disabled={!sinGuardar || guardando}
-									onclick={() => (borrador = new SvelteSet(original))}>Descartar</button
+									onclick={() => (borrador = new Set(original))}>Descartar</button
 								>
 								<button
 									class="btn btn-primary btn-sm"

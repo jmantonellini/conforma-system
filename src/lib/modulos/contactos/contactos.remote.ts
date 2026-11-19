@@ -28,6 +28,23 @@ const ContactoBaseSchema = {
 	telefono: v.optional(v.string())
 };
 
+const textoEntrega = v.optional(
+	v.pipe(
+		v.string(),
+		v.trim(),
+		v.maxLength(300),
+		v.transform((valor) => valor || null)
+	)
+);
+
+const CamposEntregaContactoSchema = {
+	entrega_transportista: textoEntrega,
+	entrega_direccion: textoEntrega,
+	entrega_localidad: textoEntrega,
+	entrega_recibe: textoEntrega,
+	entrega_telefono: textoEntrega
+};
+
 const CheckboxBooleanSchema = v.optional(
 	v.union([
 		v.boolean(),
@@ -184,7 +201,8 @@ const ContactoSchema = v.object({
 	calle: v.optional(v.string()),
 	numero: v.optional(v.string()),
 	piso: v.optional(v.string()),
-	departamento: v.optional(v.string())
+	departamento: v.optional(v.string()),
+	...CamposEntregaContactoSchema
 });
 
 const ProveedorSchema = v.object({
@@ -216,6 +234,7 @@ const ContactoUpdateSchema = v.object({
 	contacto_telefono: v.optional(v.string()),
 	condiciones_pago: v.optional(v.string()),
 	saldo_disponible: v.optional(v.pipe(v.number(), v.minValue(0)), 0),
+	...CamposEntregaContactoSchema,
 	id: v.string()
 });
 const ProveedorUpdateSchema = v.object({ ...ProveedorSchema.entries, id: v.string() });

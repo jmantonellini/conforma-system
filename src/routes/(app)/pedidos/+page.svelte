@@ -5,6 +5,7 @@
 	import { diasHasta, fechaRelativa, formatearFecha } from '$lib/utils/fechas';
 	import { formatearMoneda } from '$lib/utils/precios';
 	import { can } from '$lib/utils/permissions';
+	import { ETIQUETA_TIPO_TRABAJO, TIPO_TRABAJO_COLOR } from '$lib/modulos/ventas/trabajo';
 	import type { PageProps } from './$types';
 
 	let { data }: PageProps = $props();
@@ -80,6 +81,11 @@
 				<Highlight text={pedido.numero_pedido} query={busqueda} />
 			</a>
 			<p class="secundario">{formatearFecha(pedido.fecha_pedido)}</p>
+			{#if pedido.tipo_trabajo !== 'fabricacion'}
+				<span class={['badge badge-soft badge-xs', TIPO_TRABAJO_COLOR[pedido.tipo_trabajo]]}>
+					{ETIQUETA_TIPO_TRABAJO[pedido.tipo_trabajo]}
+				</span>
+			{/if}
 		</td>
 		<td class="max-w-56">
 			<p class="truncate font-medium">
@@ -103,6 +109,11 @@
 		<td class="whitespace-nowrap">
 			{formatearFecha(pedido.fecha_entrega_real ?? pedido.fecha_entrega)}
 			{#if aviso}<p class={['text-xs font-medium', aviso.clase]}>{aviso.texto}</p>{/if}
+			{#if pedido.faltan_entrega.length && !pedido.estado_final}
+				<p class="flex items-center gap-1 text-xs font-medium text-warning">
+					<Icono nombre="camion" class="size-3.5" /> Sin datos de entrega
+				</p>
+			{/if}
 		</td>
 		<td class="hidden md:table-cell">
 			{#if unidades?.total}

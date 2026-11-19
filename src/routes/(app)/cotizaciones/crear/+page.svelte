@@ -22,6 +22,11 @@
 	import { getEmpleadosOpciones } from '$lib/modulos/configuracion/empleados.remote';
 	import { toast } from '$lib/ui/toast.svelte';
 	import { CANALES_COTIZACION } from '$lib/modulos/cotizaciones/canales';
+	import {
+		ETIQUETA_TIPO_TRABAJO,
+		TIPOS_TRABAJO,
+		recibePiezaDelCliente
+	} from '$lib/modulos/ventas/trabajo';
 	import { formatearCuit } from '$lib/utils/cuit';
 	import { can } from '$lib/utils/permissions';
 
@@ -63,6 +68,7 @@
 	let altaContacto: ContactoRapido;
 
 	if (!form.fields.canal.value()) form.fields.canal.set('whatsapp');
+	if (!form.fields.tipo_trabajo.value()) form.fields.tipo_trabajo.set('fabricacion');
 
 	let ultimaBusqueda = { cliente: 0, distribuidor: 0 };
 	async function buscar(texto: string, tipo: 'cliente' | 'distribuidor') {
@@ -217,6 +223,24 @@
 								/>
 							{/each}
 						</div>
+					</div>
+
+					<div class="campo">
+						<span class="text-sm font-medium text-base-content/80">Tipo de trabajo</span>
+						<div class="flex flex-wrap gap-2">
+							{#each TIPOS_TRABAJO as tipo (tipo)}
+								<input
+									class="btn rounded-full btn-sm"
+									aria-label={ETIQUETA_TIPO_TRABAJO[tipo]}
+									{...form.fields.tipo_trabajo.as('radio', tipo)}
+								/>
+							{/each}
+						</div>
+						{#if recibePiezaDelCliente(form.fields.tipo_trabajo.value())}
+							<p class="text-xs text-base-content/60">
+								Cuando llegue la pieza, registrala con fotos desde la cotización.
+							</p>
+						{/if}
 					</div>
 
 					<FormFieldWrapper label="¿Qué pide el cliente?" id="descripcion" required>

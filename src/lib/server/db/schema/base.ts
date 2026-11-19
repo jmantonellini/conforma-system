@@ -1,5 +1,6 @@
 import { sql } from 'drizzle-orm';
 import { MONEDAS } from '$lib/utils/moneda';
+import { TIPOS_TRABAJO } from '$lib/modulos/ventas/trabajo';
 import { integer, numeric, pgPolicy, pgTable, serial, text, timestamp } from 'drizzle-orm/pg-core';
 
 export const fecha = (nombre: string) => timestamp(nombre, { withTimezone: true, mode: 'date' });
@@ -16,6 +17,17 @@ export const cantidad = (nombre: string) =>
 	numeric(nombre, { precision: 14, scale: 4, mode: 'number' });
 export const tipoCambio = (nombre: string) =>
 	numeric(nombre, { precision: 14, scale: 4, mode: 'number' });
+
+export const datosEntrega = () => ({
+	entrega_transportista: text('entrega_transportista'),
+	entrega_direccion: text('entrega_direccion'),
+	entrega_localidad: text('entrega_localidad'),
+	entrega_recibe: text('entrega_recibe'),
+	entrega_telefono: text('entrega_telefono')
+});
+
+export const tipoTrabajo = () =>
+	text('tipo_trabajo', { enum: TIPOS_TRABAJO }).notNull().default('fabricacion');
 
 export const moneda = () => text('moneda', { enum: MONEDAS }).notNull().default('USD');
 

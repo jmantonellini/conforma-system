@@ -8,6 +8,7 @@
 	import { toast } from '$lib/ui/toast.svelte';
 	import type { Adjunto, CategoriaAdjunto, TipoEntidadAdjunto } from '$lib/modulos/adjuntos/tipos';
 	import { can } from '$lib/utils/permissions';
+	import { achicarImagen } from '$lib/utils/imagenes';
 
 	let {
 		tipo,
@@ -16,7 +17,9 @@
 		titulo = 'Archivos adjuntos',
 		descripcion,
 		categoria = 'general',
-		vacio = 'Sin archivos adjuntos.'
+		vacio = 'Sin archivos adjuntos.',
+		soloLectura = false,
+		seccion = true
 	}: {
 		tipo: TipoEntidadAdjunto;
 		entidadId: number;
@@ -25,54 +28,76 @@
 		descripcion?: string;
 		categoria?: CategoriaAdjunto;
 		vacio?: string;
+		soloLectura?: boolean;
+		seccion?: boolean;
 	} = $props();
 
 	let subiendo = $state(false);
+	let progreso = $state('');
 	let arrastrando = $state(false);
 	let ampliada = $state<Adjunto | null>(null);
 
 	const SOLO_IMAGENES = 'image/jpeg,image/png,image/webp';
-	const TIPOS_ARCHIVO = `${SOLO_IMAGENES},audio/ogg,audio/mpeg,audio/mp4,audio/x-m4a,audio/wav,audio/x-wav,video/mp4,application/pdf`;
+	const TIPOS_ARCHIVO = `${SOLO_IMAGENES},audio/ogg,audio/mpeg,audio/mp4,audio/x-m4a,audio/wav,audio/x-wav,video/mp4,video/quicktime,application/pdf`;
 	const MODULOS = {
 		cotizacion: 'cotizaciones',
 		pedido: 'pedidos',
 		producto: 'productos',
 		fabricacion: 'fabricacion'
 	} as const;
+	const ACEPTA_FOTOS = 'image/*,video/mp4,video/quicktime';
+	const esFotos = $derived(categoria === 'recepcion' || categoria === 'despacho');
 	const puedeSubir = $derived(
-		can(page.data.user, page.data.permisos, MODULOS[tipo], 'edit') ||
-			(tipo === 'cotizacion' && can(page.data.user, page.data.permisos, 'cotizaciones', 'create'))
+		!soloLectura &&
+			(can(page.data.user, page.data.permisos, MODULOS[tipo], 'edit') ||
+				(tipo === 'cotizacion' &&
+					can(page.data.user, page.data.permisos, 'cotizaciones', 'create')))
 	);
 
 	const url = (id: number) => resolve(`/adjuntos/${id}`);
 	const esImagen = (adjunto: Adjunto) => adjunto.mime_type?.startsWith('image/') ?? false;
 
-	async function subir(archivos: FileList | null | undefined) {
-		if (!archivos?.length || subiendo) return;
-		subiendo = true;
+	async function subirUno(archivo: File) {
 		const cuerpo = new FormData();
 		cuerpo.set('tipo', tipo);
 		cuerpo.set('entidad_id', String(entidadId));
 		cuerpo.set('accion', tipo === 'producto' ? 'edit' : 'create');
 		cuerpo.set('categoria', categoria);
-		for (const archivo of archivos) cuerpo.append('archivos', archivo);
+		cuerpo.append('archivos', await achicarImagen(archivo));
+		const respuesta = await fetch(resolve('/adjuntos'), { method: 'POST', body: cuerpo });
+		const resultado = (await respuesta.json().catch(() => null)) as {
+			error?: string;
+			resultados?: { error?: string }[];
+		} | null;
+		if (respuesta.status === 413) return 'es demasiado grande (máx. 25 MB)';
+		if (!respuesta.ok) return resultado?.error || 'no se pudo subir';
+		return resultado?.resultados?.find((r) => r.error)?.error ?? null;
+	}
 
+	async function subir(lista: FileList | null | undefined) {
+		const archivos = [...(lista ?? [])];
+		if (!archivos.length || subiendo) return;
+		subiendo = true;
+		const fallidos: string[] = [];
 		try {
-			const respuesta = await fetch(resolve('/adjuntos'), { method: 'POST', body: cuerpo });
-			const resultado = (await respuesta.json().catch(() => null)) as {
-				error?: string;
-				resultados?: { nombre: string; error?: string }[];
-			} | null;
-			if (!respuesta.ok)
-				return toast.error(resultado?.error || 'No se pudieron subir los archivos');
-			const fallidos = (resultado?.resultados ?? []).filter((archivo) => archivo.error);
-			if (fallidos.length) toast.error(fallidos.map((f) => `${f.nombre}: ${f.error}`).join(' · '));
-			else toast.success(archivos.length === 1 ? 'Archivo subido' : 'Archivos subidos');
-			await invalidateAll();
-		} catch {
-			toast.error('No se pudo conectar para subir los archivos');
+			for (const [indice, archivo] of archivos.entries()) {
+				progreso = archivos.length > 1 ? `${indice + 1} de ${archivos.length}` : '';
+				try {
+					const fallo = await subirUno(archivo);
+					if (fallo) fallidos.push(`${archivo.name}: ${fallo}`);
+				} catch {
+					fallidos.push(`${archivo.name}: sin conexión`);
+				}
+			}
+			if (fallidos.length) toast.error(fallidos.join(' · '));
+			if (fallidos.length < archivos.length) {
+				const subidos = archivos.length - fallidos.length;
+				toast.success(subidos === 1 ? 'Archivo subido' : `${subidos} archivos subidos`);
+				await invalidateAll();
+			}
 		} finally {
 			subiendo = false;
+			progreso = '';
 		}
 	}
 
@@ -103,7 +128,7 @@
 		});
 </script>
 
-<Seccion {titulo} {descripcion}>
+{#snippet contenido()}
 	{#if puedeSubir}
 		<label
 			class={[
@@ -117,18 +142,22 @@
 			<Icono nombre="clip" class="size-5 text-base-content/50" />
 			<span>
 				{#if subiendo}
-					Subiendo...
+					Subiendo{progreso ? ` ${progreso}` : ''}...
 				{:else}
 					<span class="font-medium text-primary">Elegí archivos</span> o arrastralos acá
 				{/if}
 			</span>
 			<span class="secundario">
-				{categoria === 'general' ? 'Imágenes, audio, video o PDF' : 'Imágenes JPEG, PNG o WebP'}
+				{categoria === 'general'
+					? 'Imágenes, audio, video o PDF'
+					: esFotos
+						? 'Fotos o videos. Desde el celular podés sacarlas en el momento.'
+						: 'Imágenes JPEG, PNG o WebP'}
 			</span>
 			<input
 				type="file"
 				multiple
-				accept={categoria === 'general' ? TIPOS_ARCHIVO : SOLO_IMAGENES}
+				accept={categoria === 'general' ? TIPOS_ARCHIVO : esFotos ? ACEPTA_FOTOS : SOLO_IMAGENES}
 				class="absolute inset-0 cursor-pointer opacity-0"
 				disabled={subiendo}
 				onchange={(e) => {
@@ -137,6 +166,28 @@
 				}}
 			/>
 		</label>
+		{#if categoria !== 'portada'}
+			<label
+				class={[
+					'btn hidden w-full btn-outline btn-primary pointer-coarse:inline-flex',
+					subiendo && 'btn-disabled'
+				]}
+			>
+				<Icono nombre="camara" class="size-5" />
+				Sacar foto
+				<input
+					type="file"
+					accept="image/*"
+					capture="environment"
+					class="hidden"
+					disabled={subiendo}
+					onchange={(e) => {
+						const entrada = e.currentTarget;
+						void subir(entrada.files).then(() => (entrada.value = ''));
+					}}
+				/>
+			</label>
+		{/if}
 	{/if}
 
 	{#if adjuntos.length}
@@ -182,7 +233,7 @@
 						{#if adjunto.categoria === 'plano' && categoria !== 'plano'}
 							<span class="badge badge-soft badge-xs badge-info">Plano</span>
 						{/if}
-						{#if propio}
+						{#if propio && !soloLectura}
 							<Can modulo={MODULOS[adjunto.propietario.tipo]} accion="edit">
 								<MenuDesplegable
 									alFinal
@@ -228,7 +279,13 @@
 	{:else}
 		<p class="text-sm text-base-content/60">{vacio}</p>
 	{/if}
-</Seccion>
+{/snippet}
+
+{#if seccion}
+	<Seccion {titulo} {descripcion}>{@render contenido()}</Seccion>
+{:else}
+	<div class="flex flex-col gap-3">{@render contenido()}</div>
+{/if}
 
 {#if ampliada}
 	<dialog

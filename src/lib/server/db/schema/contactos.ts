@@ -1,5 +1,13 @@
 import { boolean, integer, pgTable, serial, text, uniqueIndex } from 'drizzle-orm/pg-core';
-import { actualizado, aislamiento, creado, empresa, importe, porcentaje } from './base';
+import {
+	actualizado,
+	aislamiento,
+	creado,
+	datosEntrega,
+	empresa,
+	importe,
+	porcentaje
+} from './base';
 
 export const contactos = pgTable(
 	'contactos',
@@ -20,6 +28,7 @@ export const contactos = pgTable(
 		numero: text('numero'),
 		piso: text('piso'),
 		departamento: text('departamento'),
+		...datosEntrega(),
 		es_cliente: boolean('es_cliente').default(false),
 		es_distribuidor: boolean('es_distribuidor').default(false),
 		porcentaje_compensacion: porcentaje('porcentaje_compensacion').default(0),

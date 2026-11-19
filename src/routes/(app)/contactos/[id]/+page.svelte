@@ -11,6 +11,7 @@
 		Seccion
 	} from '$lib/ui';
 	import FormDireccion from '$lib/ui/FormDireccion.svelte';
+	import FormEntregaContacto from '$lib/modulos/contactos/componentes/FormEntregaContacto.svelte';
 	import {
 		actualizarContacto,
 		eliminarContacto,
@@ -228,8 +229,9 @@
 				</div>
 			</fieldset>
 			<FormDireccion {form} initialData={contacto} disabled={!editando} />
-			<FormErrors {form} />
 		</div>
+		<FormEntregaContacto campos={form.fields} inicial={contacto} disabled={!editando} />
+		<FormErrors {form} />
 	</form>
 
 	<Seccion titulo="Historial de pedidos">

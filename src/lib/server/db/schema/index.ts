@@ -24,6 +24,7 @@ export * from './pedidos';
 export * from './fabricacion';
 export * from './stock';
 export * from './adjuntos';
+export * from './recepciones';
 export * from './sistema';
 
 export type Usuario = typeof usuarios.$inferSelect;

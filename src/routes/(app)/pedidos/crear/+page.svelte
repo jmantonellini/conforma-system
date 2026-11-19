@@ -12,6 +12,7 @@
 	import ContactoRapido from '$lib/modulos/contactos/componentes/ContactoRapido.svelte';
 	import SearchSelect from '$lib/ui/SearchSelect.svelte';
 	import FormFieldWrapper from '$lib/ui/FormFieldWrapper.svelte';
+	import { ETIQUETA_TIPO_TRABAJO, TIPOS_TRABAJO } from '$lib/modulos/ventas/trabajo';
 	import { FormActions, FormErrors, PageLayout } from '$lib/ui';
 	import { toast } from '$lib/ui/toast.svelte';
 	import { Paths } from '$lib/tipos';
@@ -402,6 +403,18 @@
 						{/if}
 					</FormFieldWrapper>
 				{/if}
+
+				<FormFieldWrapper label="Tipo de trabajo" id="tipo_trabajo">
+					<select
+						id="tipo_trabajo"
+						class="select select-sm"
+						{...form.fields.tipo_trabajo.as('select', 'fabricacion')}
+					>
+						{#each TIPOS_TRABAJO as tipo (tipo)}
+							<option value={tipo}>{ETIQUETA_TIPO_TRABAJO[tipo]}</option>
+						{/each}
+					</select>
+				</FormFieldWrapper>
 
 				<FormFieldWrapper label="Moneda" id="moneda">
 					<select

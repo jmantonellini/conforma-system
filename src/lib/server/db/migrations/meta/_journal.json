@@ -64,6 +64,13 @@
 			"when": 1794858914718,
 			"tag": "0008_pagos_en_pesos",
 			"breakpoints": true
+		},
+		{
+			"idx": 9,
+			"version": "7",
+			"when": 1795116837116,
+			"tag": "0009_reparaciones_y_entregas",
+			"breakpoints": true
 		}
 	]
 }

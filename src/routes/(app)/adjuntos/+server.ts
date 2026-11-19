@@ -15,6 +15,7 @@ import { eliminarObjeto, guardarObjeto } from '$lib/server/almacenamiento';
 import {
 	ACCION_ADJUNTO,
 	ENTIDAD_ADJUNTO,
+	type CategoriaAdjunto,
 	type TipoEntidadAdjunto
 } from '$lib/modulos/adjuntos/tipos';
 import { ENTIDADES_ADJUNTO } from '$lib/modulos/adjuntos/adjuntos.server';
@@ -32,6 +33,7 @@ const TIPOS_ARCHIVO = {
 	'audio/wav': '.wav',
 	'audio/x-wav': '.wav',
 	'video/mp4': '.mp4',
+	'video/quicktime': '.mov',
 	'application/pdf': '.pdf'
 };
 
@@ -50,6 +52,18 @@ async function requirePermiso(
 		if (!permiteCrear || accion !== ACCION_ADJUNTO.CREAR) throw error;
 		await requirePermission(tipo, ACCION_ADJUNTO.CREAR);
 	}
+}
+
+const CATEGORIAS_FOTOS: CategoriaAdjunto[] = ['recepcion', 'despacho'];
+
+function categoriaPermitida(tipo: TipoEntidadAdjunto, pedida: FormDataEntryValue | null) {
+	const permitidas: Partial<Record<TipoEntidadAdjunto, CategoriaAdjunto[]>> = {
+		[ENTIDAD_ADJUNTO.PRODUCTO]: ['plano', 'portada'],
+		[ENTIDAD_ADJUNTO.COTIZACION]: ['recepcion'],
+		[ENTIDAD_ADJUNTO.PEDIDO]: ['recepcion', 'despacho']
+	};
+	const categoria = pedida as CategoriaAdjunto;
+	return permitidas[tipo]?.includes(categoria) ? categoria : 'general';
 }
 
 async function entidadExiste(tipo: TipoEntidadAdjunto, id: number) {
@@ -87,12 +101,7 @@ export async function POST({ request }) {
 	const archivos = formData
 		.getAll('archivos')
 		.filter((archivo): archivo is File => archivo instanceof File && archivo.size > 0);
-	const categoriaPedida = formData.get('categoria');
-	const categoria =
-		tipo === ENTIDAD_ADJUNTO.PRODUCTO &&
-		(categoriaPedida === 'plano' || categoriaPedida === 'portada')
-			? categoriaPedida
-			: 'general';
+	const categoria = categoriaPermitida(tipo, formData.get('categoria'));
 	if (categoria === 'portada' && archivos.length !== 1) {
 		return json({ error: 'La portada es una sola imagen' }, { status: 400 });
 	}
@@ -112,10 +121,17 @@ export async function POST({ request }) {
 			resultados.push({ nombre: archivo.name, error: 'Archivo muy grande (máx. 25 MB)' });
 			continue;
 		}
-		if (categoria !== 'general' && !archivo.type.startsWith('image/')) {
+		const esFoto = CATEGORIAS_FOTOS.includes(categoria);
+		if (
+			categoria !== 'general' &&
+			!archivo.type.startsWith('image/') &&
+			!(esFoto && archivo.type.startsWith('video/'))
+		) {
 			resultados.push({
 				nombre: archivo.name,
-				error: 'Planos y portada deben ser imágenes JPEG, PNG o WebP'
+				error: esFoto
+					? 'Subí fotos (JPEG, PNG o WebP) o videos MP4 o MOV'
+					: 'Planos y portada deben ser imágenes JPEG, PNG o WebP'
 			});
 			continue;
 		}

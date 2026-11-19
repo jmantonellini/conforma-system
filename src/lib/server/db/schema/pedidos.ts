@@ -15,13 +15,15 @@ import {
 	aislamiento,
 	cantidad,
 	creado,
+	datosEntrega,
 	empresa,
 	fecha,
 	importe,
 	moneda,
 	porcentaje,
 	precioUnitario,
-	tipoCambio
+	tipoCambio,
+	tipoTrabajo
 } from './base';
 import { MONEDAS } from '$lib/utils/moneda';
 import { usuarios } from './acceso';
@@ -62,6 +64,8 @@ export const pedidos = pgTable(
 		creado_por: integer('creado_por').references(() => usuarios.id, { onDelete: 'set null' }),
 		observaciones: text('observaciones'),
 		factura: text('factura'),
+		tipo_trabajo: tipoTrabajo(),
+		...datosEntrega(),
 		created_at: creado(),
 		updated_at: actualizado()
 	},

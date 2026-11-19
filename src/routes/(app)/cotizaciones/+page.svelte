@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { ETIQUETA_TIPO_TRABAJO, TIPO_TRABAJO_COLOR } from '$lib/modulos/ventas/trabajo';
 	import { resolve } from '$app/paths';
 	import { page } from '$app/state';
 	import {
@@ -73,6 +74,11 @@
 			<a class="enlace-fila font-mono" href={resolve(`/cotizaciones/${cot.id}`)}>
 				<Highlight text={cot.numero_cotizacion} query={busqueda} />
 			</a>
+			{#if cot.tipo_trabajo !== 'fabricacion'}
+				<span class={['badge badge-soft badge-xs', TIPO_TRABAJO_COLOR[cot.tipo_trabajo]]}>
+					{ETIQUETA_TIPO_TRABAJO[cot.tipo_trabajo]}
+				</span>
+			{/if}
 		</td>
 		<td>
 			<p class="font-medium"><Highlight text={cot.cliente_nombre || '-'} query={busqueda} /></p>

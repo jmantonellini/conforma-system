@@ -52,6 +52,8 @@ import {
 	reservarStockParaLineaTx
 } from '$lib/modulos/stock/stock.server';
 import { siguienteNumero } from '$lib/server/db/numeracion';
+import { columnasEntrega } from './entrega.server';
+import { ENTREGA_VACIA, TIPOS_TRABAJO, resolverEntrega } from '$lib/modulos/ventas/trabajo';
 import type { MaterialSnapshot } from '$lib/modulos/ventas/tipos';
 import { historialAuditoria } from '$lib/server/auditoria';
 import { monedaParaDocumento } from '$lib/modulos/ventas/moneda.server';
@@ -122,7 +124,8 @@ export const PedidoSchema = v.object({
 	anticipo: v.optional(v.pipe(v.number(), v.toMinValue(0)), 0),
 	moneda: v.optional(v.picklist(MONEDAS), 'USD'),
 	tipo_cambio: v.optional(v.pipe(v.number(), v.minValue(0))),
-	observaciones: v.optional(v.string())
+	observaciones: v.optional(v.string()),
+	tipo_trabajo: v.optional(v.picklist(TIPOS_TRABAJO), 'fabricacion')
 });
 
 export type NuevoPedido = v.InferOutput<typeof PedidoSchema>;
@@ -153,6 +156,9 @@ export async function obtenerPedidoDetalle(id: number) {
 			fecha_entrega_prometida: pedidos.fecha_entrega_prometida,
 			observaciones: pedidos.observaciones,
 			factura: pedidos.factura,
+			tipo_trabajo: pedidos.tipo_trabajo,
+			entrega_propia: columnasEntrega(pedidos),
+			entrega_cliente: columnasEntrega(contactos),
 			anticipo: pedidos.anticipo,
 			total: pedidos.precio_total,
 			moneda: pedidos.moneda,
@@ -246,9 +252,11 @@ export async function obtenerPedidoDetalle(id: number) {
 	}));
 	const ordenes = lineas.flatMap((linea) => (linea.orden_id ? [linea.orden_id] : []));
 
+	const { entrega_propia, entrega_cliente, ...datosPedido } = pedido;
 	return {
 		pedido: {
-			...pedido,
+			...datosPedido,
+			entrega: resolverEntrega(entrega_propia ?? ENTREGA_VACIA, entrega_cliente),
 			transiciones,
 			navegacion: {
 				cotizacion_id: cotizacion?.id ?? null,
@@ -320,6 +328,9 @@ export async function getPedidosListado({
 					join ${estados} on ${estados.id} = ${unidades_fabricacion.estado_id}
 					where ${lineas_pedido.pedido_id} = ${pedidos.id}
 				)`,
+				tipo_trabajo: pedidos.tipo_trabajo,
+				entrega_propia: columnasEntrega(pedidos),
+				entrega_cliente: columnasEntrega(contactos),
 				estado_id: pedidos.estado_id,
 				estado_slug: estados.slug,
 				estado_nombre: estados.nombre,
@@ -341,7 +352,15 @@ export async function getPedidosListado({
 			.where(where)
 	]);
 
-	return { data, total, totalPages: Math.ceil(total / limit), currentPage: page };
+	return {
+		data: data.map(({ entrega_propia, entrega_cliente, ...pedido }) => ({
+			...pedido,
+			faltan_entrega: resolverEntrega(entrega_propia ?? ENTREGA_VACIA, entrega_cliente).faltan
+		})),
+		total,
+		totalPages: Math.ceil(total / limit),
+		currentPage: page
+	};
 }
 
 type EventoHistorial = {
@@ -526,7 +545,8 @@ export async function crearPedidoServicio(data: NuevoPedido, usuarioId: number) 
 				moneda: documento.moneda,
 				tipo_cambio: documento.tipo_cambio,
 				anticipo,
-				observaciones: data.observaciones
+				observaciones: data.observaciones,
+				tipo_trabajo: data.tipo_trabajo
 			})
 			.returning();
 

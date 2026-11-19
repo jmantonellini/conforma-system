@@ -11,7 +11,7 @@ export const ENTIDAD_ADJUNTO = Object.freeze({
 } as const);
 export type TipoEntidadAdjunto = (typeof ENTIDAD_ADJUNTO)[keyof typeof ENTIDAD_ADJUNTO];
 
-export type CategoriaAdjunto = 'general' | 'plano' | 'portada';
+export type CategoriaAdjunto = 'general' | 'plano' | 'portada' | 'recepcion' | 'despacho';
 
 export type Adjunto = {
 	id: number;
@@ -25,3 +25,6 @@ export type Adjunto = {
 		id: number;
 	};
 };
+
+export const esFotoDeControl = (adjunto: Pick<Adjunto, 'categoria'>) =>
+	adjunto.categoria === 'recepcion' || adjunto.categoria === 'despacho';

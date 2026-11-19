@@ -21,6 +21,16 @@
 	import { formatearMoneda } from '$lib/utils/precios';
 	import { can } from '$lib/utils/permissions';
 	import PedidoEnvios from './PedidoEnvios.svelte';
+	import PedidoEntrega from './PedidoEntrega.svelte';
+	import { cambiarTipoTrabajoPedido } from '$lib/modulos/pedidos/entrega.remote';
+	import {
+		ETIQUETA_TIPO_TRABAJO,
+		TIPOS_TRABAJO,
+		recibePiezaDelCliente,
+		type TipoTrabajo
+	} from '$lib/modulos/ventas/trabajo';
+	import RecepcionPieza from '$lib/modulos/recepciones/componentes/RecepcionPieza.svelte';
+	import { esFotoDeControl } from '$lib/modulos/adjuntos/tipos';
 	import PedidoPagos from './PedidoPagos.svelte';
 	import FacturaDialog from './FacturaDialog.svelte';
 	import ArchivosAdjuntos from '$lib/modulos/adjuntos/componentes/ArchivosAdjuntos.svelte';
@@ -43,6 +53,10 @@
 		veImportes &&
 			can(page.data.user, page.data.permisos, 'pedidos', 'edit') &&
 			pedido.estado.slug !== PEDIDO_SLUG.CANCELADO
+	);
+	const fotosDespacho = $derived(adjuntos.filter((adjunto) => adjunto.categoria === 'despacho'));
+	const despachable = $derived(
+		pedido.estado.slug === PEDIDO_SLUG.COMPLETADO || pedido.estado.slug === PEDIDO_SLUG.ENTREGADO
 	);
 	let dialogoMoneda = $state<CambiarMonedaDialog>();
 	let dialogoFactura = $state<FacturaDialog>();
@@ -76,6 +90,15 @@
 			toast.success(`Pedido ${destino_nombre.toLowerCase()}`);
 		} catch (error) {
 			toast.error(mensajeError(error, 'No se pudo cambiar el estado'));
+		}
+	}
+
+	async function cambiarTipo(tipo: TipoTrabajo) {
+		try {
+			await cambiarTipoTrabajoPedido({ id: pedido.id, tipo });
+			toast.success(`Pedido marcado como ${ETIQUETA_TIPO_TRABAJO[tipo].toLowerCase()}`);
+		} catch (error) {
+			toast.error(mensajeError(error, 'No se pudo cambiar el tipo de trabajo'));
 		}
 	}
 
@@ -127,6 +150,25 @@
 			<div>
 				<dt>Fecha</dt>
 				<dd>{formatearFecha(pedido.fecha)}</dd>
+			</div>
+			<div>
+				<dt>Tipo de trabajo</dt>
+				<dd>
+					{#if can(page.data.user, page.data.permisos, 'pedidos', 'edit') && !pedido.estado.es_final}
+						<select
+							class="select w-auto select-sm"
+							aria-label="Tipo de trabajo"
+							value={pedido.tipo_trabajo}
+							onchange={(e) => cambiarTipo(e.currentTarget.value as TipoTrabajo)}
+						>
+							{#each TIPOS_TRABAJO as tipo (tipo)}
+								<option value={tipo}>{ETIQUETA_TIPO_TRABAJO[tipo]}</option>
+							{/each}
+						</select>
+					{:else}
+						{ETIQUETA_TIPO_TRABAJO[pedido.tipo_trabajo]}
+					{/if}
+				</dd>
 			</div>
 			{#if pedido.fecha_entrega_prometida}
 				<div>
@@ -276,12 +318,41 @@
 
 	<div class="grid items-start gap-4 sm:gap-6 lg:grid-cols-3">
 		<div class="flex min-w-0 flex-col gap-4 sm:gap-6 lg:col-span-2">
-			<ArchivosAdjuntos tipo="pedido" entidadId={pedido.id} {adjuntos} />
+			<RecepcionPieza
+				cotizacionId={pedido.navegacion.cotizacion_id}
+				pedidoId={pedido.id}
+				dueno={{ tipo: 'pedido', id: pedido.id }}
+				{adjuntos}
+				esperada={recibePiezaDelCliente(pedido.tipo_trabajo)}
+			/>
+			<ArchivosAdjuntos
+				tipo="pedido"
+				entidadId={pedido.id}
+				adjuntos={adjuntos.filter((adjunto) => !esFotoDeControl(adjunto))}
+			/>
+			{#if fotosDespacho.length || despachable}
+				<ArchivosAdjuntos
+					tipo="pedido"
+					entidadId={pedido.id}
+					adjuntos={fotosDespacho}
+					categoria="despacho"
+					titulo="Fotos del despacho"
+					descripcion="Cómo salió el pedido: embalaje y estado, como respaldo ante reclamos."
+					vacio="Sin fotos del despacho."
+				/>
+			{/if}
 		</div>
 
 		<div class="flex min-w-0 flex-col gap-4 sm:gap-6">
 			{#if veImportes}<PedidoPagos pedidoId={pedido.id} />{/if}
-			<Can modulo="envios"><PedidoEnvios pedidoId={pedido.id} /></Can>
+			<PedidoEntrega
+				pedidoId={pedido.id}
+				entrega={pedido.entrega}
+				finalizado={pedido.estado.es_final ?? false}
+			/>
+			<Can modulo="envios">
+				<PedidoEnvios pedidoId={pedido.id} transportista={pedido.entrega.datos.transportista} />
+			</Can>
 			<Seccion titulo="Historial">
 				<Historial eventos={historial} />
 			</Seccion>

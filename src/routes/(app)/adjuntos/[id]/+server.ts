@@ -22,7 +22,10 @@ export async function GET({ params }) {
 	try {
 		await requirePermission(ENTIDADES_ADJUNTO[owner.tipo].modulo, 'view');
 	} catch (cause) {
-		if (owner.tipo !== 'producto' || adjunto.categoria === 'general') throw cause;
+		const visibleEnTaller =
+			adjunto.categoria === 'recepcion' ||
+			(owner.tipo === 'producto' && adjunto.categoria !== 'general');
+		if (!visibleEnTaller) throw cause;
 		await requirePermission(ENTIDADES_ADJUNTO.fabricacion.modulo, 'view');
 	}
 

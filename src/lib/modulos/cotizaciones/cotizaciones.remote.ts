@@ -21,6 +21,8 @@ import { resolverLineaComercial } from '$lib/modulos/ventas/lineas.server';
 import { cambiarMonedaTx, dolarBNA } from '$lib/modulos/ventas/moneda.server';
 import { CambioMonedaSchema } from '$lib/modulos/ventas/moneda.schema';
 import { factorDesdeUsd } from '$lib/utils/moneda';
+import { registrarAuditoria } from '$lib/server/auditoria';
+import { ETIQUETA_TIPO_TRABAJO, TIPOS_TRABAJO } from '$lib/modulos/ventas/trabajo';
 import {
 	estadoPorSlug,
 	registrarCambioEstado,
@@ -161,6 +163,7 @@ export const crearCotizacion = form(CotizacionSchema, async (data) => {
 				contacto_id: data.contacto_id,
 				contacto_distribuidor_id: data.contacto_distribuidor_id || null,
 				canal: data.canal,
+				tipo_trabajo: data.tipo_trabajo,
 				descripcion: data.descripcion,
 				observaciones: data.observaciones || null,
 				asignada_a: asignadaA,
@@ -427,6 +430,7 @@ export const convertirCotizacionAPedido = command(v.number(), async (cotizacionI
 				precio_total: precioTotal,
 				moneda: cotizacion.moneda,
 				tipo_cambio: cotizacion.tipo_cambio,
+				tipo_trabajo: cotizacion.tipo_trabajo,
 				creado_por: user.id,
 				observaciones: [
 					`Generado desde cotización ${cotizacion.numero_cotizacion}.`,
@@ -513,3 +517,31 @@ export const cambiarMonedaCotizacion = command(CambioMonedaSchema, async (cambio
 	getHistorialCotizacion(cambio.id).refresh();
 	return { success: true };
 });
+
+export const cambiarTipoTrabajoCotizacion = command(
+	v.object({ id: v.number(), tipo: v.picklist(TIPOS_TRABAJO) }),
+	async ({ id, tipo }) => {
+		const user = await requirePermission('cotizaciones', 'edit');
+		await db.transaction(async (tx) => {
+			const cotizacion = await bloquearCotizacion(tx, id);
+			if (cotizacion.tipo_trabajo === tipo) return;
+			await tx.update(cotizaciones).set({ tipo_trabajo: tipo }).where(eq(cotizaciones.id, id));
+			if (cotizacion.pedido_id) {
+				await tx
+					.update(pedidos)
+					.set({ tipo_trabajo: tipo })
+					.where(eq(pedidos.id, cotizacion.pedido_id));
+			}
+			await registrarAuditoria(tx, {
+				entidad: 'cotizacion',
+				entidadId: id,
+				usuarioId: user.id,
+				accion: 'tipo_trabajo',
+				detalle: `${ETIQUETA_TIPO_TRABAJO[cotizacion.tipo_trabajo]} → ${ETIQUETA_TIPO_TRABAJO[tipo]}`
+			});
+		});
+		refrescarCotizacion(id);
+		getHistorialCotizacion(id).refresh();
+		return { success: true };
+	}
+);

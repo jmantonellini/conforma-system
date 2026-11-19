@@ -6,7 +6,7 @@ import { ordenes_fabricacion } from './fabricacion';
 import { pedidos } from './pedidos';
 import { productos } from './productos';
 
-export const CATEGORIAS_ADJUNTO = ['general', 'plano', 'portada'] as const;
+export const CATEGORIAS_ADJUNTO = ['general', 'plano', 'portada', 'recepcion', 'despacho'] as const;
 
 export const adjuntos = pgTable(
 	'adjuntos',

@@ -1,4 +1,5 @@
 import * as v from 'valibot';
+import { TIPOS_TRABAJO } from '$lib/modulos/ventas/trabajo';
 
 export const LineaCotizacionSchema = v.object({
 	visible_cliente: v.optional(v.boolean(), true),
@@ -40,6 +41,7 @@ export const CotizacionSchema = v.object({
 	),
 	contacto_distribuidor_id: v.optional(v.pipe(v.string(), v.transform(Number), v.number())),
 	canal: v.optional(v.string(), 'whatsapp'),
+	tipo_trabajo: v.optional(v.picklist(TIPOS_TRABAJO), 'fabricacion'),
 	descripcion: v.pipe(v.string(), v.nonEmpty('Describí la consulta recibida')),
 	observaciones: v.optional(v.string()),
 	asignada_a: v.optional(v.pipe(v.string(), v.transform(Number), v.number()))
