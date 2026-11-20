@@ -4,6 +4,7 @@
 	import { page } from '$app/state';
 	import {
 		cambiarEstadoUnidad,
+		reabrirUnidad,
 		reanudarUnidad,
 		eliminarOrdenFabricacion
 	} from '$lib/modulos/fabricacion/fabricacion.remote';
@@ -47,6 +48,7 @@
 	import ConsumoLote from '$lib/modulos/insumos/componentes/ConsumoLote.svelte';
 	import { can } from '$lib/utils/permissions';
 	import InsumosMovimientosTabla from '$lib/modulos/insumos/componentes/InsumosMovimientosTabla.svelte';
+	import EditarOrden from '$lib/modulos/fabricacion/componentes/EditarOrden.svelte';
 
 	let { params } = $props();
 	const id = $derived(Number(params.id));
@@ -56,6 +58,8 @@
 
 	const puedeVerMovimientos = can(page.data.user, page.data.permisos, 'insumos', 'view');
 	const puedeEditarInsumos = can(page.data.user, page.data.permisos, 'insumos', 'edit');
+	const puedeEditar = can(page.data.user, page.data.permisos, 'fabricacion', 'edit');
+	let edicion = $state<EditarOrden>();
 	const empleados = $derived(puedeEditarInsumos ? await getEmpleadosOpciones() : []);
 	const movimientos = $derived(
 		puedeVerMovimientos ? await getMovimientosInsumos({ orden_id: id, limit: 100 }) : []
@@ -72,6 +76,8 @@
 	let ocupado = $state(false);
 	let unidadAPausar = $state<{ id: number; estadoId: number } | null>(null);
 	let motivoPausa = $state('');
+	let unidadAReabrir = $state<{ id: number; serie: string } | null>(null);
+	let motivoReapertura = $state('');
 
 	async function ejecutar(accion: () => Promise<unknown>, exito: string) {
 		if (ocupado) return;
@@ -104,6 +110,18 @@
 		motivoPausa = '';
 	}
 
+	async function confirmarReapertura() {
+		if (!unidadAReabrir) return;
+		if (!motivoReapertura.trim()) return toast.error('Contá por qué se reabre');
+		const unidad = unidadAReabrir;
+		await ejecutar(
+			() => reabrirUnidad({ unidad_id: String(unidad.id), motivo: motivoReapertura.trim() }),
+			`Unidad ${unidad.serie} de nuevo en producción`
+		);
+		unidadAReabrir = null;
+		motivoReapertura = '';
+	}
+
 	async function eliminar() {
 		await eliminarOrdenFabricacion(String(orden.id)).updates(getOrdenesFabricacion);
 		toast.success('Orden eliminada');
@@ -127,6 +145,9 @@
 		}}
 	>
 		{#snippet acciones()}
+			{#if puedeEditar}
+				<button class="btn btn-sm" onclick={() => edicion?.abrir()}>Editar</button>
+			{/if}
 			<a
 				class="btn btn-sm"
 				href={resolve(`/fabricacion/${orden.id}/pdf`)}
@@ -194,7 +215,16 @@
 				<td class="text-sm text-base-content/70">{unidad.comentario_estado ?? ''}</td>
 				<td>
 					<div class="flex flex-wrap justify-end gap-1">
-						{#if unidad.esta_pausada}
+						{#if unidad.estado.es_final}
+							{#if puedeEditar}
+								<button
+									class="btn btn-ghost btn-xs"
+									disabled={ocupado}
+									onclick={() => (unidadAReabrir = { id: unidad.id, serie: unidad.numero_serie })}
+									>Reabrir</button
+								>
+							{/if}
+						{:else if unidad.esta_pausada}
 							<button
 								class="btn btn-xs"
 								disabled={ocupado}
@@ -241,6 +271,14 @@
 						<a class="btn btn-sm" href={resolve(`/productos/${orden.producto.id}`)}>Ver producto</a>
 					{/if}
 				{/snippet}
+				{#if orden.observaciones}
+					<div>
+						<h3 class="mb-1 text-sm font-medium text-base-content/60">Especificaciones técnicas</h3>
+						<p class="rounded-box border border-base-300 p-3 text-sm whitespace-pre-line">
+							{orden.observaciones}
+						</p>
+					</div>
+				{/if}
 				<AtributosResumen grupos={orden.atributos} />
 				{#if orden.producto?.notas_fabricacion}
 					<p class="rounded-box bg-base-200/60 p-3 text-sm whitespace-pre-line">
@@ -337,6 +375,23 @@
 </Modal>
 
 <Modal
+	open={unidadAReabrir !== null}
+	titulo="Reabrir unidad {unidadAReabrir?.serie ?? ''}"
+	descripcion="Vuelve a En producción. Si el pedido había pasado a Completado, vuelve a En producción también."
+	alCerrar={() => (unidadAReabrir = null)}
+	accion={{ etiqueta: 'Reabrir', pendiente: ocupado, onclick: confirmarReapertura }}
+>
+	<FormFieldWrapper id="motivo-reapertura" label="Motivo" required>
+		<textarea
+			id="motivo-reapertura"
+			class="textarea"
+			rows="3"
+			bind:value={motivoReapertura}
+			placeholder="Ej.: se marcó como terminada por error"></textarea>
+	</FormFieldWrapper>
+</Modal>
+
+<Modal
 	bind:open={preparando}
 	titulo={`Preparar insumos · OF-${orden.id}`}
 	descripcion="Se registra como un solo consumo, a nombre del empleado que retira."
@@ -359,3 +414,7 @@
 		onRegistrado={() => (preparando = false)}
 	/>
 </Modal>
+
+{#if puedeEditar}
+	<EditarOrden bind:this={edicion} {orden} />
+{/if}

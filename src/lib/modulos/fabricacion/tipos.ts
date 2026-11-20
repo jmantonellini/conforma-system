@@ -5,6 +5,8 @@ export const FABRICACION_GRUPO = {
 	FINAL: 'final'
 } as const;
 
+export const ESTADO_INICIAL_FABRICACION = 'preparando_material';
+
 export const ESTADO_FABRICACION = Object.freeze({
 	PAUSADO: 'pausado',
 	EN_PRODUCCION: 'en_produccion',

@@ -2,7 +2,7 @@ import { and, desc, eq, inArray } from 'drizzle-orm';
 import { db, type Tx } from '$lib/server/db';
 import { empleados, logs_sistema, usuarios } from '$lib/server/db/schema';
 
-export type EntidadAuditada = 'cotizacion' | 'pedido';
+export type EntidadAuditada = 'cotizacion' | 'pedido' | 'orden_fabricacion';
 export type AccionAuditada =
 	| 'edicion'
 	| 'moneda'
@@ -11,7 +11,8 @@ export type AccionAuditada =
 	| 'pago_eliminado'
 	| 'entrega'
 	| 'tipo_trabajo'
-	| 'recepcion';
+	| 'recepcion'
+	| 'producto';
 
 export const TITULO_ACCION: Record<AccionAuditada, string> = {
 	edicion: 'Datos editados',
@@ -21,7 +22,8 @@ export const TITULO_ACCION: Record<AccionAuditada, string> = {
 	pago_eliminado: 'Pago eliminado',
 	entrega: 'Datos de entrega',
 	tipo_trabajo: 'Tipo de trabajo cambiado',
-	recepcion: 'Pieza del cliente recibida'
+	recepcion: 'Pieza del cliente recibida',
+	producto: 'Producto cambiado'
 };
 
 export async function registrarAuditoria(

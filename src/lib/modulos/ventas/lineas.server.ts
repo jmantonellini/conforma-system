@@ -82,6 +82,41 @@ async function componerDesdeInsumos(
 	});
 }
 
+type ProductoConReceta = Awaited<ReturnType<typeof getProductoConRecetaService>>;
+
+export function snapshotReceta(
+	producto: ProductoConReceta,
+	enMoneda: (valorUsd: number | null | undefined) => number
+): MaterialSnapshot[] {
+	return producto.recetaDirecta.map((material) => {
+		if (material.insumo_id) {
+			const insumo = producto.receta.find((item) => item.insumo_id === material.insumo_id);
+			const costo_unitario = enMoneda(insumo?.costo_unitario);
+			return {
+				insumo_id: material.insumo_id,
+				codigo: insumo?.codigo ?? null,
+				nombre: insumo?.nombre ?? 'Insumo',
+				cantidad: material.cantidad,
+				costo_unitario,
+				unidad: insumo?.unidad ?? '',
+				subtotal: redondearPrecio(material.cantidad * costo_unitario)
+			};
+		}
+
+		const componente = producto.componentes.find(
+			(item) => item.componente_id === material.producto_id
+		);
+		return {
+			producto_id: material.producto_id ?? null,
+			nombre: `${componente?.nombre ?? 'Componente'} (${material.cantidad}x)`,
+			cantidad: material.cantidad,
+			unidad: 'subproducto',
+			costo_unitario: 0,
+			subtotal: 0
+		};
+	});
+}
+
 export async function resolverLineaComercial(
 	tx: Tx,
 	linea: LineaComercialEntrada,
@@ -136,33 +171,7 @@ export async function resolverLineaComercial(
 				receta: asociados.map(({ insumo_id, cantidad }) => ({ insumo_id, cantidad }))
 			});
 		} else {
-			insumos_snapshot = producto.recetaDirecta.map((material) => {
-				if (material.insumo_id) {
-					const insumo = producto.receta.find((item) => item.insumo_id === material.insumo_id);
-					const costo_unitario = enMoneda(insumo?.costo_unitario);
-					return {
-						insumo_id: material.insumo_id,
-						codigo: insumo?.codigo ?? null,
-						nombre: insumo?.nombre ?? 'Insumo',
-						cantidad: material.cantidad,
-						costo_unitario,
-						unidad: insumo?.unidad ?? '',
-						subtotal: redondearPrecio(material.cantidad * costo_unitario)
-					};
-				}
-
-				const componente = producto.componentes.find(
-					(item) => item.componente_id === material.producto_id
-				);
-				return {
-					producto_id: material.producto_id ?? null,
-					nombre: `${componente?.nombre ?? 'Componente'} (${material.cantidad}x)`,
-					cantidad: material.cantidad,
-					unidad: 'subproducto',
-					costo_unitario: 0,
-					subtotal: 0
-				};
-			});
+			insumos_snapshot = snapshotReceta(producto, enMoneda);
 		}
 	} else if (tipo === 'insumo') {
 		if (linea.nuevo_insumo) {

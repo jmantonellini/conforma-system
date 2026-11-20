@@ -21,6 +21,8 @@ import { requirePermission } from '$lib/server/auth/permissions';
 import { historialEstados, listarEstados, prioridadPorEstado } from '$lib/server/estados';
 import { listarAdjuntosRelacionados } from '$lib/modulos/adjuntos/adjuntos.server';
 import { estadoDeOrden, resumenOrdenes } from '$lib/modulos/fabricacion/fabricacion.server';
+import { historialAuditoria } from '$lib/server/auditoria';
+import { motivoProductoFijo } from './edicion.server';
 import {
 	getAtributosCategoriaService,
 	getProductoConRecetaService
@@ -232,6 +234,7 @@ export const getOrdenFabricacion = query(v.number(), async (id) => {
 		}),
 		getAtributosCategoriaService(trabajo?.producto?.categoria_id)
 	]);
+	const motivoProducto = await motivoProductoFijo(id, orden.linea_pedido_id);
 
 	const { pedido_id, pedido_numero, empleado_nombre, empleado_apellido, total_filas, ...datos } =
 		orden;
@@ -250,6 +253,8 @@ export const getOrdenFabricacion = query(v.number(), async (id) => {
 				}
 			: null,
 		descripcion_producto: trabajo?.descripcion ?? null,
+		producto_trabajo_id: trabajo?.producto_id ?? null,
+		motivo_producto_fijo: motivoProducto,
 		atributos: gruposConValor(
 			agruparAtributos(definiciones, { ...productoTrabajo?.atributos, ...trabajo?.atributos_linea })
 		),
@@ -279,9 +284,24 @@ export const getHistorialUnidades = query(v.number(), async (ordenId) => {
 		.select({ id: unidades_fabricacion.id, numero_serie: unidades_fabricacion.numero_serie })
 		.from(unidades_fabricacion)
 		.where(eq(unidades_fabricacion.orden_fabricacion_id, ordenId));
-	if (!unidades.length) return [];
 
 	const series = new Map(unidades.map((unidad) => [unidad.id, unidad.numero_serie]));
-	const historial = await historialEstados('fabricacion', [...series.keys()]);
-	return historial.map(({ entidad_id, ...log }) => ({ ...log, unidad: series.get(entidad_id) }));
+	const [historial, auditoria] = await Promise.all([
+		series.size ? historialEstados('fabricacion', [...series.keys()]) : [],
+		historialAuditoria('orden_fabricacion', [ordenId])
+	]);
+	return [
+		...historial.map(({ entidad_id, ...log }) => ({
+			...log,
+			id: `estado-${log.id}`,
+			unidad: series.get(entidad_id)
+		})),
+		...auditoria.map((registro) => ({
+			id: `auditoria-${registro.id}`,
+			fecha: registro.fecha,
+			titulo: registro.titulo,
+			detalle: registro.detalle,
+			empleado: registro.empleado
+		}))
+	].sort((a, b) => new Date(b.fecha ?? 0).getTime() - new Date(a.fecha ?? 0).getTime());
 });

@@ -27,3 +27,22 @@ export const CrearOrdenSchema = v.object({
 	asignado_a: v.optional(v.pipe(v.string(), v.transform(Number), v.number())),
 	observaciones: v.optional(v.string())
 });
+
+const idOpcional = v.nullable(v.pipe(v.number(), v.integer(), v.minValue(1)));
+
+export const EdicionOrdenSchema = v.object({
+	id: v.pipe(v.number(), v.integer(), v.minValue(1)),
+	nombre_trabajo: v.pipe(
+		v.string(),
+		v.trim(),
+		v.nonEmpty('Escribí el nombre del trabajo'),
+		v.maxLength(200, 'El nombre es demasiado largo')
+	),
+	observaciones: v.nullable(v.pipe(v.string(), v.maxLength(4000))),
+	prioridad: v.picklist([0, 1, 2]),
+	fecha_fin_estimada: v.nullable(v.pipe(v.string(), v.isoDate('Fecha inválida'))),
+	asignado_a: idOpcional,
+	producto_id: idOpcional
+});
+
+export type EdicionOrden = v.InferOutput<typeof EdicionOrdenSchema>;

@@ -11,7 +11,8 @@ import {
 	ordenes_fabricacion,
 	productos,
 	unidades_fabricacion,
-	lineas_pedido
+	lineas_pedido,
+	pedidos
 } from '$lib/server/db/schema';
 import { and, desc, eq, ne } from 'drizzle-orm';
 import { requirePermission } from '$lib/server/auth/permissions';
@@ -20,8 +21,11 @@ import { clavesAdjuntos, eliminarArchivos } from '$lib/modulos/adjuntos/adjuntos
 import { moverPedidoAutomatico } from '$lib/modulos/pedidos/pedidos.server';
 import { registrarIngresoProduccionTx } from '$lib/modulos/stock/stock.server';
 import { PEDIDO_SLUG } from '$lib/modulos/pedidos/tipos';
-import { CrearOrdenSchema } from './fabricacion.schema';
-import { getPedidos } from '../pedidos/pedidos.remote';
+import { fechaDesdeInput } from '$lib/utils/fechas';
+import { CrearOrdenSchema, EdicionOrdenSchema } from './fabricacion.schema';
+import { editarOrdenServicio } from './edicion.server';
+import { getHistorialPedido, getPedidoById, getPedidos } from '../pedidos/pedidos.remote';
+import { getPendientesReceta } from '../insumos/insumos.remote';
 import {
 	getOrdenFabricacion,
 	getOrdenesFabricacion,
@@ -70,7 +74,9 @@ export const crearOrdenFabricacion = form(CrearOrdenSchema, async (data) => {
 				es_para_stock: esParaStock,
 				cantidad_total: cantidadTotal,
 				prioridad: data.prioridad,
-				fecha_fin_estimada: data.fecha_fin_estimada ? new Date(data.fecha_fin_estimada) : null,
+				fecha_fin_estimada: data.fecha_fin_estimada
+					? fechaDesdeInput(data.fecha_fin_estimada)
+					: null,
 				asignado_a: data.asignado_a || null,
 				observaciones: data.observaciones
 			})
@@ -141,7 +147,32 @@ async function completarPedidoSiTermino(tx: Tx, ordenId: number, usuarioId: numb
 	});
 }
 
-async function cambiarEstado(unidadId: number, destinoId: number, comentario: string | undefined) {
+async function reabrirPedidoDeOrden(tx: Tx, ordenId: number, usuarioId: number, motivo: string) {
+	const [pedido] = await tx
+		.select({ id: pedidos.id, slug: estados.slug, numero: pedidos.numero_pedido })
+		.from(ordenes_fabricacion)
+		.innerJoin(lineas_pedido, eq(lineas_pedido.id, ordenes_fabricacion.linea_pedido_id))
+		.innerJoin(pedidos, eq(pedidos.id, lineas_pedido.pedido_id))
+		.innerJoin(estados, eq(estados.id, pedidos.estado_id))
+		.where(eq(ordenes_fabricacion.id, ordenId));
+	if (!pedido) return;
+	if (pedido.slug === PEDIDO_SLUG.ENTREGADO || pedido.slug === PEDIDO_SLUG.CANCELADO) {
+		error(409, `El pedido ${pedido.numero} ya está cerrado: no se puede reabrir la unidad`);
+	}
+	await moverPedidoAutomatico(tx, pedido.id, {
+		desde: [PEDIDO_SLUG.COMPLETADO],
+		hacia: PEDIDO_SLUG.EN_PRODUCCION,
+		usuarioId,
+		comentario: `OF-${ordenId} reabierta: ${motivo}`
+	});
+}
+
+async function cambiarEstado(
+	unidadId: number,
+	destinoId: number | null,
+	comentario: string | undefined,
+	reapertura = false
+) {
 	const user = await requirePermission('fabricacion', 'edit');
 
 	const ordenId = await db.transaction(async (tx) => {
@@ -169,9 +200,22 @@ async function cambiarEstado(unidadId: number, destinoId: number, comentario: st
 			.for('update', { of: unidades_fabricacion });
 		if (!unidad) error(404, `Unidad ${unidadId} no encontrada`);
 
-		const destino = await validarTransicion(tx, unidad.estado_id, destinoId);
+		let destino;
+		if (reapertura) {
+			const [origen] = await tx
+				.select({ es_final: estados.es_final })
+				.from(estados)
+				.where(eq(estados.id, unidad.estado_id));
+			if (!origen?.es_final) error(409, `La unidad ${unidad.numero_serie} no está terminada`);
+			destino = await estadoPorSlug('fabricacion', ESTADO_FABRICACION.EN_PRODUCCION, tx);
+		} else {
+			destino = await validarTransicion(tx, unidad.estado_id, destinoId!);
+		}
 		if (unidad.ingreso_stock && !destino.es_final) {
 			error(409, 'No se puede reabrir una unidad que ya ingresó al stock');
+		}
+		if (reapertura) {
+			await reabrirPedidoDeOrden(tx, unidad.orden_id, user.id, comentario ?? '');
 		}
 
 		await tx
@@ -230,6 +274,19 @@ export const cambiarEstadoUnidad = command(
 		cambiarEstado(unidad_id, estado_destino_id, comentario)
 );
 
+export const reabrirUnidad = command(
+	v.object({
+		unidad_id: idDesdeTexto,
+		motivo: v.pipe(
+			v.string(),
+			v.trim(),
+			v.nonEmpty('Contá por qué se reabre'),
+			v.maxLength(500, 'El motivo es demasiado largo')
+		)
+	}),
+	({ unidad_id, motivo }) => cambiarEstado(unidad_id, null, motivo, true)
+);
+
 export const reanudarUnidad = command(
 	v.object({ unidad_id: idDesdeTexto, comentario: v.optional(v.string()) }),
 	async ({ unidad_id, comentario }) => {
@@ -279,4 +336,34 @@ export const eliminarOrdenFabricacion = command(idDesdeTexto, async (id) => {
 	await eliminarArchivos(claves);
 	await requested(getOrdenesFabricacion, 5).refreshAll();
 	return { success: true };
+});
+
+export const editarOrdenFabricacion = command(EdicionOrdenSchema, async (data) => {
+	const user = await requirePermission('fabricacion', 'edit');
+	if (data.producto_id !== null) await requirePermission('pedidos', 'edit');
+	const { cambios, orden } = await editarOrdenServicio(data, user.id);
+	if (!orden) return { cambios };
+
+	if (orden.asignado_nuevo) {
+		await notificar(
+			{ empleados: [orden.asignado_nuevo] },
+			{
+				modulo: 'fabricacion',
+				titulo: `Te asignaron la OF-${orden.id}`,
+				mensaje: orden.nombre_trabajo,
+				link: `/fabricacion/${orden.id}`
+			},
+			{ actor: user.id }
+		);
+	}
+	getOrdenFabricacion(orden.id).refresh();
+	getHistorialUnidades(orden.id).refresh();
+	requested(getOrdenesFabricacion, 1).refreshAll();
+	if (orden.cambia_producto) getPendientesReceta(orden.id).refresh();
+	if (orden.pedido_id) {
+		getPedidoById(orden.pedido_id).refresh();
+		getHistorialPedido(orden.pedido_id).refresh();
+		requested(getPedidos, 1).refreshAll();
+	}
+	return { cambios };
 });
