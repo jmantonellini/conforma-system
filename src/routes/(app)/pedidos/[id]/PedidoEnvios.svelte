@@ -19,7 +19,7 @@
 	let envios = $derived(await getEnviosByPedido(pedidoId));
 
 	let showModal = $state(false);
-	const form = crearEnvio;
+	const form = $derived(crearEnvio.for(String(pedidoId)));
 
 	function cerrar() {
 		showModal = false;

@@ -22,15 +22,13 @@
 	import type { PageProps } from './$types';
 
 	let { data }: PageProps = $props();
-	const form = actualizarContacto;
+	const form = $derived(actualizarContacto.for(String(data.contacto.id)));
 	const contacto = $derived(data.contacto);
-	let distribuidorEditado = $state<boolean | undefined>();
-	let rolEditado = $state<string | undefined>();
-	const esDistribuidor = $derived(distribuidorEditado ?? contacto.es_distribuidor ?? false);
+	let esDistribuidor = $derived(contacto.es_distribuidor ?? false);
 	const rolBase = $derived(
 		contacto.proveedor ? 'proveedor' : contacto.es_cliente ? 'cliente' : 'ninguno'
 	);
-	const rol = $derived(rolEditado ?? rolBase);
+	let rol = $derived(rolBase);
 	let editando = $state(false);
 
 	async function eliminar() {
@@ -141,7 +139,7 @@
 							class="select"
 							disabled={!editando}
 							{...form.fields.rol.as('select', rol)}
-							onchange={(event) => (rolEditado = event.currentTarget.value)}
+							onchange={(event) => (rol = event.currentTarget.value)}
 						>
 							<option value="ninguno">Sin rol comercial</option>
 							<option value="cliente">Cliente</option>
@@ -157,7 +155,7 @@
 								value="true"
 								disabled={!editando}
 								checked={esDistribuidor}
-								onchange={(event) => (distribuidorEditado = event.currentTarget.checked)}
+								onchange={(event) => (esDistribuidor = event.currentTarget.checked)}
 							/>
 							<span>Es distribuidor</span>
 						</label>

@@ -14,7 +14,7 @@
 	}: { pedidoId: number; entrega: DatosEntrega; origen: OrigenEntrega } = $props();
 
 	let abierto = $state(false);
-	const form = guardarEntregaPedido;
+	const form = $derived(guardarEntregaPedido.for(String(pedidoId)));
 	const editaContacto = can(page.data.user, page.data.permisos, 'contactos', 'edit');
 
 	export function abrir() {
