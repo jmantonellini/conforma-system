@@ -440,7 +440,7 @@
 			{/if}
 
 			{#if definiciones.length}
-				<Seccion titulo="Medidas">
+				<Seccion titulo="Medidas y construcción">
 					<AtributosCampos {definiciones} bind:valores={valoresAtributos} />
 				</Seccion>
 			{/if}

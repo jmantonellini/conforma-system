@@ -41,9 +41,12 @@ export const gruposConValor = (grupos: GrupoAtributos[]) =>
 		.map((grupo) => ({ ...grupo, atributos: grupo.atributos.filter((a) => tieneValor(a.valor)) }))
 		.filter((grupo) => grupo.atributos.length);
 
+const numeroAtributo = new Intl.NumberFormat('es-AR', { maximumFractionDigits: 3 });
+
 export function formatearAtributo({ valor, unidad }: Pick<AtributoConValor, 'valor' | 'unidad'>) {
 	if (!tieneValor(valor)) return '-';
-	return unidad ? `${valor} ${unidad}` : String(valor);
+	const texto = typeof valor === 'number' ? numeroAtributo.format(valor) : String(valor);
+	return unidad ? `${texto} ${unidad}` : texto;
 }
 
 export function limpiarValores(valores: ValoresAtributos, definiciones: DefinicionAtributo[]) {

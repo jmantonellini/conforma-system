@@ -152,7 +152,7 @@
 		</FormFieldWrapper>
 		{#if definiciones.length}
 			<div class="mt-2 rounded-box border border-base-300 p-3">
-				<p class="mb-2 text-sm font-semibold">Medidas</p>
+				<p class="mb-2 text-sm font-semibold">Medidas y construcción</p>
 				<AtributosCampos {definiciones} bind:valores={atributos} nombre="" compacto />
 			</div>
 		{/if}

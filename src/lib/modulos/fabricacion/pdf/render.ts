@@ -3,6 +3,7 @@ import {
 	A4,
 	COLOR,
 	Documento,
+	LIMITE_INFERIOR,
 	Lienzo,
 	MARGEN,
 	generarPdf
@@ -22,7 +23,10 @@ export type DatosPdfOrden = {
 	terminadas: number;
 	prioridad: { nombre: string; urgente: boolean };
 	responsable: string | null;
-	medidas: { nombre: string; valores: string }[];
+	medidas: {
+		nombre: string;
+		valores: { etiqueta: string; valor: string; unidad: string | null }[];
+	}[];
 	notas: string[];
 	materiales: {
 		codigo: string | null;
@@ -111,17 +115,43 @@ export function renderizarOrden(d: DatosPdfOrden) {
 	};
 
 	if (d.medidas.length) {
-		seccion('Medidas', d.medidas.length, (pagina, yy) =>
-			pagina.tabla(
-				yy,
-				[
-					{ titulo: 'Sección', ancho: 38 },
-					{ titulo: 'Medidas', ancho: 142 }
-				],
-				d.medidas.map((m) => [m.nombre, m.valores]),
-				{ tamano: 10.5, relleno: 2.8 }
-			)
-		);
+		const porFila = Math.min(3, d.medidas.length);
+		const separacion = 4;
+		const anchoColumna = (ANCHO_UTIL - separacion * (porFila - 1)) / porFila;
+		const altoFila = 6;
+		const filas: (typeof d.medidas)[] = [];
+		for (let i = 0; i < d.medidas.length; i += porFila) filas.push(d.medidas.slice(i, i + porFila));
+		const altoBloque = (fila: typeof d.medidas) =>
+			8 + Math.max(...fila.map((grupo) => grupo.valores.length)) * altoFila + 2;
+		let pagina = doc.reservar(7 + altoBloque(filas[0]));
+		doc.y = titulo(pagina, doc.y, 'Medidas y construcción');
+		for (const fila of filas) {
+			const alto = altoBloque(fila);
+			if (doc.y + alto > LIMITE_INFERIOR) pagina = doc.nueva();
+			fila.forEach((grupo, i) => {
+				const x = MARGEN + i * (anchoColumna + separacion);
+				pagina.rect(x, doc.y, anchoColumna, alto, COLOR.blanco, COLOR.linea);
+				pagina.rect(x, doc.y, anchoColumna, 7, COLOR.fondo);
+				pagina.etiqueta(x + 3, doc.y + 1.8, anchoColumna - 6, grupo.nombre, COLOR.tinta);
+				grupo.valores.forEach((medida, j) => {
+					const yFila = doc.y + 9 + j * altoFila;
+					pagina.texto(x + 3, yFila, anchoColumna * 0.55 - 3, 5, medida.etiqueta, {
+						tamano: 9,
+						color: COLOR.suave
+					});
+					pagina.texto(
+						x + anchoColumna * 0.55,
+						yFila,
+						anchoColumna * 0.45 - 3,
+						5,
+						medida.unidad ? `${medida.valor} ${medida.unidad}` : medida.valor,
+						{ tamano: 10, alinear: 'right', ajustar: true }
+					);
+				});
+			});
+			doc.y += alto + separacion;
+		}
+		doc.y += 2;
 	}
 
 	if (d.materiales.length) {

@@ -271,6 +271,7 @@
 						<a class="btn btn-sm" href={resolve(`/productos/${orden.producto.id}`)}>Ver producto</a>
 					{/if}
 				{/snippet}
+				<AtributosResumen grupos={orden.atributos} />
 				{#if orden.observaciones}
 					<div>
 						<h3 class="mb-1 text-sm font-medium text-base-content/60">Especificaciones técnicas</h3>
@@ -279,7 +280,6 @@
 						</p>
 					</div>
 				{/if}
-				<AtributosResumen grupos={orden.atributos} />
 				{#if orden.producto?.notas_fabricacion}
 					<p class="rounded-box bg-base-200/60 p-3 text-sm whitespace-pre-line">
 						{orden.producto.notas_fabricacion}

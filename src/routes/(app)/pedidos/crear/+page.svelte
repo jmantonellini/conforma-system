@@ -171,7 +171,6 @@
 				subtotal: material.subtotal === undefined ? undefined : escalar(material.subtotal)
 			}))
 		}));
-		form.fields.lineas.set(serializarLineas(lineas));
 	}
 
 	function cambiarMoneda(nueva: Moneda) {
@@ -186,7 +185,6 @@
 		if (moneda === 'ARS' && anterior > 0 && factor > 0) reescalarLineas(factor / anterior);
 	}
 	if (contactoInicialId) form.fields.contacto_id.set(contactoInicialId);
-	form.fields.lineas.set(serializarLineas(lineasIniciales));
 
 	let total = $derived(
 		redondearPrecio(
@@ -491,6 +489,7 @@
 			{/if}
 		</fieldset>
 
+		<input type="hidden" name="lineas" value={serializarLineas(lineas)} />
 		<LineasConceptosEditor
 			bind:lineas
 			{productos}
@@ -509,7 +508,6 @@
 			importeDescuento={0}
 			incluirIva={false}
 			importeIva={0}
-			onChange={(nuevasLineas) => form.fields.lineas.set(serializarLineas(nuevasLineas))}
 		/>
 		<div class="divider"></div>
 		<div class="flex justify-end">

@@ -2,10 +2,10 @@ import { and, eq, or } from 'drizzle-orm';
 import logoUrl from '$lib/assets/Logo.png';
 import { db } from '$lib/server/db';
 import { adjuntos } from '$lib/server/db/schema';
+import { formatearAtributo } from '$lib/modulos/productos/atributos';
 import { obtenerEmpresa } from '$lib/server/empresa';
 import { leerObjeto } from '$lib/server/almacenamiento';
 import { imagenEnCache, logoEmpresa } from '$lib/server/pdf/imagenes';
-import { formatearAtributo } from '$lib/modulos/productos/atributos';
 import type { MaterialSnapshot } from '$lib/modulos/ventas/tipos';
 import { getOrdenFabricacion } from './fabricacion-consultas.remote';
 import { ETIQUETA_PRIORIDAD, PRIORIDAD_FABRICACION } from './tipos';
@@ -44,18 +44,14 @@ export async function generarPDFFabricacion(ordenId: number) {
 	]);
 	const logo = await logoEmpresa(empresa?.logo_url, logoUrl).catch(() => null);
 
-	const medidas = orden.atributos
-		.map((grupo) => ({
-			nombre: grupo.nombre,
-			valores: grupo.atributos
-				.filter((a) => a.tipo !== 'texto')
-				.map((a) => `${a.etiqueta}: ${formatearAtributo(a)}`)
-				.join(' · ')
+	const medidas = orden.atributos.map((grupo) => ({
+		nombre: grupo.nombre,
+		valores: grupo.atributos.map((a) => ({
+			etiqueta: a.etiqueta,
+			valor: formatearAtributo({ valor: a.valor, unidad: null }),
+			unidad: a.unidad
 		}))
-		.filter((grupo) => grupo.valores);
-	const textos = orden.atributos.flatMap((grupo) =>
-		grupo.atributos.filter((a) => a.tipo === 'texto').map((a) => `${a.etiqueta}: ${a.valor}`)
-	);
+	}));
 	const material = (m: MaterialSnapshot, adicional: boolean) => ({
 		codigo: m.codigo ?? null,
 		nombre: m.nombre,
@@ -86,7 +82,7 @@ export async function generarPDFFabricacion(ordenId: number) {
 			? [orden.empleado.nombre, orden.empleado.apellido].filter(Boolean).join(' ')
 			: null,
 		medidas,
-		notas: [orden.observaciones, orden.producto?.notas_fabricacion, ...textos].filter(
+		notas: [orden.observaciones, orden.producto?.notas_fabricacion].filter(
 			(nota): nota is string => !!nota?.trim()
 		),
 		materiales: [

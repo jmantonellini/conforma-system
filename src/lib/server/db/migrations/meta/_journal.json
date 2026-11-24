@@ -78,6 +78,13 @@
       "when": 1795129419295,
       "tag": "0010_entregas_flete_y_dni",
       "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1795552847793,
+      "tag": "0011_especificaciones_escapes",
+      "breakpoints": true
     }
   ]
 }
