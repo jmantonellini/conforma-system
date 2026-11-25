@@ -12,7 +12,8 @@ export type AccionAuditada =
 	| 'entrega'
 	| 'tipo_trabajo'
 	| 'recepcion'
-	| 'producto';
+	| 'producto'
+	| 'numeracion';
 
 export const TITULO_ACCION: Record<AccionAuditada, string> = {
 	edicion: 'Datos editados',
@@ -23,7 +24,8 @@ export const TITULO_ACCION: Record<AccionAuditada, string> = {
 	entrega: 'Datos de entrega',
 	tipo_trabajo: 'Tipo de trabajo cambiado',
 	recepcion: 'Pieza del cliente recibida',
-	producto: 'Producto cambiado'
+	producto: 'Producto cambiado',
+	numeracion: 'Unidades numeradas'
 };
 
 export async function registrarAuditoria(

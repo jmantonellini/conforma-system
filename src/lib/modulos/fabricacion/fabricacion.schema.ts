@@ -25,7 +25,8 @@ export const CrearOrdenSchema = v.object({
 	prioridad: v.optional(v.pipe(v.string(), v.transform(Number), v.number()), '0'),
 	fecha_fin_estimada: v.optional(v.string()),
 	asignado_a: v.optional(v.pipe(v.string(), v.transform(Number), v.number())),
-	observaciones: v.optional(v.string())
+	observaciones: v.optional(v.string()),
+	numerar: v.optional(v.boolean(), false)
 });
 
 const idOpcional = v.nullable(v.pipe(v.number(), v.integer(), v.minValue(1)));

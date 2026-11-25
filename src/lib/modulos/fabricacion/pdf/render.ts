@@ -20,6 +20,7 @@ export type DatosPdfOrden = {
 	emision: Date;
 	entregaEstimada: Date | null;
 	cantidad: number;
+	numeros: string;
 	terminadas: number;
 	prioridad: { nombre: string; urgente: boolean };
 	responsable: string | null;
@@ -104,6 +105,11 @@ export function renderizarOrden(d: DatosPdfOrden) {
 		});
 	});
 	doc.y = y + 31;
+	if (d.numeros) {
+		p.etiqueta(MARGEN, doc.y, 30, 'N° grabado', COLOR.marca);
+		p.texto(MARGEN + 30, doc.y - 1.5, ANCHO_UTIL - 30, 7, d.numeros, { tamano: 14, ajustar: true });
+		doc.y += 10;
+	}
 
 	const seccion = (
 		texto: string,

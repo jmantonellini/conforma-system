@@ -6,6 +6,7 @@
 		cambiarEstadoUnidad,
 		reabrirUnidad,
 		reanudarUnidad,
+		numerarUnidades,
 		eliminarOrdenFabricacion
 	} from '$lib/modulos/fabricacion/fabricacion.remote';
 	import {
@@ -38,7 +39,11 @@
 	import { resolve } from '$app/paths';
 	import { formatearFecha } from '$lib/utils/fechas';
 	import type { MaterialSnapshot } from '$lib/modulos/ventas/tipos';
-	import { ESTADO_FABRICACION, ETIQUETA_PRIORIDAD } from '$lib/modulos/fabricacion/tipos';
+	import {
+		ESTADO_FABRICACION,
+		ETIQUETA_PRIORIDAD,
+		etiquetaUnidad
+	} from '$lib/modulos/fabricacion/tipos';
 	import { getEmpleadosOpciones } from '$lib/modulos/configuracion/empleados.remote';
 	import {
 		getInsumos,
@@ -152,8 +157,10 @@
 				class="btn btn-sm"
 				href={resolve(`/fabricacion/${orden.id}/pdf`)}
 				target="_blank"
-				rel="noreferrer"><Icono nombre="imprimir" /> Imprimir</a
+				rel="noreferrer"
 			>
+				<Icono nombre="imprimir" /> Imprimir
+			</a>
 		{/snippet}
 	</EncabezadoDetalle>
 
@@ -201,16 +208,35 @@
 		</dl>
 	</Seccion>
 
-	<Seccion titulo="Unidades"
-		><Table data={orden.unidades}>
+	<Seccion titulo="Unidades">
+		{#snippet acciones()}
+			{#if puedeEditar && orden.unidades.some((unidad) => unidad.numero === null)}
+				<button
+					class="btn btn-sm"
+					disabled={ocupado}
+					onclick={() =>
+						ejecutar(
+							() => numerarUnidades(String(orden.id)),
+							orden.unidades.some((unidad) => unidad.numero !== null)
+								? 'Unidades restantes numeradas'
+								: 'Unidades numeradas'
+						)}
+				>
+					Asignar número grabado
+				</button>
+			{/if}
+		{/snippet}
+		<Table data={orden.unidades}>
 			{#snippet header()}
+				<th>N° grabado</th>
 				<th>N° serie</th>
 				<th>Estado</th>
 				<th>Comentario</th>
 				<th class="text-right">Mover a</th>
 			{/snippet}
 			{#snippet row(unidad: (typeof orden.unidades)[number])}
-				<td class="font-mono">{unidad.numero_serie}</td>
+				<td class="font-semibold tabular-nums">{unidad.numero ?? '—'}</td>
+				<td class="font-mono text-sm text-base-content/60">{unidad.numero_serie}</td>
 				<td><EstadoBadge class="badge-sm" estado={unidad.estado} /></td>
 				<td class="text-sm text-base-content/70">{unidad.comentario_estado ?? ''}</td>
 				<td>
@@ -220,9 +246,11 @@
 								<button
 									class="btn btn-ghost btn-xs"
 									disabled={ocupado}
-									onclick={() => (unidadAReabrir = { id: unidad.id, serie: unidad.numero_serie })}
-									>Reabrir</button
+									onclick={() =>
+										(unidadAReabrir = { id: unidad.id, serie: etiquetaUnidad(unidad) })}
 								>
+									Reabrir
+								</button>
 							{/if}
 						{:else if unidad.esta_pausada}
 							<button
@@ -232,8 +260,10 @@
 									ejecutar(
 										() => reanudarUnidad({ unidad_id: String(unidad.id) }),
 										'Unidad reanudada'
-									)}>Reanudar</button
+									)}
 							>
+								Reanudar
+							</button>
 						{:else}
 							{#each unidad.transiciones_disponibles as destino (destino.id)}
 								<button
@@ -248,8 +278,10 @@
 									onclick={() =>
 										destino.slug === ESTADO_FABRICACION.PAUSADO
 											? (unidadAPausar = { id: unidad.id, estadoId: destino.id })
-											: cambiarEstado(unidad.id, destino.id)}>{destino.nombre}</button
+											: cambiarEstado(unidad.id, destino.id)}
 								>
+									{destino.nombre}
+								</button>
 							{/each}
 						{/if}
 					</div>
@@ -292,9 +324,9 @@
 							<ul class="list rounded-box border border-base-300">
 								{#each lista.items as insumo, indice (indice)}
 									<li class="list-row py-2">
-										<span class="font-mono text-xs text-base-content/60"
-											>{insumo.codigo ?? '—'}</span
-										>
+										<span class="font-mono text-xs text-base-content/60">
+											{insumo.codigo ?? '—'}
+										</span>
 										<span>{insumo.nombre}</span>
 										<span class="numero font-medium">{insumo.cantidad} {insumo.unidad ?? ''}</span>
 									</li>

@@ -85,6 +85,13 @@
       "when": 1795552847793,
       "tag": "0011_especificaciones_escapes",
       "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "7",
+      "when": 1795640408365,
+      "tag": "0012_numero_escape",
+      "breakpoints": true
     }
   ]
 }

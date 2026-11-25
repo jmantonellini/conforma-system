@@ -29,6 +29,7 @@ import {
 } from '$lib/modulos/productos/productos.server';
 import type { MaterialSnapshot } from '$lib/modulos/ventas/tipos';
 import { agruparAtributos, gruposConValor } from '$lib/modulos/productos/atributos';
+import { etiquetaUnidad } from './tipos';
 
 export const getEstadosFabricacion = query(async () => {
 	await requirePermission('fabricacion', 'view');
@@ -102,7 +103,10 @@ export const getOrdenesFabricacion = query(
 						ilike(pedidos.numero_pedido, termino),
 						ilike(contactos.razon_social, termino),
 						ilike(productos.nombre, termino),
-						ilike(productoStock.nombre, termino)
+						ilike(productoStock.nombre, termino),
+						/^\d+$/.test(search!.trim())
+							? sql`exists (select 1 from ${unidades_fabricacion} where ${unidades_fabricacion.orden_fabricacion_id} = ${ordenes_fabricacion.id} and ${unidades_fabricacion.numero} = ${Number(search!.trim())})`
+							: undefined
 					)
 				: undefined,
 			estado ? eq(estadoOrden.id, estado) : undefined,
@@ -185,6 +189,7 @@ export const getOrdenFabricacion = query(v.number(), async (id) => {
 			.select({
 				id: unidades_fabricacion.id,
 				numero_serie: unidades_fabricacion.numero_serie,
+				numero: unidades_fabricacion.numero,
 				estado_id: unidades_fabricacion.estado_id,
 				es_defectuoso: unidades_fabricacion.es_defectuoso,
 				defecto_descripcion: unidades_fabricacion.defecto_descripcion,
@@ -281,11 +286,15 @@ export const getOrdenFabricacion = query(v.number(), async (id) => {
 export const getHistorialUnidades = query(v.number(), async (ordenId) => {
 	await requirePermission('fabricacion', 'view');
 	const unidades = await db
-		.select({ id: unidades_fabricacion.id, numero_serie: unidades_fabricacion.numero_serie })
+		.select({
+			id: unidades_fabricacion.id,
+			numero_serie: unidades_fabricacion.numero_serie,
+			numero: unidades_fabricacion.numero
+		})
 		.from(unidades_fabricacion)
 		.where(eq(unidades_fabricacion.orden_fabricacion_id, ordenId));
 
-	const series = new Map(unidades.map((unidad) => [unidad.id, unidad.numero_serie]));
+	const series = new Map(unidades.map((unidad) => [unidad.id, etiquetaUnidad(unidad)]));
 	const [historial, auditoria] = await Promise.all([
 		series.size ? historialEstados('fabricacion', [...series.keys()]) : [],
 		historialAuditoria('orden_fabricacion', [ordenId])

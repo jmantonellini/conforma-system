@@ -1,5 +1,6 @@
 import { notificar, participantesOrden } from '$lib/modulos/notificaciones/notificaciones.server';
-import { ESTADO_FABRICACION } from './tipos';
+import { ESTADO_FABRICACION, etiquetaUnidad, rangosNumeros } from './tipos';
+import { siguientesNumeros } from './fabricacion.server';
 import * as v from 'valibot';
 import { error } from '@sveltejs/kit';
 import { form, command, requested } from '$app/server';
@@ -14,7 +15,7 @@ import {
 	lineas_pedido,
 	pedidos
 } from '$lib/server/db/schema';
-import { and, desc, eq, ne } from 'drizzle-orm';
+import { and, desc, eq, isNull, ne } from 'drizzle-orm';
 import { requirePermission } from '$lib/server/auth/permissions';
 import { estadoPorSlug, registrarCambioEstado, validarTransicion } from '$lib/server/estados';
 import { clavesAdjuntos, eliminarArchivos } from '$lib/modulos/adjuntos/adjuntos.server';
@@ -24,6 +25,7 @@ import { PEDIDO_SLUG } from '$lib/modulos/pedidos/tipos';
 import { fechaDesdeInput } from '$lib/utils/fechas';
 import { CrearOrdenSchema, EdicionOrdenSchema } from './fabricacion.schema';
 import { editarOrdenServicio } from './edicion.server';
+import { registrarAuditoria } from '$lib/server/auditoria';
 import { getHistorialPedido, getPedidoById, getPedidos } from '../pedidos/pedidos.remote';
 import { getPendientesReceta } from '../insumos/insumos.remote';
 import {
@@ -82,12 +84,14 @@ export const crearOrdenFabricacion = form(CrearOrdenSchema, async (data) => {
 			})
 			.returning();
 
+		const numeros = data.numerar ? await siguientesNumeros(tx, cantidadTotal) : [];
 		const unidades = await tx
 			.insert(unidades_fabricacion)
 			.values(
 				Array.from({ length: cantidadTotal }, (_, indice) => ({
 					orden_fabricacion_id: creada.id,
 					numero_serie: `${creada.id}-${String(indice + 1).padStart(3, '0')}`,
+					numero: numeros[indice] ?? null,
 					estado_id: estadoInicial.id
 				}))
 			)
@@ -116,6 +120,44 @@ export const crearOrdenFabricacion = form(CrearOrdenSchema, async (data) => {
 	);
 	requested(getOrdenesFabricacion, 1).refreshAll();
 	return { success: true, orden, unidades };
+});
+
+export const numerarUnidades = command(idDesdeTexto, async (ordenId) => {
+	const user = await requirePermission('fabricacion', 'edit');
+	const numeros = await db.transaction(async (tx) => {
+		const sinNumero = await tx
+			.select({ id: unidades_fabricacion.id })
+			.from(unidades_fabricacion)
+			.where(
+				and(
+					eq(unidades_fabricacion.orden_fabricacion_id, ordenId),
+					isNull(unidades_fabricacion.numero)
+				)
+			)
+			.orderBy(unidades_fabricacion.id)
+			.for('update');
+		if (!sinNumero.length) error(409, 'Todas las unidades ya tienen número');
+		const numeros = await siguientesNumeros(tx, sinNumero.length);
+		for (const [indice, unidad] of sinNumero.entries()) {
+			await tx
+				.update(unidades_fabricacion)
+				.set({ numero: numeros[indice], updated_at: new Date() })
+				.where(eq(unidades_fabricacion.id, unidad.id));
+		}
+		await registrarAuditoria(tx, {
+			entidad: 'orden_fabricacion',
+			entidadId: ordenId,
+			usuarioId: user.id,
+			accion: 'numeracion',
+			detalle: `Números asignados: ${rangosNumeros(numeros)}`
+		});
+		return numeros;
+	});
+	await Promise.all([
+		getOrdenFabricacion(ordenId).refresh(),
+		getHistorialUnidades(ordenId).refresh()
+	]);
+	return { numeros };
 });
 
 async function completarPedidoSiTermino(tx: Tx, ordenId: number, usuarioId: number) {
@@ -180,6 +222,7 @@ async function cambiarEstado(
 			.select({
 				id: unidades_fabricacion.id,
 				numero_serie: unidades_fabricacion.numero_serie,
+				numero: unidades_fabricacion.numero,
 				estado_id: unidades_fabricacion.estado_id,
 				es_defectuoso: unidades_fabricacion.es_defectuoso,
 				orden_id: ordenes_fabricacion.id,
@@ -206,7 +249,7 @@ async function cambiarEstado(
 				.select({ es_final: estados.es_final })
 				.from(estados)
 				.where(eq(estados.id, unidad.estado_id));
-			if (!origen?.es_final) error(409, `La unidad ${unidad.numero_serie} no está terminada`);
+			if (!origen?.es_final) error(409, `La unidad ${etiquetaUnidad(unidad)} no está terminada`);
 			destino = await estadoPorSlug('fabricacion', ESTADO_FABRICACION.EN_PRODUCCION, tx);
 		} else {
 			destino = await validarTransicion(tx, unidad.estado_id, destinoId!);
@@ -237,7 +280,7 @@ async function cambiarEstado(
 				{
 					modulo: 'fabricacion',
 					titulo: `Producción pausada en OF-${unidad.orden_id}`,
-					mensaje: `Unidad ${unidad.numero_serie}${comentario ? ` · ${comentario}` : ''}`,
+					mensaje: `Unidad ${etiquetaUnidad(unidad)}${comentario ? ` · ${comentario}` : ''}`,
 					link: `/fabricacion/${unidad.orden_id}`
 				},
 				{ actor: user.id, ejecutor: tx }

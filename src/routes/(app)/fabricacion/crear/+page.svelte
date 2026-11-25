@@ -132,6 +132,16 @@
 						/>
 					</FormFieldWrapper>
 
+					<label class="label items-start gap-3 text-base-content lg:col-span-3">
+						<input class="checkbox mt-0.5" {...form.fields.numerar.as('checkbox')} />
+						<span>
+							<span class="font-medium">Lleva número grabado</span>
+							<span class="block text-sm whitespace-normal text-base-content/60">
+								Cada unidad recibe el siguiente número de la numeración de la empresa.
+							</span>
+						</span>
+					</label>
+
 					<FormFieldWrapper class="lg:col-span-3" id="observaciones" label="Observaciones">
 						<textarea
 							class="textarea w-full resize-none"

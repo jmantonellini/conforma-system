@@ -52,6 +52,7 @@ export const unidades_fabricacion = pgTable(
 			.references(() => ordenes_fabricacion.id, { onDelete: 'cascade' })
 			.notNull(),
 		numero_serie: text('numero_serie').notNull(),
+		numero: integer('numero'),
 		estado_id: integer('estado_id')
 			.references(() => estados.id, { onDelete: 'restrict' })
 			.notNull(),
@@ -66,6 +67,7 @@ export const unidades_fabricacion = pgTable(
 	(t) => [
 		index('idx_unidades_orden').on(t.orden_fabricacion_id),
 		index('idx_unidades_estado').on(t.estado_id),
+		uniqueIndex('idx_unidades_empresa_numero').on(t.empresa_id, t.numero),
 		aislamiento()
 	]
 );

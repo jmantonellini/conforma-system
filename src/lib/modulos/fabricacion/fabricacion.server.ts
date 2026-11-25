@@ -1,5 +1,5 @@
 import { aliasedTable, and, eq, sql } from 'drizzle-orm';
-import { db } from '$lib/server/db';
+import { db, type Tx } from '$lib/server/db';
 import { estados, unidades_fabricacion } from '$lib/server/db/schema';
 
 export function resumenOrdenes() {
@@ -27,4 +27,12 @@ export function estadoDeOrden(resumen: ReturnType<typeof resumenOrdenes>) {
 		estadoOrden,
 		condicion: and(eq(estadoOrden.flujo, 'fabricacion'), eq(estadoOrden.slug, resumen.estado_slug))
 	};
+}
+
+export async function siguientesNumeros(tx: Tx, cantidad: number) {
+	await tx.execute(sql`select pg_advisory_xact_lock(hashtext('numero_unidad'), empresa_actual())`);
+	const [{ ultimo }] = await tx
+		.select({ ultimo: sql<number>`coalesce(max(${unidades_fabricacion.numero}), 0)::int` })
+		.from(unidades_fabricacion);
+	return Array.from({ length: cantidad }, (_, indice) => ultimo + indice + 1);
 }

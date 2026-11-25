@@ -8,7 +8,7 @@ import { leerObjeto } from '$lib/server/almacenamiento';
 import { imagenEnCache, logoEmpresa } from '$lib/server/pdf/imagenes';
 import type { MaterialSnapshot } from '$lib/modulos/ventas/tipos';
 import { getOrdenFabricacion } from './fabricacion-consultas.remote';
-import { ETIQUETA_PRIORIDAD, PRIORIDAD_FABRICACION } from './tipos';
+import { ETIQUETA_PRIORIDAD, PRIORIDAD_FABRICACION, rangosNumeros } from './tipos';
 import { renderizarOrden } from './pdf/render';
 
 async function planosDe(ordenId: number, productoId: number | null | undefined) {
@@ -73,6 +73,7 @@ export async function generarPDFFabricacion(ordenId: number) {
 		emision: orden.created_at ?? new Date(),
 		entregaEstimada: orden.fecha_fin_estimada,
 		cantidad: orden.cantidad_total,
+		numeros: rangosNumeros(orden.unidades.map((unidad) => unidad.numero)),
 		terminadas: orden.cantidad_producida,
 		prioridad: {
 			nombre: ETIQUETA_PRIORIDAD[prioridad]?.nombre ?? 'Normal',
