@@ -41,6 +41,9 @@
 
 	const id = $derived(Number(page.params.id));
 	const { pedido, lineas, insumosAdicionales, adjuntos } = $derived(await getPedidoById(id));
+	const ordenHistorica = $derived(
+		pedido.historico ? lineas.find((linea) => linea.produccion)?.produccion : undefined
+	);
 	const historial = $derived(await getHistorialPedido(id));
 	const estados = $derived(await getEstadosPedido());
 	const veImportes = can(page.data.user, page.data.permisos, 'importes', 'view');
@@ -226,8 +229,8 @@
 		</dl>
 	</Seccion>
 
-	<Seccion titulo="Productos"
-		><Table data={lineas}>
+	<Seccion titulo="Productos">
+		<Table data={lineas}>
 			{#snippet header()}
 				<th>Producto</th>
 				<th class="numero">Cant.</th>
@@ -273,6 +276,17 @@
 						>
 							OF-{p.orden_id} · {p.terminadas}/{p.total}
 						</a>
+					{:else if pedido.historico}
+						{#if ordenHistorica}
+							<a
+								class="link text-sm link-hover"
+								href={resolve(`/fabricacion/${ordenHistorica.orden_id}`)}
+							>
+								Incluido en OF-{ordenHistorica.orden_id}
+							</a>
+						{:else}
+							<span class="secundario">Sin OF</span>
+						{/if}
 					{:else}
 						<Can modulo="fabricacion" accion="create">
 							<a class="btn btn-xs" href={resolve(`/fabricacion/crear?linea=${linea.id}`)}>
@@ -285,9 +299,9 @@
 			{#snippet footer()}
 				{#if veImportes}
 					<th colspan="5" class="numero">Total</th>
-					<th class="numero text-base text-base-content"
-						>{formatearMoneda(pedido.total, pedido.moneda)}</th
-					>
+					<th class="numero text-base text-base-content">
+						{formatearMoneda(pedido.total, pedido.moneda)}
+					</th>
 					<th></th>
 				{/if}
 			{/snippet}

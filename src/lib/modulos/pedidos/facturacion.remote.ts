@@ -71,7 +71,8 @@ export const getPagosByPedido = query(v.number(), async (pedidoId) => {
 				precio_total: pedidos.precio_total,
 				anticipo: pedidos.anticipo,
 				moneda: pedidos.moneda,
-				tipo_cambio: pedidos.tipo_cambio
+				tipo_cambio: pedidos.tipo_cambio,
+				historico: pedidos.historico
 			})
 			.from(pedidos)
 			.where(eq(pedidos.id, pedidoId))
@@ -101,7 +102,8 @@ export const getPagosByPedido = query(v.number(), async (pedidoId) => {
 		estado,
 		total: pedidoRow?.precio_total ?? 0,
 		moneda: pedidoRow?.moneda ?? 'USD',
-		tipo_cambio_pedido: pedidoRow?.tipo_cambio ?? null
+		tipo_cambio_pedido: pedidoRow?.tipo_cambio ?? null,
+		historico: pedidoRow?.historico ?? false
 	};
 });
 

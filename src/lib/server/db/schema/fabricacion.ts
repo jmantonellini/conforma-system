@@ -1,5 +1,14 @@
 import { sql } from 'drizzle-orm';
-import { boolean, index, integer, pgTable, serial, text, uniqueIndex } from 'drizzle-orm/pg-core';
+import {
+	boolean,
+	check,
+	index,
+	integer,
+	pgTable,
+	serial,
+	text,
+	uniqueIndex
+} from 'drizzle-orm/pg-core';
 import {
 	actualizado,
 	aislamiento,
@@ -11,6 +20,7 @@ import {
 	precioUnitario
 } from './base';
 import { empleados } from './acceso';
+import { contactos } from './contactos';
 import { estados } from './estados';
 import { lineas_pedido } from './pedidos';
 import { productos } from './productos';
@@ -48,11 +58,14 @@ export const unidades_fabricacion = pgTable(
 	{
 		id: serial('id').primaryKey(),
 		empresa_id: empresa(),
-		orden_fabricacion_id: integer('orden_fabricacion_id')
-			.references(() => ordenes_fabricacion.id, { onDelete: 'cascade' })
-			.notNull(),
+		orden_fabricacion_id: integer('orden_fabricacion_id').references(() => ordenes_fabricacion.id, {
+			onDelete: 'cascade'
+		}),
 		numero_serie: text('numero_serie').notNull(),
 		numero: integer('numero'),
+		contacto_id: integer('contacto_id').references(() => contactos.id, { onDelete: 'set null' }),
+		descripcion: text('descripcion'),
+		fecha_fabricacion: fecha('fecha_fabricacion'),
 		estado_id: integer('estado_id')
 			.references(() => estados.id, { onDelete: 'restrict' })
 			.notNull(),
@@ -67,7 +80,12 @@ export const unidades_fabricacion = pgTable(
 	(t) => [
 		index('idx_unidades_orden').on(t.orden_fabricacion_id),
 		index('idx_unidades_estado').on(t.estado_id),
-		uniqueIndex('idx_unidades_empresa_numero').on(t.empresa_id, t.numero),
+		index('idx_unidades_empresa_numero').on(t.empresa_id, t.numero),
+		index('idx_unidades_contacto').on(t.contacto_id),
+		check(
+			'unidades_con_orden_o_descripcion',
+			sql`${t.orden_fabricacion_id} IS NOT NULL OR ${t.descripcion} IS NOT NULL`
+		),
 		aislamiento()
 	]
 );

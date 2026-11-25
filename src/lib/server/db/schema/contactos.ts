@@ -32,6 +32,7 @@ export const contactos = pgTable(
 		...datosEntrega(),
 		es_cliente: boolean('es_cliente').default(false),
 		es_distribuidor: boolean('es_distribuidor').default(false),
+		historico: boolean('historico').notNull().default(false),
 		porcentaje_compensacion: porcentaje('porcentaje_compensacion').default(0),
 		saldo_disponible: importe('saldo_disponible').default(0),
 		activo: boolean('activo').default(true),

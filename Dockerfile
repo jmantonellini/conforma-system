@@ -25,6 +25,7 @@ COPY --from=build /app/build ./build
 COPY src/lib/server/db/migrations ./src/lib/server/db/migrations
 COPY src/lib/server/db/seed.sql ./src/lib/server/db/seed.sql
 COPY scripts/migrar.mjs scripts/seed.mjs ./scripts/
+COPY scripts/historico ./scripts/historico
 EXPOSE 3000
 HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
     CMD wget -qO- http://127.0.0.1:3000/salud >/dev/null || exit 1

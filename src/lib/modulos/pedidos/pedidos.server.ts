@@ -156,6 +156,7 @@ export async function obtenerPedidoDetalle(id: number) {
 			fecha_entrega_prometida: pedidos.fecha_entrega_prometida,
 			observaciones: pedidos.observaciones,
 			factura: pedidos.factura,
+			historico: pedidos.historico,
 			tipo_trabajo: pedidos.tipo_trabajo,
 			entrega_propia: columnasEntrega(pedidos),
 			entrega_cliente: columnasEntrega(contactos),
@@ -762,6 +763,7 @@ export function getLineasPedidoSinOrdenServicio({
 		})
 		.from(lineas_pedido)
 		.innerJoin(pedidos, eq(lineas_pedido.pedido_id, pedidos.id))
+		.innerJoin(estados, eq(estados.id, pedidos.estado_id))
 		.leftJoin(productos, eq(lineas_pedido.producto_id, productos.id))
 		.leftJoin(ordenes_fabricacion, eq(ordenes_fabricacion.linea_pedido_id, lineas_pedido.id))
 		.leftJoin(
@@ -776,6 +778,7 @@ export function getLineasPedidoSinOrdenServicio({
 				isNull(ordenes_fabricacion.id),
 				isNull(reservas_stock.id),
 				eq(lineas_pedido.es_flete_recepcion, false),
+				eq(estados.es_final, false),
 				pedido_id ? eq(lineas_pedido.pedido_id, pedido_id) : undefined
 			)
 		)

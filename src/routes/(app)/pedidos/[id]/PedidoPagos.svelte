@@ -122,21 +122,28 @@
 			<button class="btn btn-sm" onclick={() => (showModal = true)}>+ Registrar</button>
 		</Can>
 	{/snippet}
-	<div class="flex items-start justify-between gap-2">
-		<EstadoBadge estado={ESTADOS[facturacion.estado]} />
-		{#if facturacion.saldo > 0}
-			<div class="text-right text-sm text-base-content/70">
-				<p>Saldo {formatearMoneda(facturacion.saldo, monedaPedido)}</p>
-				{#if saldoEnPesos !== null}
-					<p class="text-xs text-base-content/60">
-						≈ {formatearMoneda(saldoEnPesos, 'ARS')} al dólar {formatearDosDecimales(
-							cambioSugerido
-						)}
-					</p>
-				{/if}
-			</div>
-		{/if}
-	</div>
+	{#if facturacion.historico && facturacion.estado !== ESTADO_PAGO.PAGADO}
+		<p class="text-sm text-base-content/70">
+			Pedido importado del histórico. La planilla no tenía el importe de todos los cobros: los que
+			faltan figuran en las observaciones.
+		</p>
+	{:else}
+		<div class="flex items-start justify-between gap-2">
+			<EstadoBadge estado={ESTADOS[facturacion.estado]} />
+			{#if facturacion.saldo > 0}
+				<div class="text-right text-sm text-base-content/70">
+					<p>Saldo {formatearMoneda(facturacion.saldo, monedaPedido)}</p>
+					{#if saldoEnPesos !== null}
+						<p class="text-xs text-base-content/60">
+							≈ {formatearMoneda(saldoEnPesos, 'ARS')} al dólar {formatearDosDecimales(
+								cambioSugerido
+							)}
+						</p>
+					{/if}
+				</div>
+			{/if}
+		</div>
+	{/if}
 	{#if items.length}
 		<ul class="list -mx-4 sm:-mx-5">
 			{#each items as pago (pago.id)}

@@ -20,6 +20,7 @@
 		Seccion
 	} from '$lib/ui';
 	import ArchivosAdjuntos from '$lib/modulos/adjuntos/componentes/ArchivosAdjuntos.svelte';
+	import FabricadosProducto from '$lib/modulos/fabricacion/componentes/FabricadosProducto.svelte';
 	import { toast } from '$lib/ui/toast.svelte';
 	import { goto, invalidateAll } from '$app/navigation';
 	import { page } from '$app/state';
@@ -352,8 +353,8 @@
 												class="h-5 w-5 object-contain"
 											/>
 										{/if}
-										{m.nombre}</option
-									>
+										{m.nombre}
+									</option>
 								{/each}
 							</select>
 						</FormFieldWrapper>
@@ -493,7 +494,8 @@
 							<span
 								class="label w-20 min-w-0 justify-start truncate whitespace-nowrap"
 								title={unidad}
-								>{unidad}
+							>
+								{unidad}
 							</span>
 							<button
 								class="btn btn-square btn-ghost text-error btn-sm"
@@ -501,8 +503,9 @@
 								aria-label="Quitar componente"
 								type="button"
 								onclick={() => (receta = receta.filter((_, i) => i !== indice))}
-								><Icono nombre="papelera" /></button
 							>
+								<Icono nombre="papelera" />
+							</button>
 						</div>
 					{/each}
 				</div>
@@ -536,6 +539,10 @@
 				submitText="Guardar cambios"
 			/>
 		</form>
+	</Can>
+
+	<Can modulo="fabricacion" accion="view">
+		<FabricadosProducto productoId={data.producto.id} />
 	</Can>
 
 	<div class="grid items-start gap-4 sm:gap-6 lg:grid-cols-2">

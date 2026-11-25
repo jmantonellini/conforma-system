@@ -123,3 +123,23 @@ En Dozzle se puede filtrar por usuario (`vaneconforma`), por estado (`500`) o po
    gunzip -c ~/backups/conforma_FECHA.sql.gz | docker compose exec -T postgres psql -U postgres -d conforma_db
    docker compose start app
    ```
+
+## 8. Importar el histórico de producción y ventas
+
+El script `scripts/historico/importar.mjs` carga la planilla "HISTÓRICO PRODUCCIÓN Y VENTAS" como pedidos y OF históricos (con su número de OF real), escapes numerados y cobros. Todo va en una transacción: si algo falla no se guarda nada. Sin `--confirmar` solo simula y arma el informe.
+
+1. Exportar la planilla de Numbers a Excel (Archivo → Exportar a → Excel).
+2. Bajar la cotización histórica del dólar oficial: `curl -o oficial.json https://api.argentinadatos.com/v1/cotizaciones/dolares/oficial`.
+3. Probar en local contra una copia de producción y revisar el informe:
+   ```bash
+   DATABASE_URL=postgres://postgres:postgres@localhost:5432/conforma_migtest node scripts/historico/importar.mjs historico.xlsx --cotizaciones oficial.json --informe informe.xlsx
+   ```
+4. En el droplet, con un backup recién hecho:
+   ```bash
+   docker compose cp historico.xlsx app:/tmp/historico.xlsx
+   docker compose cp oficial.json app:/tmp/oficial.json
+   docker compose exec app node scripts/historico/importar.mjs /tmp/historico.xlsx --cotizaciones /tmp/oficial.json --informe /tmp/informe.xlsx
+   docker compose exec app node scripts/historico/importar.mjs /tmp/historico.xlsx --cotizaciones /tmp/oficial.json --confirmar
+   ```
+
+Opciones: `--hasta AAAA-MM-DD` deja afuera las OF posteriores (las que ya se cargaron en el sistema); `--reemplazar` borra la importación anterior (pedidos, OF, escapes sueltos y los contactos que creó y nadie más usa) y vuelve a importar.

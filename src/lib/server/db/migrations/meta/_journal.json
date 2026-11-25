@@ -92,6 +92,13 @@
       "when": 1795640408365,
       "tag": "0012_numero_escape",
       "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "7",
+      "when": 1795644720106,
+      "tag": "0013_historico_fabricacion",
+      "breakpoints": true
     }
   ]
 }

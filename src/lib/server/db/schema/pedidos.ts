@@ -64,6 +64,7 @@ export const pedidos = pgTable(
 		creado_por: integer('creado_por').references(() => usuarios.id, { onDelete: 'set null' }),
 		observaciones: text('observaciones'),
 		factura: text('factura'),
+		historico: boolean('historico').notNull().default(false),
 		tipo_trabajo: tipoTrabajo(),
 		...datosEntrega(),
 		created_at: creado(),

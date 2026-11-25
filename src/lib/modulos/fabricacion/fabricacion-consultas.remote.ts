@@ -190,6 +190,7 @@ export const getOrdenFabricacion = query(v.number(), async (id) => {
 				id: unidades_fabricacion.id,
 				numero_serie: unidades_fabricacion.numero_serie,
 				numero: unidades_fabricacion.numero,
+				descripcion: unidades_fabricacion.descripcion,
 				estado_id: unidades_fabricacion.estado_id,
 				es_defectuoso: unidades_fabricacion.es_defectuoso,
 				defecto_descripcion: unidades_fabricacion.defecto_descripcion,
@@ -314,3 +315,93 @@ export const getHistorialUnidades = query(v.number(), async (ordenId) => {
 		}))
 	].sort((a, b) => new Date(b.fecha ?? 0).getTime() - new Date(a.fecha ?? 0).getTime());
 });
+
+export const getUnidadesFabricadas = query(
+	v.object({
+		search: v.optional(v.string()),
+		producto_id: v.optional(v.number()),
+		page: v.optional(v.pipe(v.number(), v.minValue(1)), 1),
+		limit: v.optional(v.pipe(v.number(), v.minValue(1), v.maxValue(100)), 50)
+	}),
+	async ({ search, producto_id, page, limit }) => {
+		await requirePermission('fabricacion', 'view');
+		const clienteUnidad = aliasedTable(contactos, 'cliente_unidad');
+		const productoStock = aliasedTable(productos, 'producto_stock');
+		const productoId = sql<
+			number | null
+		>`COALESCE(${lineas_pedido.producto_id}, ${ordenes_fabricacion.producto_id})`;
+		const descripcion = sql<string>`COALESCE(${unidades_fabricacion.descripcion}, ${ordenes_fabricacion.nombre_trabajo})`;
+		const cliente = sql<
+			string | null
+		>`COALESCE(${clienteUnidad.razon_social}, ${contactos.razon_social})`;
+		const productoNombre = sql<
+			string | null
+		>`COALESCE(${productos.nombre}, ${productoStock.nombre})`;
+		const fecha = sql<Date | null>`COALESCE(${unidades_fabricacion.fecha_fabricacion}, ${ordenes_fabricacion.fecha_fin_real}, ${ordenes_fabricacion.created_at})`;
+		const termino = search?.trim();
+		const filtroBusqueda = termino
+			? /^\d+$/.test(termino)
+				? or(
+						eq(unidades_fabricacion.numero, Number(termino)),
+						eq(ordenes_fabricacion.id, Number(termino))
+					)
+				: or(
+						ilike(descripcion, `%${termino}%`),
+						ilike(cliente, `%${termino}%`),
+						ilike(productoNombre, `%${termino}%`),
+						ilike(unidades_fabricacion.observaciones, `%${termino}%`)
+					)
+			: undefined;
+
+		const filas = await db
+			.select({
+				id: unidades_fabricacion.id,
+				numero: unidades_fabricacion.numero,
+				numero_serie: unidades_fabricacion.numero_serie,
+				descripcion,
+				observaciones: unidades_fabricacion.observaciones,
+				fecha,
+				cliente,
+				producto: productoNombre,
+				orden_id: ordenes_fabricacion.id,
+				pedido_id: pedidos.id,
+				pedido_numero: pedidos.numero_pedido,
+				estado: { nombre: estados.nombre, color: estados.color, es_final: estados.es_final },
+				total_filas: sql<number>`count(*) over()::int`
+			})
+			.from(unidades_fabricacion)
+			.innerJoin(estados, eq(estados.id, unidades_fabricacion.estado_id))
+			.leftJoin(
+				ordenes_fabricacion,
+				eq(ordenes_fabricacion.id, unidades_fabricacion.orden_fabricacion_id)
+			)
+			.leftJoin(lineas_pedido, eq(lineas_pedido.id, ordenes_fabricacion.linea_pedido_id))
+			.leftJoin(pedidos, eq(pedidos.id, lineas_pedido.pedido_id))
+			.leftJoin(contactos, eq(contactos.id, pedidos.contacto_id))
+			.leftJoin(clienteUnidad, eq(clienteUnidad.id, unidades_fabricacion.contacto_id))
+			.leftJoin(productos, eq(productos.id, lineas_pedido.producto_id))
+			.leftJoin(productoStock, eq(productoStock.id, ordenes_fabricacion.producto_id))
+			.where(
+				and(
+					producto_id
+						? eq(productoId, producto_id)
+						: sql`${unidades_fabricacion.numero} IS NOT NULL`,
+					filtroBusqueda
+				)
+			)
+			.orderBy(
+				sql`${unidades_fabricacion.numero} DESC NULLS LAST`,
+				desc(fecha),
+				desc(unidades_fabricacion.id)
+			)
+			.limit(limit)
+			.offset((page - 1) * limit);
+		const total = filas[0]?.total_filas ?? 0;
+		return {
+			unidades: filas.map(({ total_filas, ...fila }) => fila),
+			total,
+			totalPages: Math.ceil(total / limit),
+			currentPage: page
+		};
+	}
+);

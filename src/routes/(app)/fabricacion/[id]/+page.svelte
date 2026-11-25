@@ -236,7 +236,12 @@
 			{/snippet}
 			{#snippet row(unidad: (typeof orden.unidades)[number])}
 				<td class="font-semibold tabular-nums">{unidad.numero ?? '—'}</td>
-				<td class="font-mono text-sm text-base-content/60">{unidad.numero_serie}</td>
+				<td>
+					<span class="font-mono text-sm text-base-content/60">{unidad.numero_serie}</span>
+					{#if unidad.descripcion}
+						<p class="secundario">{unidad.descripcion}</p>
+					{/if}
+				</td>
 				<td><EstadoBadge class="badge-sm" estado={unidad.estado} /></td>
 				<td class="text-sm text-base-content/70">{unidad.comentario_estado ?? ''}</td>
 				<td>
