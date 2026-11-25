@@ -64,6 +64,7 @@ export const unidades_fabricacion = pgTable(
 		numero_serie: text('numero_serie').notNull(),
 		numero: integer('numero'),
 		contacto_id: integer('contacto_id').references(() => contactos.id, { onDelete: 'set null' }),
+		producto_id: integer('producto_id').references(() => productos.id, { onDelete: 'set null' }),
 		descripcion: text('descripcion'),
 		fecha_fabricacion: fecha('fecha_fabricacion'),
 		estado_id: integer('estado_id')
@@ -82,6 +83,7 @@ export const unidades_fabricacion = pgTable(
 		index('idx_unidades_estado').on(t.estado_id),
 		index('idx_unidades_empresa_numero').on(t.empresa_id, t.numero),
 		index('idx_unidades_contacto').on(t.contacto_id),
+		index('idx_unidades_producto').on(t.producto_id),
 		check(
 			'unidades_con_orden_o_descripcion',
 			sql`${t.orden_fabricacion_id} IS NOT NULL OR ${t.descripcion} IS NOT NULL`

@@ -1,4 +1,5 @@
 import type { PageLoad } from './$types';
+import { TIPOS_PIEZA } from '$lib/modulos/productos/tipos';
 
 export const load: PageLoad = ({ url }) => {
 	const sort = url.searchParams.get('sort') === 'codigo' ? 'codigo' : 'nombre';
@@ -6,6 +7,7 @@ export const load: PageLoad = ({ url }) => {
 		filtros: {
 			search: url.searchParams.get('search') || undefined,
 			categoriaId: Number(url.searchParams.get('categoria')) || undefined,
+			tipoPieza: TIPOS_PIEZA.find((tipo) => tipo === url.searchParams.get('tipo')),
 			sort,
 			direction: url.searchParams.get('direction') === 'desc' ? 'desc' : 'asc',
 			page: Number(url.searchParams.get('page')) || 1

@@ -17,7 +17,7 @@ import {
 	transiciones_estado
 } from '$lib/server/db/schema';
 import { aliasedTable, and, asc, desc, eq, ilike, or, sql } from 'drizzle-orm';
-import { requirePermission } from '$lib/server/auth/permissions';
+import { puedeVerImportes, requirePermission } from '$lib/server/auth/permissions';
 import { historialEstados, listarEstados, prioridadPorEstado } from '$lib/server/estados';
 import { listarAdjuntosRelacionados } from '$lib/modulos/adjuntos/adjuntos.server';
 import { estadoDeOrden, resumenOrdenes } from '$lib/modulos/fabricacion/fabricacion.server';
@@ -324,19 +324,25 @@ export const getUnidadesFabricadas = query(
 		limit: v.optional(v.pipe(v.number(), v.minValue(1), v.maxValue(100)), 50)
 	}),
 	async ({ search, producto_id, page, limit }) => {
-		await requirePermission('fabricacion', 'view');
+		const user = await requirePermission('fabricacion', 'view');
+		const conImportes = await puedeVerImportes(user);
 		const clienteUnidad = aliasedTable(contactos, 'cliente_unidad');
 		const productoStock = aliasedTable(productos, 'producto_stock');
+		const productoUnidad = aliasedTable(productos, 'producto_unidad');
 		const productoId = sql<
 			number | null
-		>`COALESCE(${lineas_pedido.producto_id}, ${ordenes_fabricacion.producto_id})`;
+		>`COALESCE(${unidades_fabricacion.producto_id}, ${lineas_pedido.producto_id}, ${ordenes_fabricacion.producto_id})`;
 		const descripcion = sql<string>`COALESCE(${unidades_fabricacion.descripcion}, ${ordenes_fabricacion.nombre_trabajo})`;
 		const cliente = sql<
 			string | null
 		>`COALESCE(${clienteUnidad.razon_social}, ${contactos.razon_social})`;
 		const productoNombre = sql<
 			string | null
-		>`COALESCE(${productos.nombre}, ${productoStock.nombre})`;
+		>`COALESCE(${productoUnidad.nombre}, ${productos.nombre}, ${productoStock.nombre})`;
+		const precioUsd = sql<number | null>`CASE
+			WHEN ${pedidos.moneda} = 'USD' THEN ${lineas_pedido.precio_unitario}
+			ELSE ${lineas_pedido.precio_unitario} / NULLIF(${pedidos.tipo_cambio}, 0)
+		END`.mapWith(Number);
 		const fecha = sql<Date | null>`COALESCE(${unidades_fabricacion.fecha_fabricacion}, ${ordenes_fabricacion.fecha_fin_real}, ${ordenes_fabricacion.created_at})`;
 		const termino = search?.trim();
 		const filtroBusqueda = termino
@@ -363,6 +369,8 @@ export const getUnidadesFabricadas = query(
 				fecha,
 				cliente,
 				producto: productoNombre,
+				producto_id: productoId,
+				precio_usd: precioUsd,
 				orden_id: ordenes_fabricacion.id,
 				pedido_id: pedidos.id,
 				pedido_numero: pedidos.numero_pedido,
@@ -381,6 +389,7 @@ export const getUnidadesFabricadas = query(
 			.leftJoin(clienteUnidad, eq(clienteUnidad.id, unidades_fabricacion.contacto_id))
 			.leftJoin(productos, eq(productos.id, lineas_pedido.producto_id))
 			.leftJoin(productoStock, eq(productoStock.id, ordenes_fabricacion.producto_id))
+			.leftJoin(productoUnidad, eq(productoUnidad.id, unidades_fabricacion.producto_id))
 			.where(
 				and(
 					producto_id
@@ -398,7 +407,10 @@ export const getUnidadesFabricadas = query(
 			.offset((page - 1) * limit);
 		const total = filas[0]?.total_filas ?? 0;
 		return {
-			unidades: filas.map(({ total_filas, ...fila }) => fila),
+			unidades: filas.map(({ total_filas, precio_usd, ...fila }) => ({
+				...fila,
+				precio_usd: conImportes && precio_usd > 0 ? precio_usd : null
+			})),
 			total,
 			totalPages: Math.ceil(total / limit),
 			currentPage: page

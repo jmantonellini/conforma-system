@@ -101,7 +101,8 @@ function construirEscape(fila) {
 		]),
 		of: claveOF(fila['OF VINCULADA'])?.numero ?? null,
 		confianza: texto(fila.CONFIANZA),
-		notas: []
+		notas: [],
+		fila
 	};
 }
 

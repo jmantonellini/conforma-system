@@ -34,7 +34,12 @@
 	} from '$lib/utils/precios';
 	import MargenPrecio from '$lib/modulos/productos/componentes/MargenPrecio.svelte';
 	import type { PageProps } from './$types';
-	import { CATEGORIAS_PRODUCTO, TIPOS_USO_PRODUCTO } from '$lib/modulos/productos/tipos';
+	import {
+		CATEGORIAS_PRODUCTO,
+		ETIQUETA_TIPO_PIEZA,
+		TIPOS_PIEZA,
+		TIPOS_USO_PRODUCTO
+	} from '$lib/modulos/productos/tipos';
 	import { formatearAnios } from '$lib/modulos/productos/anios';
 
 	let { data }: PageProps = $props();
@@ -317,6 +322,20 @@
 							{/each}
 						</select>
 					</FormFieldWrapper>
+					{#if categoriaSeleccionada?.slug === CATEGORIAS_PRODUCTO.ESCAPES}
+						<FormFieldWrapper label="Tipo de pieza" id="tipo_pieza">
+							<select
+								id="tipo_pieza"
+								class="select"
+								{...form.fields.tipo_pieza.as('select', data.producto.tipo_pieza ?? '')}
+							>
+								<option value="">Sin definir</option>
+								{#each TIPOS_PIEZA as tipo (tipo)}
+									<option value={tipo}>{ETIQUETA_TIPO_PIEZA[tipo]}</option>
+								{/each}
+							</select>
+						</FormFieldWrapper>
+					{/if}
 				</div>
 			</Seccion>
 

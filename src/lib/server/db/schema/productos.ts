@@ -11,6 +11,7 @@ import {
 	uniqueIndex
 } from 'drizzle-orm/pg-core';
 import { TIPOS_ATRIBUTO, type ValoresAtributos } from '$lib/modulos/productos/atributos';
+import { TIPOS_PIEZA } from '$lib/modulos/productos/tipos';
 import { actualizado, aislamiento, cantidad, creado, empresa, porcentaje } from './base';
 import { insumos } from './insumos';
 
@@ -131,6 +132,7 @@ export const productos = pgTable(
 		categoria_id: integer('categoria_id').references(() => categorias_productos.id, {
 			onDelete: 'set null'
 		}),
+		tipo_pieza: text('tipo_pieza', { enum: TIPOS_PIEZA }),
 		atributos: jsonb('atributos').$type<ValoresAtributos>().notNull().default({}),
 		notas_fabricacion: text('notas_fabricacion'),
 		tipo_vehiculo_id: integer('tipo_vehiculo_id').references(() => tipos_vehiculo.id),
@@ -145,6 +147,7 @@ export const productos = pgTable(
 		margen_porcentaje: porcentaje('margen_porcentaje').notNull().default(0),
 		es_personalizable: boolean('es_personalizable').default(true),
 		activo: boolean('activo').default(true),
+		historico: boolean('historico').notNull().default(false),
 		created_at: creado(),
 		updated_at: actualizado()
 	},

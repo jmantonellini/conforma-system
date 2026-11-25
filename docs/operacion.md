@@ -142,4 +142,11 @@ El script `scripts/historico/importar.mjs` carga la planilla "HISTÓRICO PRODUCC
    docker compose exec app node scripts/historico/importar.mjs /tmp/historico.xlsx --cotizaciones /tmp/oficial.json --confirmar
    ```
 
+La importación también crea un producto histórico por diseño (tipo de pieza + marca + modelo + motor + categoría de competición), con marcas, modelos y categorías nuevas si hacen falta, y lo vincula a los ítems del pedido y a cada escape. Para rehacer solo los productos sobre una importación ya hecha:
+
+```bash
+docker compose exec app node scripts/historico/vincular-productos.mjs /tmp/historico.xlsx --reemplazar --informe /tmp/productos.xlsx
+docker compose exec app node scripts/historico/vincular-productos.mjs /tmp/historico.xlsx --reemplazar --confirmar
+```
+
 Opciones: `--hasta AAAA-MM-DD` deja afuera las OF posteriores (las que ya se cargaron en el sistema); `--reemplazar` borra la importación anterior (pedidos, OF, escapes sueltos y los contactos que creó y nadie más usa) y vuelve a importar.

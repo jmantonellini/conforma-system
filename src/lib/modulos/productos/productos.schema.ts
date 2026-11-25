@@ -1,4 +1,5 @@
 import * as v from 'valibot';
+import { TIPOS_PIEZA } from './tipos';
 
 const anio = v.optional(
 	v.pipe(
@@ -20,6 +21,13 @@ const camposProducto = {
 	codigo: v.optional(v.pipe(v.string(), v.trim()), ''),
 	nombre: v.pipe(v.string(), v.nonEmpty('Nombre requerido')),
 	categoria_id: v.optional(v.pipe(v.string(), v.transform(Number), v.number())),
+	tipo_pieza: v.optional(
+		v.pipe(
+			v.string(),
+			v.transform((valor) => valor || null),
+			v.nullable(v.picklist(TIPOS_PIEZA, 'Tipo de pieza inválido'))
+		)
+	),
 	margen_porcentaje: v.optional(v.pipe(v.number(), v.minValue(0), v.maxValue(99.99)), 0),
 	atributos: v.optional(
 		v.pipe(

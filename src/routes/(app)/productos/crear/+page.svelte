@@ -15,7 +15,12 @@
 	import { resolve } from '$app/paths';
 	import { formatearMoneda, redondearPrecio } from '$lib/utils/precios';
 	import MargenPrecio from '$lib/modulos/productos/componentes/MargenPrecio.svelte';
-	import { CATEGORIAS_PRODUCTO, TIPOS_USO_PRODUCTO } from '$lib/modulos/productos/tipos';
+	import {
+		CATEGORIAS_PRODUCTO,
+		ETIQUETA_TIPO_PIEZA,
+		TIPOS_PIEZA,
+		TIPOS_USO_PRODUCTO
+	} from '$lib/modulos/productos/tipos';
 	import AtributosCampos from '$lib/modulos/productos/componentes/AtributosCampos.svelte';
 	import type { ValoresAtributos } from '$lib/modulos/productos/atributos';
 
@@ -177,6 +182,19 @@
 							{/each}
 						</select>
 					</FormFieldWrapper>
+					{#if categoriaSeleccionada?.slug === CATEGORIAS_PRODUCTO.ESCAPES}
+						<FormFieldWrapper label="Tipo de pieza" id="tipo_pieza">
+							<select
+								{...crearProducto.fields.tipo_pieza.as('select')}
+								class="select w-full select-sm"
+							>
+								<option value="">Sin definir</option>
+								{#each TIPOS_PIEZA as tipo (tipo)}
+									<option value={tipo}>{ETIQUETA_TIPO_PIEZA[tipo]}</option>
+								{/each}
+							</select>
+						</FormFieldWrapper>
+					{/if}
 					<div class="stat rounded-box border border-base-300 bg-base-100 p-3">
 						<div class="stat-title">Costo de receta</div>
 						<div class="stat-value text-xl">
@@ -220,8 +238,8 @@
 													class="h-5 w-5 object-contain"
 												/>
 											{/if}
-											{m.nombre}</option
-										>
+											{m.nombre}
+										</option>
 									{/each}
 								</select>
 							</FormFieldWrapper>
@@ -377,13 +395,15 @@
 								class="btn btn-square btn-ghost text-error btn-sm sm:justify-self-end"
 								title="Quitar componente"
 								aria-label="Quitar componente"
-								onclick={() => quitarInsumo(indice)}><Delete /></button
+								onclick={() => quitarInsumo(indice)}
 							>
+								<Delete />
+							</button>
 						</div>
 					{/each}
-					<button type="button" class="btn w-fit btn-outline btn-sm" onclick={agregarInsumo}
-						>+ Agregar componente</button
-					>
+					<button type="button" class="btn w-fit btn-outline btn-sm" onclick={agregarInsumo}>
+						+ Agregar componente
+					</button>
 				</div>
 			</fieldset>
 			<fieldset class="fieldset seccion">

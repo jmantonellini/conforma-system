@@ -36,6 +36,7 @@ import {
 	sincronizarRecetaProducto,
 	validarComponentes
 } from '$lib/modulos/productos/receta.server';
+import type { TipoPieza } from '$lib/modulos/productos/tipos';
 import { generarCodigoProductoUnico } from '$lib/modulos/productos/codigo.server';
 import { calcularPrecioVenta, redondearPrecio } from '$lib/utils/precios';
 import { limpiarValores } from './atributos';
@@ -146,6 +147,7 @@ function coincideAnio(anio: number | null) {
 export async function getProductosListado({
 	search,
 	categoriaId,
+	tipoPieza,
 	page = 1,
 	limit = 10,
 	sort = 'nombre',
@@ -154,6 +156,7 @@ export async function getProductosListado({
 }: {
 	search?: string;
 	categoriaId?: number;
+	tipoPieza?: TipoPieza;
 	page?: number;
 	limit?: number;
 	sort?: 'nombre' | 'codigo';
@@ -179,6 +182,9 @@ export async function getProductosListado({
 	if (categoriaId) {
 		conditions.push(eq(productos.categoria_id, categoriaId));
 	}
+	if (tipoPieza) {
+		conditions.push(eq(productos.tipo_pieza, tipoPieza));
+	}
 
 	const whereCondition = conditions.length > 0 ? and(...conditions) : undefined;
 	const columnaOrden = sort === 'codigo' ? productos.codigo : productos.nombre;
@@ -189,6 +195,7 @@ export async function getProductosListado({
 			codigo: productos.codigo,
 			nombre: productos.nombre,
 			categoria_id: productos.categoria_id,
+			tipo_pieza: productos.tipo_pieza,
 			margen_porcentaje: productos.margen_porcentaje,
 			anio_desde: productos.anio_desde,
 			anio_hasta: productos.anio_hasta,

@@ -18,6 +18,7 @@
 	import { confirmarYEjecutar } from '$lib/ui/confirmar.svelte';
 	import { formatearMoneda } from '$lib/utils/precios';
 	import { formatearAnios } from '$lib/modulos/productos/anios';
+	import { ETIQUETA_TIPO_PIEZA, TIPOS_PIEZA } from '$lib/modulos/productos/tipos';
 	import type { PageProps } from './$types';
 
 	let { data }: PageProps = $props();
@@ -55,6 +56,16 @@
 				<option value={String(categoria.id)}>{categoria.nombre}</option>
 			{/each}
 		</select>
+		<select
+			class="select w-44 select-sm"
+			value={parametro('tipo')}
+			onchange={(e) => filtrar({ tipo: e.currentTarget.value })}
+		>
+			<option value="">Todos los tipos</option>
+			{#each TIPOS_PIEZA as tipo (tipo)}
+				<option value={tipo}>{ETIQUETA_TIPO_PIEZA[tipo]}</option>
+			{/each}
+		</select>
 	{/snippet}
 	{#snippet header()}
 		<ColumnaOrden clave="nombre" porDefecto="nombre">Producto</ColumnaOrden>
@@ -74,7 +85,12 @@
 				<span class="badge badge-soft badge-xs badge-warning">Receta pendiente</span>
 			{/if}
 		</td>
-		<td class="text-base-content/70">{categorias.get(producto.categoria_id ?? 0) ?? '-'}</td>
+		<td class="text-base-content/70">
+			{categorias.get(producto.categoria_id ?? 0) ?? '-'}
+			{#if producto.tipo_pieza}
+				<p class="secundario">{ETIQUETA_TIPO_PIEZA[producto.tipo_pieza]}</p>
+			{/if}
+		</td>
 		<td>
 			<Highlight
 				text={[

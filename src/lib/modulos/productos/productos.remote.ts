@@ -22,6 +22,7 @@ import {
 
 import { requirePermission } from '$lib/server/auth/permissions';
 import { toOptionalId } from '$lib/utils/ids';
+import { TIPOS_PIEZA } from '$lib/modulos/productos/tipos';
 
 const toOptionalNumber = toOptionalId;
 
@@ -43,6 +44,7 @@ export const getProductos = query(
 		v.object({
 			search: v.optional(v.string()),
 			categoriaId: v.optional(v.number()),
+			tipoPieza: v.optional(v.picklist(TIPOS_PIEZA)),
 			sort: v.optional(v.picklist(['nombre', 'codigo']), 'nombre'),
 			direction: v.optional(v.picklist(['asc', 'desc']), 'asc'),
 			page: v.optional(v.pipe(v.number(), v.toMinValue(1)), 1),
@@ -54,6 +56,7 @@ export const getProductos = query(
 	async ({
 		search,
 		categoriaId,
+		tipoPieza,
 		sort = 'nombre',
 		direction = 'asc',
 		page,
@@ -63,6 +66,7 @@ export const getProductos = query(
 		return getProductosListado({
 			search,
 			categoriaId,
+			tipoPieza,
 			sort,
 			direction,
 			page,

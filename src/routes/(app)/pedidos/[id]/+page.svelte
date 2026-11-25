@@ -245,6 +245,9 @@
 			{#snippet row(linea: (typeof lineas)[number])}
 				<td>
 					<p>{linea.producto_nombre || linea.descripcion_personalizada || '-'}</p>
+					{#if linea.producto_nombre && linea.descripcion_personalizada}
+						<p class="text-sm text-base-content/70">{linea.descripcion_personalizada}</p>
+					{/if}
 					<p class="font-mono text-xs text-base-content/60">
 						{linea.es_flete_recepcion
 							? 'Cargo'

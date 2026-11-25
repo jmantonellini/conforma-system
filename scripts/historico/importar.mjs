@@ -6,6 +6,7 @@ import { parseArgs } from 'node:util';
 import { cotizador, leerHojas, marcaTemporal, normalizarTransportista, unir } from './datos.mjs';
 import { Clientes, limpiarNombreCliente } from './clientes.mjs';
 import { construirModelo } from './modelo.mjs';
+import { construirProductos, desvincularProductos, vincularProductos } from './productos.mjs';
 
 const RETIRA_EN_FABRICA = 'Retira en fábrica';
 const redondear = (valor) => Number(valor.toFixed(2));
@@ -32,10 +33,8 @@ if (!process.env.DATABASE_URL) throw new Error('DATABASE_URL es obligatorio');
 
 const hoy = new Date().toISOString().slice(0, 10);
 const cotizacion = cotizador(JSON.parse(readFileSync(opciones.cotizaciones, 'utf8')));
-const { ordenes, ventas, sueltos, informe } = construirModelo(leerHojas(archivo), {
-	hoy,
-	hasta: opciones.hasta
-});
+const modelo = construirModelo(leerHojas(archivo), { hoy, hasta: opciones.hasta });
+const { ordenes, ventas, sueltos, informe } = modelo;
 
 const pool = new pg.Pool({ connectionString: process.env.DATABASE_URL });
 const db = await pool.connect();
@@ -108,7 +107,11 @@ try {
 			`Ya hay ${previos} pedidos históricos importados. Usá --reemplazar para volver a importar.`
 		);
 	}
-	if (opciones.reemplazar) resumen.borrados = await borrarImportacionAnterior();
+	if (opciones.reemplazar) {
+		await desvincularProductos(consulta);
+		resumen.borrados = await borrarImportacionAnterior();
+		resumen.productosBorrados = await desvincularProductos(consulta);
+	}
 
 	const numerosOF = ordenes.map((o) => Number(o.numero));
 	const ocupadas = await consulta('SELECT id FROM ordenes_fabricacion WHERE id = ANY($1::int[])', [
@@ -373,6 +376,14 @@ try {
 	await consulta(
 		"SELECT setval(pg_get_serial_sequence('ordenes_fabricacion', 'id'), (SELECT max(id) FROM ordenes_fabricacion))"
 	);
+	const [{ count: productosPrevios }] = await consulta(
+		'SELECT count(*)::int FROM productos WHERE historico'
+	);
+	if (!productosPrevios) {
+		const vinculados = await vincularProductos(consulta, construirProductos(modelo));
+		resumen.productos = vinculados.productos;
+		resumen.unidadesConProducto = vinculados.unidadesVinculadas;
+	}
 
 	await db.query(opciones.confirmar ? 'COMMIT' : 'ROLLBACK');
 	console.log(

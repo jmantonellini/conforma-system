@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { resolve } from '$app/paths';
-	import { EstadoBadge, Highlight, Listado, parametro } from '$lib/ui';
+	import { EstadoBadge, Highlight, Icono, Listado, parametro } from '$lib/ui';
 	import { getUnidadesFabricadas } from '$lib/modulos/fabricacion/fabricacion-consultas.remote';
 	import { formatearFecha } from '$lib/utils/fechas';
 
@@ -22,6 +22,11 @@
 	buscar="N° grabado, OF, cliente, modelo..."
 	vacio="No hay escapes numerados para esta búsqueda"
 >
+	{#snippet acciones()}
+		<a class="btn btn-ghost btn-sm" href={resolve('/fabricacion')}>
+			<Icono nombre="izquierda" /> Volver a Fabricación
+		</a>
+	{/snippet}
 	{#snippet header()}
 		<th>N° grabado</th>
 		<th>Fecha</th>
@@ -37,10 +42,13 @@
 		<td class="text-base-content/70">{formatearFecha(unidad.fecha)}</td>
 		<td class="max-w-md">
 			<p class="font-medium"><Highlight text={unidad.descripcion} query={busqueda} /></p>
-			{#if unidad.producto || unidad.observaciones}
-				<p class="secundario line-clamp-2">
-					{[unidad.producto, unidad.observaciones].filter(Boolean).join(' · ')}
-				</p>
+			{#if unidad.producto && unidad.producto_id}
+				<a class="link text-sm link-hover" href={resolve(`/productos/${unidad.producto_id}`)}>
+					{unidad.producto}
+				</a>
+			{/if}
+			{#if unidad.observaciones}
+				<p class="secundario line-clamp-2">{unidad.observaciones}</p>
 			{/if}
 		</td>
 		<td><Highlight text={unidad.cliente ?? '—'} query={busqueda} /></td>
