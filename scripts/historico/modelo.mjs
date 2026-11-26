@@ -106,6 +106,16 @@ function construirEscape(fila) {
 	};
 }
 
+function enRango(fecha, hoy, orden, tipo = '') {
+	if (!fecha || (fecha >= '2000-01-01' && fecha <= hoy)) return fecha;
+	const nota = `Fecha ${tipo ? `${tipo} ` : ''}descartada: la planilla decía ${fecha}`.replace(
+		'  ',
+		' '
+	);
+	if (!orden.notas.includes(nota)) orden.notas.push(nota);
+	return null;
+}
+
 export function construirModelo(hojas, { hoy, hasta }) {
 	const ordenes = new Map();
 	const informe = {
@@ -140,7 +150,7 @@ export function construirModelo(hojas, { hoy, hasta }) {
 		if (!clave || clave.anexa || clave.duplicada) continue;
 		const o = orden(clave.numero);
 		o.resumen = fila;
-		o.fecha = fechaISO(fila.FECHA);
+		o.fecha = enRango(fechaISO(fila.FECHA), hoy, o);
 		o.cliente = texto(fila.CLIENTE);
 		if (clave.nota) {
 			o.notas.push(clave.nota);
@@ -162,7 +172,7 @@ export function construirModelo(hojas, { hoy, hasta }) {
 			continue;
 		}
 		const o = orden(clave.numero);
-		o.fecha ??= fechaISO(fila['FECHA OF']);
+		o.fecha ??= enRango(fechaISO(fila['FECHA OF']), hoy, o);
 		o.cliente ??= texto(fila.CLIENTE);
 		const item = construirItem(fila, o.items.length + o.anexos.length);
 		if (clave.anexa) {
@@ -189,7 +199,7 @@ export function construirModelo(hojas, { hoy, hasta }) {
 		const valores = (columna) => filas.map((fila) => fila[columna]);
 		o.facturas.push(...valores('FACTURA').map(limpiarFactura));
 		const entregas = valores('ENTREGA / ESTADO').map(texto).filter(Boolean);
-		o.fechaEntrega = entregas.map(fechaISO).find(Boolean) ?? null;
+		o.fechaEntrega = enRango(entregas.map(fechaISO).find(Boolean) ?? null, hoy, o, 'de entrega');
 		o.transporte = valores('TRANSPORTE').map(texto).find(Boolean) ?? null;
 		o.pendiente = entregas.some((e) => /PENDIENTE/i.test(e));
 		o.detalle = {
