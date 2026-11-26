@@ -45,7 +45,8 @@
 		actual,
 		acciones,
 		menu,
-		eliminar
+		eliminar,
+		editando = false
 	}: {
 		titulo: string;
 		subtitulo?: string | null;
@@ -60,6 +61,7 @@
 		acciones?: Snippet;
 		menu?: Snippet;
 		eliminar?: { modulo: string; mensaje: string; onConfirmar: () => Promise<unknown> };
+		editando?: boolean;
 	} = $props();
 
 	const PASOS = [
@@ -127,7 +129,7 @@
 		{/if}
 
 		<div class="flex flex-wrap items-center gap-2 md:justify-self-end">
-			{#if onTransicion}
+			{#if onTransicion && !editando}
 				{#each avances as transicion, indice (transicion.estado_destino_id)}
 					<button
 						class={['btn btn-sm', indice === 0 && 'btn-primary']}
@@ -139,7 +141,7 @@
 				{/each}
 			{/if}
 			{@render acciones?.()}
-			{#if menu || otras.length || puedeEliminar}
+			{#if !editando && (menu || otras.length || puedeEliminar)}
 				<MenuDesplegable class="btn btn-square btn-sm" titulo="Más acciones" alFinal>
 					{#snippet etiqueta()}<Icono nombre="mas" class="size-5" />{/snippet}
 					{#if otras.length}

@@ -18,6 +18,7 @@
 	import {
 		EncabezadoDetalle,
 		EstadoBadge,
+		FormActions,
 		FormFieldWrapper,
 		Historial,
 		Icono,
@@ -64,7 +65,8 @@
 	const puedeVerMovimientos = can(page.data.user, page.data.permisos, 'insumos', 'view');
 	const puedeEditarInsumos = can(page.data.user, page.data.permisos, 'insumos', 'edit');
 	const puedeEditar = can(page.data.user, page.data.permisos, 'fabricacion', 'edit');
-	let edicion = $state<EditarOrden>();
+	let editando = $state(false);
+	let guardandoOrden = $state(false);
 	const empleados = $derived(puedeEditarInsumos ? await getEmpleadosOpciones() : []);
 	const movimientos = $derived(
 		puedeVerMovimientos ? await getMovimientosInsumos({ orden_id: id, limit: 100 }) : []
@@ -139,6 +141,7 @@
 		titulo="OF-{orden.id}"
 		subtitulo={orden.nombre_trabajo}
 		volver={{ href: '/fabricacion', etiqueta: 'Fabricación' }}
+		{editando}
 		estado={orden.estado}
 		{estados}
 		actual="fabricacion"
@@ -150,63 +153,76 @@
 		}}
 	>
 		{#snippet acciones()}
-			{#if puedeEditar}
-				<button class="btn btn-sm" onclick={() => edicion?.abrir()}>Editar</button>
+			{#if editando}
+				<FormActions
+					formulario="editar-orden"
+					pending={guardandoOrden}
+					submitText="Guardar cambios"
+					onCancel={() => (editando = false)}
+				/>
+			{:else}
+				{#if puedeEditar}
+					<button class="btn btn-sm" onclick={() => (editando = true)}>Editar</button>
+				{/if}
+				<a
+					class="btn btn-sm"
+					href={resolve(`/fabricacion/${orden.id}/pdf`)}
+					target="_blank"
+					rel="noreferrer"
+				>
+					<Icono nombre="imprimir" /> Imprimir
+				</a>
 			{/if}
-			<a
-				class="btn btn-sm"
-				href={resolve(`/fabricacion/${orden.id}/pdf`)}
-				target="_blank"
-				rel="noreferrer"
-			>
-				<Icono nombre="imprimir" /> Imprimir
-			</a>
 		{/snippet}
 	</EncabezadoDetalle>
 
-	<Seccion>
-		<dl class="datos">
-			<div>
-				<dt>Progreso</dt>
-				<dd class="flex items-center gap-2">
-					<progress
-						class="progress w-24 progress-primary"
-						value={orden.cantidad_producida}
-						max={orden.cantidad_total}
-					></progress>
-					<span class="tabular-nums">{orden.cantidad_producida}/{orden.cantidad_total}</span>
-				</dd>
-			</div>
-			<div>
-				<dt>Cliente</dt>
-				<dd>{orden.es_para_stock ? 'Stock interno' : (orden.cliente_nombre ?? '-')}</dd>
-			</div>
-			{#if orden.tipo_trabajo && orden.tipo_trabajo !== 'fabricacion'}
+	{#if editando}
+		<EditarOrden {orden} bind:guardando={guardandoOrden} onGuardado={() => (editando = false)} />
+	{:else}
+		<Seccion>
+			<dl class="datos">
 				<div>
-					<dt>Tipo de trabajo</dt>
-					<dd>
-						<span class={['badge badge-soft', TIPO_TRABAJO_COLOR[orden.tipo_trabajo]]}>
-							{ETIQUETA_TIPO_TRABAJO[orden.tipo_trabajo]}
-						</span>
+					<dt>Progreso</dt>
+					<dd class="flex items-center gap-2">
+						<progress
+							class="progress w-24 progress-primary"
+							value={orden.cantidad_producida}
+							max={orden.cantidad_total}
+						></progress>
+						<span class="tabular-nums">{orden.cantidad_producida}/{orden.cantidad_total}</span>
 					</dd>
 				</div>
-			{/if}
-			<div>
-				<dt>Prioridad</dt>
-				<dd><EstadoBadge estado={ETIQUETA_PRIORIDAD[orden.prioridad ?? 0]} /></dd>
-			</div>
-			<div>
-				<dt>Asignado a</dt>
-				<dd>
-					{orden.empleado ? `${orden.empleado.nombre} ${orden.empleado.apellido}` : 'Sin asignar'}
-				</dd>
-			</div>
-			<div>
-				<dt>Entrega estimada</dt>
-				<dd>{formatearFecha(orden.fecha_fin_estimada)}</dd>
-			</div>
-		</dl>
-	</Seccion>
+				<div>
+					<dt>Cliente</dt>
+					<dd>{orden.es_para_stock ? 'Stock interno' : (orden.cliente_nombre ?? '-')}</dd>
+				</div>
+				{#if orden.tipo_trabajo && orden.tipo_trabajo !== 'fabricacion'}
+					<div>
+						<dt>Tipo de trabajo</dt>
+						<dd>
+							<span class={['badge badge-soft', TIPO_TRABAJO_COLOR[orden.tipo_trabajo]]}>
+								{ETIQUETA_TIPO_TRABAJO[orden.tipo_trabajo]}
+							</span>
+						</dd>
+					</div>
+				{/if}
+				<div>
+					<dt>Prioridad</dt>
+					<dd><EstadoBadge estado={ETIQUETA_PRIORIDAD[orden.prioridad ?? 0]} /></dd>
+				</div>
+				<div>
+					<dt>Asignado a</dt>
+					<dd>
+						{orden.empleado ? `${orden.empleado.nombre} ${orden.empleado.apellido}` : 'Sin asignar'}
+					</dd>
+				</div>
+				<div>
+					<dt>Entrega estimada</dt>
+					<dd>{formatearFecha(orden.fecha_fin_estimada)}</dd>
+				</div>
+			</dl>
+		</Seccion>
+	{/if}
 
 	<Seccion titulo="Unidades">
 		{#snippet acciones()}
@@ -451,7 +467,3 @@
 		onRegistrado={() => (preparando = false)}
 	/>
 </Modal>
-
-{#if puedeEditar}
-	<EditarOrden bind:this={edicion} {orden} />
-{/if}

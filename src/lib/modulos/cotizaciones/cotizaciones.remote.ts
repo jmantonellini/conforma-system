@@ -36,6 +36,7 @@ import {
 	type Tx
 } from '$lib/server/estados';
 import { siguienteNumero } from '$lib/server/db/numeracion';
+import { CANALES_COTIZACION } from './canales';
 import { CotizacionSchema, LineaCotizacionSchema } from './cotizaciones.schema';
 import {
 	getCotizacionById,
@@ -535,6 +536,44 @@ export const cambiarMonedaCotizacion = command(CambioMonedaSchema, async (cambio
 	getHistorialCotizacion(cambio.id).refresh();
 	return { success: true };
 });
+
+export const editarDatosCotizacion = command(
+	v.object({
+		id: v.number(),
+		canal: v.picklist(Object.keys(CANALES_COTIZACION)),
+		descripcion: v.pipe(v.string(), v.trim(), v.nonEmpty('Escribí la consulta'), v.maxLength(4000)),
+		observaciones: v.nullable(v.pipe(v.string(), v.trim(), v.maxLength(4000)))
+	}),
+	async ({ id, canal, descripcion, observaciones }) => {
+		const user = await requirePermission('cotizaciones', 'edit');
+		await db.transaction(async (tx) => {
+			const cotizacion = await bloquearCotizacion(tx, id);
+			const notas = observaciones || null;
+			const cambios = [
+				cotizacion.canal !== canal &&
+					`Canal: ${CANALES_COTIZACION[cotizacion.canal] ?? cotizacion.canal} → ${CANALES_COTIZACION[canal]}`,
+				cotizacion.descripcion !== descripcion && 'Consulta actualizada',
+				(cotizacion.observaciones || null) !== notas &&
+					(notas ? 'Observaciones internas actualizadas' : 'Observaciones internas quitadas')
+			].filter((cambio): cambio is string => Boolean(cambio));
+			if (!cambios.length) return;
+			await tx
+				.update(cotizaciones)
+				.set({ canal, descripcion, observaciones: notas, updated_at: new Date() })
+				.where(eq(cotizaciones.id, id));
+			await registrarAuditoria(tx, {
+				entidad: 'cotizacion',
+				entidadId: id,
+				usuarioId: user.id,
+				accion: 'edicion',
+				detalle: cambios.join('\n')
+			});
+		});
+		refrescarCotizacion(id);
+		getHistorialCotizacion(id).refresh();
+		return { success: true };
+	}
+);
 
 export const cambiarTipoTrabajoCotizacion = command(
 	v.object({ id: v.number(), tipo: v.picklist(TIPOS_TRABAJO) }),

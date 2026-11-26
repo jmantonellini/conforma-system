@@ -81,7 +81,17 @@
 
 	let tiposUso: { id: number; nombre: string; slug: string }[] = page.data.tiposDeUso;
 
-	let form = $derived(actualizarProducto.for(String(data.producto.id)));
+	let editando = $state(false);
+	let version = $state(0);
+	let form = $derived(actualizarProducto.for(`${data.producto.id}-${version}`));
+	const puedeEditar = can(page.data.user, page.data.permisos, 'productos', 'edit');
+
+	function cancelarEdicion() {
+		version++;
+		receta = mapearReceta();
+		valoresAtributos = { ...data.producto.atributos };
+		editando = false;
+	}
 
 	let categoriaActual = $derived(
 		form.fields.categoria_id.value() ??
@@ -197,6 +207,7 @@
 		titulo={data.producto.nombre}
 		subtitulo={[data.producto.codigo, categoriaSeleccionada?.nombre].filter(Boolean).join(' · ')}
 		volver={{ href: '/productos', etiqueta: 'Productos' }}
+		{editando}
 		eliminar={{
 			modulo: 'productos',
 			mensaje: `¿Eliminar el producto ${data.producto.nombre}?`,
@@ -206,7 +217,20 @@
 				goto(resolve('/productos'));
 			}
 		}}
-	/>
+	>
+		{#snippet acciones()}
+			{#if editando}
+				<FormActions
+					formulario="producto-form"
+					pending={!!form.pending}
+					submitText="Guardar cambios"
+					onCancel={cancelarEdicion}
+				/>
+			{:else if puedeEditar}
+				<button class="btn btn-sm" onclick={() => (editando = true)}>Editar</button>
+			{/if}
+		{/snippet}
+	</EncabezadoDetalle>
 
 	<section class="flex flex-col gap-5 seccion sm:flex-row">
 		<div
@@ -287,284 +311,289 @@
 				try {
 					if (await instancia.submit()) {
 						await invalidateAll();
+						editando = false;
 						toast.success('Producto actualizado');
 					} else toast.error('Revisá los datos del producto');
 				} catch {
 					toast.error('No se pudo actualizar el producto. Revisá la receta e intentá de nuevo.');
 				}
 			})}
+			id="producto-form"
 			class="flex flex-col gap-4 sm:gap-6"
 		>
-			<input type="hidden" name="id" value={page.params.id} />
-			<input type="hidden" name="receta" value={JSON.stringify(receta)} />
+			<fieldset disabled={!editando} class="contents">
+				<input type="hidden" name="id" value={page.params.id} />
+				<input type="hidden" name="receta" value={JSON.stringify(receta)} />
 
-			<Seccion titulo="Datos generales">
-				<div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-					<FormFieldWrapper label="Código" id="codigo" required>
-						<input
-							id="codigo"
-							class="input font-mono"
-							{...form.fields.codigo.as('text', data.producto.codigo)}
-						/>
-					</FormFieldWrapper>
-					<FormFieldWrapper label="Nombre" id="nombre" required class="lg:col-span-2">
-						<input
-							id="nombre"
-							class="input"
-							{...form.fields.nombre.as('text', data.producto.nombre)}
-						/>
-					</FormFieldWrapper>
-					<FormFieldWrapper label="Categoría" id="categoria_id">
-						<select
-							id="categoria_id"
-							class="select"
-							{...form.fields.categoria_id.as('select', String(data.producto.categoria_id))}
-						>
-							<option value="">Seleccionar...</option>
-							{#each categorias as cat (cat.id)}
-								<option value={String(cat.id)}>{cat.nombre}</option>
-							{/each}
-						</select>
-					</FormFieldWrapper>
-					{#if categoriaSeleccionada?.slug === CATEGORIAS_PRODUCTO.ESCAPES}
-						<FormFieldWrapper label="Tipo de pieza" id="tipo_pieza">
+				<Seccion titulo="Datos generales">
+					<div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+						<FormFieldWrapper label="Código" id="codigo" required>
+							<input
+								id="codigo"
+								class="input font-mono"
+								{...form.fields.codigo.as('text', data.producto.codigo)}
+							/>
+						</FormFieldWrapper>
+						<FormFieldWrapper label="Nombre" id="nombre" required class="lg:col-span-2">
+							<input
+								id="nombre"
+								class="input"
+								{...form.fields.nombre.as('text', data.producto.nombre)}
+							/>
+						</FormFieldWrapper>
+						<FormFieldWrapper label="Categoría" id="categoria_id">
 							<select
-								id="tipo_pieza"
+								id="categoria_id"
 								class="select"
-								{...form.fields.tipo_pieza.as('select', data.producto.tipo_pieza ?? '')}
-							>
-								<option value="">Sin definir</option>
-								{#each TIPOS_PIEZA as tipo (tipo)}
-									<option value={tipo}>{ETIQUETA_TIPO_PIEZA[tipo]}</option>
-								{/each}
-							</select>
-						</FormFieldWrapper>
-					{/if}
-				</div>
-			</Seccion>
-
-			{#if categoriaSeleccionada?.slug === CATEGORIAS_PRODUCTO.ESCAPES}
-				<Seccion titulo="Vehículo">
-					<div class="grid gap-4 sm:grid-cols-3">
-						<FormFieldWrapper label="Tipo" id="tipo_vehiculo_id">
-							<select
-								{...form.fields.tipo_vehiculo_id.as(
-									'select',
-									String(data.producto.tipo_vehiculo_id)
-								)}
-								class="select w-full"
+								{...form.fields.categoria_id.as('select', String(data.producto.categoria_id))}
 							>
 								<option value="">Seleccionar...</option>
-								{#each tiposVehiculo as tv (tv.id)}
-									<option value={String(tv.id)}>{tv.nombre}</option>
+								{#each categorias as cat (cat.id)}
+									<option value={String(cat.id)}>{cat.nombre}</option>
 								{/each}
 							</select>
 						</FormFieldWrapper>
-
-						<FormFieldWrapper label="Marca" id="marca_id">
-							<select
-								{...form.fields.marca_id.as('select', String(data.producto.marca_id))}
-								class="select w-full"
-								disabled={!tipoVehiculoActual}
-							>
-								<option value="">Seleccionar...</option>
-								{#each marcas as m (m.id)}
-									<option value={String(m.id)}>
-										{#if m.logo_url}<img
-												src={m.logo_url}
-												alt={m.nombre}
-												class="h-5 w-5 object-contain"
-											/>
-										{/if}
-										{m.nombre}
-									</option>
-								{/each}
-							</select>
-						</FormFieldWrapper>
-
-						<FormFieldWrapper label="Modelo" id="modelo_id">
-							<select
-								{...form.fields.modelo_id.as('select', String(data.producto.modelo_id))}
-								class="select w-full"
-								disabled={!marcaActual}
-							>
-								<option value="">Seleccionar...</option>
-								{#each marcaActual ? await getModelos(Number(marcaActual)) : [] as mod (mod.id)}
-									<option value={String(mod.id)}>{mod.nombre}</option>
-								{/each}
-							</select>
-						</FormFieldWrapper>
-					</div>
-
-					<div class="grid gap-4 sm:grid-cols-2">
-						<FormFieldWrapper
-							label="Año desde"
-							id="anio_desde"
-							error={form.fields.anio_desde.issues()?.[0]?.message}
-						>
-							<input
-								{...form.fields.anio_desde.as('number', data.producto.anio_desde ?? '')}
-								id="anio_desde"
-								class="input w-full"
-								min="1900"
-								max="2100"
-								step="1"
-								placeholder="Ej: 2010"
-							/>
-						</FormFieldWrapper>
-						<FormFieldWrapper
-							label="Año hasta"
-							id="anio_hasta"
-							ayuda="Vacío si sigue vigente"
-							error={form.fields.anio_hasta.issues()?.[0]?.message}
-						>
-							<input
-								{...form.fields.anio_hasta.as('number', data.producto.anio_hasta ?? '')}
-								id="anio_hasta"
-								class="input w-full"
-								min="1900"
-								max="2100"
-								step="1"
-								placeholder="Ej: 2016"
-							/>
-						</FormFieldWrapper>
-					</div>
-
-					<div class="grid gap-4 sm:grid-cols-2">
-						<FormFieldWrapper label="Tipo de uso" id="tipo_uso_id">
-							<select
-								{...form.fields.tipo_uso_id.as('select', String(data.producto.tipo_uso_id))}
-								class="select w-full"
-							>
-								<option value="">Seleccionar...</option>
-								{#each tiposUso as tu (tu.id)}
-									<option value={String(tu.id)}>{tu.nombre}</option>
-								{/each}
-							</select>
-						</FormFieldWrapper>
-
-						{#if tipoUsoSeleccionado?.slug === TIPOS_USO_PRODUCTO.COMPETENCIA}
-							<FormFieldWrapper label="Categoría de competencia" id="categoria_competencia_id">
+						{#if categoriaSeleccionada?.slug === CATEGORIAS_PRODUCTO.ESCAPES}
+							<FormFieldWrapper label="Tipo de pieza" id="tipo_pieza">
 								<select
-									{...form.fields.categoria_competencia_id.as(
-										'select',
-										String(data.producto.categoria_competencia_id)
-									)}
-									class="select w-full"
+									id="tipo_pieza"
+									class="select"
+									{...form.fields.tipo_pieza.as('select', data.producto.tipo_pieza ?? '')}
 								>
-									<option value="">Seleccionar...</option>
-									{#each tipoVehiculoActual ? await getCategoriasComp(Number(tipoVehiculoActual)) : [] as cat (cat.id)}
-										<option value={String(cat.id)}>{cat.nombre}</option>
+									<option value="">Sin definir</option>
+									{#each TIPOS_PIEZA as tipo (tipo)}
+										<option value={tipo}>{ETIQUETA_TIPO_PIEZA[tipo]}</option>
 									{/each}
 								</select>
 							</FormFieldWrapper>
 						{/if}
 					</div>
 				</Seccion>
-			{/if}
 
-			{#if definiciones.length}
-				<Seccion titulo="Medidas y construcción">
-					<AtributosCampos {definiciones} bind:valores={valoresAtributos} />
-				</Seccion>
-			{/if}
+				{#if categoriaSeleccionada?.slug === CATEGORIAS_PRODUCTO.ESCAPES}
+					<Seccion titulo="Vehículo">
+						<div class="grid gap-4 sm:grid-cols-3">
+							<FormFieldWrapper label="Tipo" id="tipo_vehiculo_id">
+								<select
+									{...form.fields.tipo_vehiculo_id.as(
+										'select',
+										String(data.producto.tipo_vehiculo_id)
+									)}
+									class="select w-full"
+								>
+									<option value="">Seleccionar...</option>
+									{#each tiposVehiculo as tv (tv.id)}
+										<option value={String(tv.id)}>{tv.nombre}</option>
+									{/each}
+								</select>
+							</FormFieldWrapper>
 
-			<Seccion titulo="Receta" descripcion="Insumos y subproductos que lleva cada unidad.">
-				{#snippet acciones()}
-					{#if veImportes}
-						<span class="text-sm text-base-content/70">
-							Costo: <strong class="tabular-nums">{formatearMoneda(costoReceta)}</strong>
-						</span>
-					{/if}
-				{/snippet}
-				<div class="flex flex-col gap-1">
-					{#each receta as linea, indice (indice)}
-						{@const unidad =
-							data.insumos.find((insumo) => String(insumo.id) === linea.insumo_id)?.unidad ??
-							(linea.producto_id ? 'Producto' : '-')}
-						<div class="mb-1 grid grid-cols-[minmax(0,1fr)_6rem_5rem_2rem] gap-1 sm:items-center">
-							<SearchSelect
-								compacto
-								label=""
-								id={`receta-edit-${indice}`}
-								placeholder="Buscar componente..."
-								field={{
-									value: () =>
-										linea.insumo_id
-											? `insumo:${linea.insumo_id}`
-											: linea.producto_id
-												? `producto:${linea.producto_id}`
-												: '',
-									set: (value: string) => {
-										const [tipo, id] = value.split(':');
-										actualizarLinea(indice, {
-											insumo_id: tipo === 'insumo' ? id : '',
-											producto_id: tipo === 'producto' ? id : ''
-										});
-									}
-								}}
-								options={opcionesComponentes}
-							/>
-							<input
-								class="input w-full min-w-0 text-right input-sm"
-								type="number"
-								min="0"
-								step="0.0001"
-								value={linea.cantidad}
-								oninput={(event) =>
-									actualizarLinea(indice, {
-										cantidad: Number(event.currentTarget.value) || 0
-									})}
-							/>
-							<span
-								class="label w-20 min-w-0 justify-start truncate whitespace-nowrap"
-								title={unidad}
+							<FormFieldWrapper label="Marca" id="marca_id">
+								<select
+									{...form.fields.marca_id.as('select', String(data.producto.marca_id))}
+									class="select w-full"
+									disabled={!tipoVehiculoActual}
+								>
+									<option value="">Seleccionar...</option>
+									{#each marcas as m (m.id)}
+										<option value={String(m.id)}>
+											{#if m.logo_url}<img
+													src={m.logo_url}
+													alt={m.nombre}
+													class="h-5 w-5 object-contain"
+												/>
+											{/if}
+											{m.nombre}
+										</option>
+									{/each}
+								</select>
+							</FormFieldWrapper>
+
+							<FormFieldWrapper label="Modelo" id="modelo_id">
+								<select
+									{...form.fields.modelo_id.as('select', String(data.producto.modelo_id))}
+									class="select w-full"
+									disabled={!marcaActual}
+								>
+									<option value="">Seleccionar...</option>
+									{#each marcaActual ? await getModelos(Number(marcaActual)) : [] as mod (mod.id)}
+										<option value={String(mod.id)}>{mod.nombre}</option>
+									{/each}
+								</select>
+							</FormFieldWrapper>
+						</div>
+
+						<div class="grid gap-4 sm:grid-cols-2">
+							<FormFieldWrapper
+								label="Año desde"
+								id="anio_desde"
+								error={form.fields.anio_desde.issues()?.[0]?.message}
 							>
-								{unidad}
+								<input
+									{...form.fields.anio_desde.as('number', data.producto.anio_desde ?? '')}
+									id="anio_desde"
+									class="input w-full"
+									min="1900"
+									max="2100"
+									step="1"
+									placeholder="Ej: 2010"
+								/>
+							</FormFieldWrapper>
+							<FormFieldWrapper
+								label="Año hasta"
+								id="anio_hasta"
+								ayuda="Vacío si sigue vigente"
+								error={form.fields.anio_hasta.issues()?.[0]?.message}
+							>
+								<input
+									{...form.fields.anio_hasta.as('number', data.producto.anio_hasta ?? '')}
+									id="anio_hasta"
+									class="input w-full"
+									min="1900"
+									max="2100"
+									step="1"
+									placeholder="Ej: 2016"
+								/>
+							</FormFieldWrapper>
+						</div>
+
+						<div class="grid gap-4 sm:grid-cols-2">
+							<FormFieldWrapper label="Tipo de uso" id="tipo_uso_id">
+								<select
+									{...form.fields.tipo_uso_id.as('select', String(data.producto.tipo_uso_id))}
+									class="select w-full"
+								>
+									<option value="">Seleccionar...</option>
+									{#each tiposUso as tu (tu.id)}
+										<option value={String(tu.id)}>{tu.nombre}</option>
+									{/each}
+								</select>
+							</FormFieldWrapper>
+
+							{#if tipoUsoSeleccionado?.slug === TIPOS_USO_PRODUCTO.COMPETENCIA}
+								<FormFieldWrapper label="Categoría de competencia" id="categoria_competencia_id">
+									<select
+										{...form.fields.categoria_competencia_id.as(
+											'select',
+											String(data.producto.categoria_competencia_id)
+										)}
+										class="select w-full"
+									>
+										<option value="">Seleccionar...</option>
+										{#each tipoVehiculoActual ? await getCategoriasComp(Number(tipoVehiculoActual)) : [] as cat (cat.id)}
+											<option value={String(cat.id)}>{cat.nombre}</option>
+										{/each}
+									</select>
+								</FormFieldWrapper>
+							{/if}
+						</div>
+					</Seccion>
+				{/if}
+
+				{#if definiciones.length}
+					<Seccion titulo="Medidas y construcción">
+						<AtributosCampos {definiciones} bind:valores={valoresAtributos} />
+					</Seccion>
+				{/if}
+
+				<Seccion titulo="Receta" descripcion="Insumos y subproductos que lleva cada unidad.">
+					{#snippet acciones()}
+						{#if veImportes}
+							<span class="text-sm text-base-content/70">
+								Costo: <strong class="tabular-nums">{formatearMoneda(costoReceta)}</strong>
 							</span>
-							<button
-								class="btn btn-square btn-ghost text-error btn-sm"
-								title="Quitar componente"
-								aria-label="Quitar componente"
-								type="button"
-								onclick={() => (receta = receta.filter((_, i) => i !== indice))}
-							>
-								<Icono nombre="papelera" />
-							</button>
-						</div>
-					{/each}
-				</div>
-				<div class="flex items-center gap-4">
-					<button class="btn btn-sm" type="button" onclick={agregarInsumo}>
-						<Icono nombre="mas_simple" /> Agregar componente
-					</button>
-					{#if veImportes}
-						<div class="ml-auto grid w-80 grid-cols-2 gap-2">
-							<MargenPrecio
-								field={form.fields.margen_porcentaje}
-								costo={costoReceta}
-								inicial={data.producto.margen_porcentaje ?? 0}
-							/>
-						</div>
-					{/if}
-				</div>
-			</Seccion>
+						{/if}
+					{/snippet}
+					<div class="flex flex-col gap-1">
+						{#each receta as linea, indice (indice)}
+							{@const unidad =
+								data.insumos.find((insumo) => String(insumo.id) === linea.insumo_id)?.unidad ??
+								(linea.producto_id ? 'Producto' : '-')}
+							<div class="mb-1 grid grid-cols-[minmax(0,1fr)_6rem_5rem_2rem] gap-1 sm:items-center">
+								<SearchSelect
+									compacto
+									label=""
+									id={`receta-edit-${indice}`}
+									placeholder="Buscar componente..."
+									field={{
+										value: () =>
+											linea.insumo_id
+												? `insumo:${linea.insumo_id}`
+												: linea.producto_id
+													? `producto:${linea.producto_id}`
+													: '',
+										set: (value: string) => {
+											const [tipo, id] = value.split(':');
+											actualizarLinea(indice, {
+												insumo_id: tipo === 'insumo' ? id : '',
+												producto_id: tipo === 'producto' ? id : ''
+											});
+										}
+									}}
+									options={opcionesComponentes}
+								/>
+								<input
+									class="input w-full min-w-0 text-right input-sm"
+									type="number"
+									min="0"
+									step="0.0001"
+									value={linea.cantidad}
+									oninput={(event) =>
+										actualizarLinea(indice, {
+											cantidad: Number(event.currentTarget.value) || 0
+										})}
+								/>
+								<span
+									class="label w-20 min-w-0 justify-start truncate whitespace-nowrap"
+									title={unidad}
+								>
+									{unidad}
+								</span>
+								<button
+									class="btn btn-square btn-ghost text-error btn-sm"
+									title="Quitar componente"
+									aria-label="Quitar componente"
+									type="button"
+									onclick={() => (receta = receta.filter((_, i) => i !== indice))}
+								>
+									<Icono nombre="papelera" />
+								</button>
+							</div>
+						{/each}
+					</div>
+					<div class="flex items-center gap-4">
+						<button class="btn btn-sm" type="button" onclick={agregarInsumo}>
+							<Icono nombre="mas_simple" /> Agregar componente
+						</button>
+						{#if veImportes}
+							<div class="ml-auto grid w-80 grid-cols-2 gap-2">
+								<MargenPrecio
+									field={form.fields.margen_porcentaje}
+									costo={costoReceta}
+									inicial={data.producto.margen_porcentaje ?? 0}
+								/>
+							</div>
+						{/if}
+					</div>
+				</Seccion>
 
-			<Seccion titulo="Notas de fabricación">
-				<textarea
-					id="notas_fabricacion"
-					class="textarea w-full"
-					rows={3}
-					{...form.fields.notas_fabricacion.as('text', data.producto.notas_fabricacion ?? '')}
-				></textarea>
-			</Seccion>
-
+				<Seccion titulo="Notas de fabricación">
+					<textarea
+						id="notas_fabricacion"
+						class="textarea w-full"
+						rows={3}
+						{...form.fields.notas_fabricacion.as('text', data.producto.notas_fabricacion ?? '')}
+					></textarea>
+				</Seccion>
+			</fieldset>
 			<FormErrors {form} />
-			<FormActions
-				cancelHref={resolve('/productos')}
-				pending={!!form.pending}
-				submitText="Guardar cambios"
-			/>
+			{#if editando}
+				<FormActions
+					pending={!!form.pending}
+					submitText="Guardar cambios"
+					onCancel={cancelarEdicion}
+				/>
+			{/if}
 		</form>
 	</Can>
 

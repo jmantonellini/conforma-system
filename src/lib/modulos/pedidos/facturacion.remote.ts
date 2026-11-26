@@ -55,11 +55,6 @@ const AjustePrecioSchema = v.object({
 	motivo: v.pipe(v.string(), v.trim(), v.nonEmpty('Indicá el motivo'), v.maxLength(200))
 });
 
-const FacturaSchema = v.object({
-	pedido_id: idTexto,
-	factura: textoOpcional
-});
-
 export const getPagosByPedido = query(v.number(), async (pedidoId) => {
 	await requirePermission('pedidos', 'view');
 	await requirePermission('importes', 'view');
@@ -312,32 +307,5 @@ export const ajustarPrecio = form(AjustePrecioSchema, async (data) => {
 	});
 
 	refrescarPedido(data.pedido_id);
-	return { success: true };
-});
-
-export const cambiarFactura = form(FacturaSchema, async (data) => {
-	const user = await requirePermission('pedidos', 'edit');
-	const factura = data.factura || null;
-
-	await db.transaction(async (tx) => {
-		const [actual] = await tx
-			.select({ factura: pedidos.factura })
-			.from(pedidos)
-			.where(eq(pedidos.id, data.pedido_id))
-			.for('update');
-		if (!actual) error(404, 'Pedido no encontrado');
-		if (actual.factura === factura) return;
-		await tx.update(pedidos).set({ factura }).where(eq(pedidos.id, data.pedido_id));
-		await registrarAuditoria(tx, {
-			entidad: 'pedido',
-			entidadId: data.pedido_id,
-			usuarioId: user.id,
-			accion: 'edicion',
-			detalle: factura ? `Factura: ${factura}` : 'Factura quitada'
-		});
-	});
-
-	getPedidoById(data.pedido_id).refresh();
-	getHistorialPedido(data.pedido_id).refresh();
 	return { success: true };
 });

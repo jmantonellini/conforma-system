@@ -6,6 +6,7 @@
 	import {
 		Can,
 		EncabezadoDetalle,
+		FormActions,
 		FormFieldWrapper,
 		Historial,
 		MenuDesplegable,
@@ -29,6 +30,7 @@
 		cambiarMonedaCotizacion,
 		cambiarTipoTrabajoCotizacion,
 		convertirCotizacionAPedido,
+		editarDatosCotizacion,
 		eliminarCotizacion
 	} from '$lib/modulos/cotizaciones/cotizaciones.remote';
 	import RecepcionPieza from '$lib/modulos/recepciones/componentes/RecepcionPieza.svelte';
@@ -56,6 +58,54 @@
 	let nota = $state('');
 	let rechazo = $state<{ estadoId: number; motivo: string } | null>(null);
 	let ocupado = $state(false);
+	let editando = $state(false);
+	let borrador = $state({
+		canal: '',
+		tipo: 'fabricacion' as TipoTrabajo,
+		asignado: '',
+		descripcion: '',
+		observaciones: ''
+	});
+
+	function empezarEdicion() {
+		borrador = {
+			canal: cotizacion.canal,
+			tipo: cotizacion.tipo_trabajo,
+			asignado: cotizacion.asignado ? String(cotizacion.asignado.id) : '',
+			descripcion: cotizacion.descripcion,
+			observaciones: cotizacion.observaciones ?? ''
+		};
+		editando = true;
+	}
+
+	async function guardarDatos() {
+		if (!borrador.descripcion.trim()) return toast.error('Escribí la consulta');
+		ocupado = true;
+		try {
+			if (borrador.tipo !== cotizacion.tipo_trabajo) {
+				await cambiarTipoTrabajoCotizacion({ id: cotizacion.id, tipo: borrador.tipo });
+			}
+			if (borrador.asignado && Number(borrador.asignado) !== cotizacion.asignado?.id) {
+				await asignarCotizacion({
+					cotizacion_id: cotizacion.id,
+					empleado_id: Number(borrador.asignado)
+				});
+			}
+			await editarDatosCotizacion({
+				id: cotizacion.id,
+				canal: borrador.canal,
+				descripcion: borrador.descripcion,
+				observaciones: borrador.observaciones.trim() || null
+			});
+			await invalidateAll();
+			editando = false;
+			toast.success('Cotización actualizada');
+		} catch (error) {
+			toast.error(mensajeError(error, 'No se pudo actualizar la cotización'));
+		} finally {
+			ocupado = false;
+		}
+	}
 
 	async function ejecutar(accion: () => Promise<unknown>, exito: string) {
 		ocupado = true;
@@ -71,12 +121,6 @@
 			ocupado = false;
 		}
 	}
-
-	const cambiarTipo = (tipo: TipoTrabajo) =>
-		ejecutar(
-			() => cambiarTipoTrabajoCotizacion({ id: cotizacion.id, tipo }),
-			`Marcada como ${ETIQUETA_TIPO_TRABAJO[tipo].toLowerCase()}`
-		);
 
 	const cambiarEstado = (estado_destino_id: number, comentario?: string) =>
 		ejecutar(
@@ -118,6 +162,7 @@
 		volver={{ href: '/cotizaciones', etiqueta: 'Cotizaciones' }}
 		estado={cotizacion.estado}
 		transiciones={cotizacion.pedido_id ? [] : cotizacion.transiciones}
+		{editando}
 		onTransicion={manejarTransicion}
 		puedeTransicionar={() => puede('edit')}
 		estados={data.estados}
@@ -133,24 +178,38 @@
 		}}
 	>
 		{#snippet acciones()}
-			{#if cotizacion.estado.slug === 'aprobada' && !cotizacion.pedido_id}
-				<Can modulo="pedidos" accion="create">
-					<button class="btn btn-primary btn-sm" onclick={generarPedido}>Generar pedido</button>
-				</Can>
-			{/if}
-			{#if veImportes}
-				<MenuDesplegable alFinal>
-					{#snippet etiqueta()}<Document /> PDF{/snippet}
-					{#each [['USD', 'Dólares (USD)'], ['ARS', 'Pesos (ARS)']] as [moneda, nombre] (moneda)}
-						<li>
-							<a
-								href={resolve(`/cotizaciones/${cotizacion.id}/pdf?moneda=${moneda}`)}
-								target="_blank"
-								rel="noreferrer">{nombre}</a
-							>
-						</li>
-					{/each}
-				</MenuDesplegable>
+			{#if editando}
+				<FormActions
+					pending={ocupado}
+					submitText="Guardar cambios"
+					onCancel={() => (editando = false)}
+					onSubmit={guardarDatos}
+				/>
+			{:else}
+				{#if puede('edit')}
+					<button class="btn btn-sm" onclick={empezarEdicion}>Editar</button>
+				{/if}
+				{#if cotizacion.estado.slug === 'aprobada' && !cotizacion.pedido_id}
+					<Can modulo="pedidos" accion="create">
+						<button class="btn btn-primary btn-sm" onclick={generarPedido}>Generar pedido</button>
+					</Can>
+				{/if}
+				{#if veImportes}
+					<MenuDesplegable alFinal>
+						{#snippet etiqueta()}<Document /> PDF{/snippet}
+						{#each [['USD', 'Dólares (USD)'], ['ARS', 'Pesos (ARS)']] as [moneda, nombre] (moneda)}
+							<li>
+								<a
+									href={resolve(`/cotizaciones/${cotizacion.id}/pdf?moneda=${moneda}`)}
+									target="_blank"
+									rel="noreferrer"
+								>
+									{nombre}
+								</a>
+							</li>
+						{/each}
+					</MenuDesplegable>
+				{/if}
 			{/if}
 		{/snippet}
 	</EncabezadoDetalle>
@@ -172,31 +231,8 @@
 				<dt>Contacto</dt>
 				<dd>
 					{cliente?.telefono || '-'}
-					{#if cliente?.email}<span class="block text-sm text-base-content/60">{cliente.email}</span
-						>{/if}
-				</dd>
-			</div>
-			<div>
-				<dt>Canal</dt>
-				<dd>{CANALES_COTIZACION[cotizacion.canal] ?? cotizacion.canal}</dd>
-			</div>
-			<div>
-				<dt>Tipo de trabajo</dt>
-				<dd>
-					{#if puede('edit')}
-						<select
-							class="select w-auto select-sm"
-							aria-label="Tipo de trabajo"
-							value={cotizacion.tipo_trabajo}
-							disabled={ocupado}
-							onchange={(e) => cambiarTipo(e.currentTarget.value as TipoTrabajo)}
-						>
-							{#each TIPOS_TRABAJO as tipo (tipo)}
-								<option value={tipo}>{ETIQUETA_TIPO_TRABAJO[tipo]}</option>
-							{/each}
-						</select>
-					{:else}
-						{ETIQUETA_TIPO_TRABAJO[cotizacion.tipo_trabajo]}
+					{#if cliente?.email}
+						<span class="block text-sm break-all text-base-content/60">{cliente.email}</span>
 					{/if}
 				</dd>
 			</div>
@@ -207,68 +243,99 @@
 			{#if veImportes}
 				<div>
 					<dt>Moneda</dt>
-					<dd class="flex items-center gap-2">
-						<span>
-							{NOMBRE_MONEDA[cotizacion.moneda]} ({cotizacion.moneda})
-							{#if cotizacion.tipo_cambio}
-								<span class="block text-sm text-base-content/60">
-									US$ 1 = $ {formatearDosDecimales(cotizacion.tipo_cambio)}
-								</span>
-							{/if}
-						</span>
-						{#if puede('edit') && !cotizacion.pedido_id}
-							<button class="btn btn-ghost btn-xs" onclick={() => dialogoMoneda?.abrir()}>
-								Cambiar
+					<dd>
+						{NOMBRE_MONEDA[cotizacion.moneda]} ({cotizacion.moneda})
+						{#if cotizacion.tipo_cambio}
+							<span class="block text-sm text-base-content/60">
+								US$ 1 = $ {formatearDosDecimales(cotizacion.tipo_cambio)}
+							</span>
+						{/if}
+						{#if editando && !cotizacion.pedido_id}
+							<button
+								type="button"
+								class="btn mt-1 btn-ghost btn-xs"
+								onclick={() => dialogoMoneda?.abrir()}
+							>
+								Cambiar moneda
 							</button>
 						{/if}
 					</dd>
 				</div>
 			{/if}
-			<div>
-				<dt>Asignada a</dt>
-				<dd class="flex items-center gap-2">
-					<Persona
-						nombre={cotizacion.asignado?.nombre}
-						apellido={cotizacion.asignado?.apellido}
-						vacio="Sin asignar"
-					/>
-					{#if puede('edit')}
-						<MenuDesplegable class="btn btn-ghost btn-xs" titulo="Cambiar responsable">
-							{#snippet etiqueta()}{cotizacion.asignado ? 'Cambiar' : 'Asignar'}{/snippet}
-							<li class="menu-title">Asignar a</li>
-							{#each data.empleados as empleado (empleado.id)}
-								<li>
-									<button
-										disabled={ocupado}
-										class={[empleado.id === cotizacion.asignado?.id && 'menu-active']}
-										onclick={() =>
-											ejecutar(
-												() =>
-													asignarCotizacion({
-														cotizacion_id: cotizacion.id,
-														empleado_id: empleado.id
-													}),
-												`Asignada a ${empleado.nombre}`
-											)}
-									>
-										{empleado.nombre}
-										{empleado.apellido ?? ''}
-									</button>
-								</li>
-							{/each}
-						</MenuDesplegable>
-					{/if}
-				</dd>
-			</div>
-			<div class="col-span-full">
-				<dt>Consulta</dt>
-				<dd class="whitespace-pre-wrap">{cotizacion.descripcion}</dd>
-			</div>
-			{#if cotizacion.observaciones}
-				<div class="col-span-full">
-					<dt>Observaciones internas</dt>
-					<dd class="whitespace-pre-wrap">{cotizacion.observaciones}</dd>
+			{#if editando}
+				<FormFieldWrapper id="cotizacion-canal" label="Canal">
+					<select id="cotizacion-canal" class="select w-full" bind:value={borrador.canal}>
+						{#each Object.entries(CANALES_COTIZACION) as [valor, etiqueta] (valor)}
+							<option value={valor}>{etiqueta}</option>
+						{/each}
+					</select>
+				</FormFieldWrapper>
+				<FormFieldWrapper id="cotizacion-tipo" label="Tipo de trabajo">
+					<select id="cotizacion-tipo" class="select w-full" bind:value={borrador.tipo}>
+						{#each TIPOS_TRABAJO as tipo (tipo)}
+							<option value={tipo}>{ETIQUETA_TIPO_TRABAJO[tipo]}</option>
+						{/each}
+					</select>
+				</FormFieldWrapper>
+				<FormFieldWrapper id="cotizacion-asignado" label="Asignada a">
+					<select id="cotizacion-asignado" class="select w-full" bind:value={borrador.asignado}>
+						{#if !cotizacion.asignado}<option value="">Sin asignar</option>{/if}
+						{#each data.empleados as empleado (empleado.id)}
+							<option value={String(empleado.id)}>
+								{empleado.nombre}
+								{empleado.apellido ?? ''}
+							</option>
+						{/each}
+					</select>
+				</FormFieldWrapper>
+				<FormFieldWrapper class="col-span-full" id="cotizacion-consulta" label="Consulta" required>
+					<textarea
+						id="cotizacion-consulta"
+						class="textarea w-full"
+						rows="3"
+						bind:value={borrador.descripcion}></textarea>
+				</FormFieldWrapper>
+				<FormFieldWrapper
+					class="col-span-full"
+					id="cotizacion-observaciones"
+					label="Observaciones internas"
+				>
+					<textarea
+						id="cotizacion-observaciones"
+						class="textarea w-full"
+						rows="2"
+						placeholder="Notas que no ve el cliente"
+						bind:value={borrador.observaciones}></textarea>
+				</FormFieldWrapper>
+			{:else}
+				<div>
+					<dt>Canal</dt>
+					<dd>{CANALES_COTIZACION[cotizacion.canal] ?? cotizacion.canal}</dd>
 				</div>
+				<div>
+					<dt>Tipo de trabajo</dt>
+					<dd>{ETIQUETA_TIPO_TRABAJO[cotizacion.tipo_trabajo]}</dd>
+				</div>
+				<div>
+					<dt>Asignada a</dt>
+					<dd>
+						<Persona
+							nombre={cotizacion.asignado?.nombre}
+							apellido={cotizacion.asignado?.apellido}
+							vacio="Sin asignar"
+						/>
+					</dd>
+				</div>
+				<div class="col-span-full">
+					<dt>Consulta</dt>
+					<dd class="whitespace-pre-wrap">{cotizacion.descripcion}</dd>
+				</div>
+				{#if cotizacion.observaciones}
+					<div class="col-span-full">
+						<dt>Observaciones internas</dt>
+						<dd class="whitespace-pre-wrap">{cotizacion.observaciones}</dd>
+					</div>
+				{/if}
 			{/if}
 		</dl>
 	</Seccion>
@@ -332,8 +399,10 @@
 								ejecutar(async () => {
 									await agregarNotaCotizacion({ cotizacion_id: cotizacion.id, contenido: nota });
 									nota = '';
-								}, 'Nota agregada')}>Agregar nota</button
+								}, 'Nota agregada')}
 						>
+							Agregar nota
+						</button>
 					</div>
 				{/if}
 				<Historial eventos={notas} vacio="Todavía no hay notas." />

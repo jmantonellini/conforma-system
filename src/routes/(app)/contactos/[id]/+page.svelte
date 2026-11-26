@@ -24,7 +24,8 @@
 
 	let { data }: PageProps = $props();
 	const veImportes = $derived(can(data.user, data.permisos, 'importes', 'view'));
-	const form = $derived(actualizarContacto.for(String(data.contacto.id)));
+	let version = $state(0);
+	const form = $derived(actualizarContacto.for(`${data.contacto.id}-${version}`));
 	const contacto = $derived(data.contacto);
 	let esDistribuidor = $derived(contacto.es_distribuidor ?? false);
 	const rolBase = $derived(
@@ -58,6 +59,7 @@
 			titulo={contacto.razon_social}
 			subtitulo={contacto.cuit}
 			volver={{ href: '/contactos', etiqueta: 'Contactos' }}
+			{editando}
 			eliminar={{
 				modulo: 'contactos',
 				mensaje: `¿Eliminar el contacto ${contacto.razon_social}?`,
@@ -68,9 +70,13 @@
 				<Can modulo="contactos" accion="edit">
 					{#if editando}
 						<FormActions
-							cancelHref={resolve('/contactos')}
 							pending={!!form.pending}
 							submitText="Guardar cambios"
+							onCancel={() => {
+								version++;
+								rol = rolBase;
+								editando = false;
+							}}
 						/>
 					{:else}
 						<button type="button" class="btn btn-primary btn-sm" onclick={() => (editando = true)}>

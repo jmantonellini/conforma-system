@@ -29,7 +29,15 @@
 	let { data }: PageProps = $props();
 	const veImportes = $derived(can(data.user, data.permisos, 'importes', 'view'));
 	const insumo = $derived(data.insumo);
-	const form = actualizarInsumo;
+	let editando = $state(false);
+	let version = $state(0);
+	const form = $derived(actualizarInsumo.for(`${data.insumo.id}-${version}`));
+	const puedeEditar = $derived(can(data.user, data.permisos, 'insumos', 'edit'));
+
+	function cancelarEdicion() {
+		version++;
+		editando = false;
+	}
 	const urlImagen = $derived(resolve(`/insumos/${insumo.id}/imagen`));
 	let subiendo = $state(false);
 
@@ -68,6 +76,7 @@
 		titulo={insumo.nombre}
 		subtitulo={[insumo.codigo, insumo.tipo?.nombre].filter(Boolean).join(' · ')}
 		volver={{ href: '/insumos', etiqueta: 'Insumos' }}
+		{editando}
 		eliminar={{
 			modulo: 'insumos',
 			mensaje: `¿Eliminar el insumo ${insumo.nombre}? Deja de aparecer en el catálogo.`,
@@ -77,7 +86,20 @@
 				goto(resolve('/insumos'));
 			}
 		}}
-	/>
+	>
+		{#snippet acciones()}
+			{#if editando}
+				<FormActions
+					formulario="insumo-form"
+					pending={!!form.pending}
+					submitText="Guardar cambios"
+					onCancel={cancelarEdicion}
+				/>
+			{:else if puedeEditar}
+				<button class="btn btn-sm" onclick={() => (editando = true)}>Editar</button>
+			{/if}
+		{/snippet}
+	</EncabezadoDetalle>
 
 	<section class="flex flex-col gap-5 seccion sm:flex-row sm:items-center">
 		<div class="group relative size-28 shrink-0 overflow-hidden rounded-box border border-base-300">
@@ -156,119 +178,128 @@
 					try {
 						if (await instancia.submit()) {
 							await invalidateAll();
+							editando = false;
 							toast.success('Insumo actualizado');
 						} else toast.error('Revisá los datos del insumo');
 					} catch {
 						toast.error('No se pudo actualizar el insumo');
 					}
 				})}
+				id="insumo-form"
 				class="flex min-w-0 flex-col gap-4 sm:gap-6 lg:col-span-2"
 			>
-				<input type="hidden" name="id" value={insumo.id} />
-				<Seccion titulo="Datos del insumo">
-					<div class="grid gap-4 sm:grid-cols-2">
-						<FormFieldWrapper label="Descripción" id="nombre" required class="sm:col-span-2">
-							<input id="nombre" class="input" {...form.fields.nombre.as('text', insumo.nombre)} />
-						</FormFieldWrapper>
-						<FormFieldWrapper label="Código" id="codigo" required>
-							<input
-								id="codigo"
-								class="input font-mono"
-								{...form.fields.codigo.as('text', insumo.codigo)}
-							/>
-						</FormFieldWrapper>
-						<FormFieldWrapper label="Unidad" id="unidad" required>
-							<select
-								id="unidad"
-								class="select"
-								{...form.fields.unidad.as('select', insumo.unidad_id?.toString() ?? '')}
-							>
-								{#each await getUnidadesInsumo() as unidad (unidad.id)}
-									<option value={String(unidad.id)}>{unidad.nombre}</option>
-								{/each}
-							</select>
-						</FormFieldWrapper>
-						<FormFieldWrapper label="Tipo" id="tipo">
-							<select
-								id="tipo"
-								class="select"
-								{...form.fields.tipo.as('select', insumo.tipo?.id?.toString() ?? '')}
-							>
-								{#each await getTiposInsumo() as tipo (tipo.id)}
-									<option value={String(tipo.id)}>{tipo.nombre}</option>
-								{/each}
-							</select>
-						</FormFieldWrapper>
-						<FormFieldWrapper label="Categoría" id="categoria_id">
-							<select
-								id="categoria_id"
-								class="select"
-								{...form.fields.categoria_id.as('select', insumo.categoria_id?.toString() ?? '')}
-							>
-								<option value="">Sin categoría</option>
-								{#each await getCategoriasInsumo() as categoria (categoria.id)}
-									<option value={String(categoria.id)}>{categoria.nombre}</option>
-								{/each}
-							</select>
-						</FormFieldWrapper>
-						<FormFieldWrapper label="Proveedor" id="proveedor_id" class="sm:col-span-2">
-							<select
-								id="proveedor_id"
-								class="select"
-								{...form.fields.proveedor_id.as('select', insumo.proveedor_id?.toString() ?? '')}
-							>
-								<option value="">Sin proveedor</option>
-								{#each await obtenerProveedores() as proveedor (proveedor.id)}
-									<option value={String(proveedor.id)}>{proveedor.nombre}</option>
-								{/each}
-							</select>
-						</FormFieldWrapper>
-					</div>
-				</Seccion>
-
-				{#if veImportes}
-					<Seccion
-						titulo="Costo"
-						descripcion="El costo final (con flete) es el que usan las recetas."
-					>
-						<div class="grid gap-4 sm:grid-cols-3">
-							<FormFieldWrapper label="Costo base" id="costo_unitario" required>
+				<fieldset disabled={!editando} class="contents">
+					<input type="hidden" name="id" value={insumo.id} />
+					<Seccion titulo="Datos del insumo">
+						<div class="grid gap-4 sm:grid-cols-2">
+							<FormFieldWrapper label="Descripción" id="nombre" required class="sm:col-span-2">
 								<input
-									id="costo_unitario"
+									id="nombre"
 									class="input"
-									min="0"
-									step="0.01"
-									{...form.fields.costo_unitario.as(
-										'number',
-										(insumo.costo_unitario ?? 0) / (1 + (insumo.flete_porcentaje ?? 0) / 100)
-									)}
+									{...form.fields.nombre.as('text', insumo.nombre)}
 								/>
 							</FormFieldWrapper>
-							<FormFieldWrapper label="Flete (%)" id="flete_porcentaje">
+							<FormFieldWrapper label="Código" id="codigo" required>
 								<input
-									id="flete_porcentaje"
-									class="input"
-									min="0"
-									step="0.01"
-									{...form.fields.flete_porcentaje.as('number', insumo.flete_porcentaje ?? 0)}
+									id="codigo"
+									class="input font-mono"
+									{...form.fields.codigo.as('text', insumo.codigo)}
 								/>
 							</FormFieldWrapper>
-							<div class="campo">
-								<span class="text-sm font-medium text-base-content/80">Costo final</span>
-								<p class="flex h-10 items-center text-lg font-semibold tabular-nums">
-									{formatearMoneda(costoFinal)}
-								</p>
-							</div>
+							<FormFieldWrapper label="Unidad" id="unidad" required>
+								<select
+									id="unidad"
+									class="select"
+									{...form.fields.unidad.as('select', insumo.unidad_id?.toString() ?? '')}
+								>
+									{#each await getUnidadesInsumo() as unidad (unidad.id)}
+										<option value={String(unidad.id)}>{unidad.nombre}</option>
+									{/each}
+								</select>
+							</FormFieldWrapper>
+							<FormFieldWrapper label="Tipo" id="tipo">
+								<select
+									id="tipo"
+									class="select"
+									{...form.fields.tipo.as('select', insumo.tipo?.id?.toString() ?? '')}
+								>
+									{#each await getTiposInsumo() as tipo (tipo.id)}
+										<option value={String(tipo.id)}>{tipo.nombre}</option>
+									{/each}
+								</select>
+							</FormFieldWrapper>
+							<FormFieldWrapper label="Categoría" id="categoria_id">
+								<select
+									id="categoria_id"
+									class="select"
+									{...form.fields.categoria_id.as('select', insumo.categoria_id?.toString() ?? '')}
+								>
+									<option value="">Sin categoría</option>
+									{#each await getCategoriasInsumo() as categoria (categoria.id)}
+										<option value={String(categoria.id)}>{categoria.nombre}</option>
+									{/each}
+								</select>
+							</FormFieldWrapper>
+							<FormFieldWrapper label="Proveedor" id="proveedor_id" class="sm:col-span-2">
+								<select
+									id="proveedor_id"
+									class="select"
+									{...form.fields.proveedor_id.as('select', insumo.proveedor_id?.toString() ?? '')}
+								>
+									<option value="">Sin proveedor</option>
+									{#each await obtenerProveedores() as proveedor (proveedor.id)}
+										<option value={String(proveedor.id)}>{proveedor.nombre}</option>
+									{/each}
+								</select>
+							</FormFieldWrapper>
 						</div>
 					</Seccion>
-				{/if}
 
+					{#if veImportes}
+						<Seccion
+							titulo="Costo"
+							descripcion="El costo final (con flete) es el que usan las recetas."
+						>
+							<div class="grid gap-4 sm:grid-cols-3">
+								<FormFieldWrapper label="Costo base" id="costo_unitario" required>
+									<input
+										id="costo_unitario"
+										class="input"
+										min="0"
+										step="0.01"
+										{...form.fields.costo_unitario.as(
+											'number',
+											(insumo.costo_unitario ?? 0) / (1 + (insumo.flete_porcentaje ?? 0) / 100)
+										)}
+									/>
+								</FormFieldWrapper>
+								<FormFieldWrapper label="Flete (%)" id="flete_porcentaje">
+									<input
+										id="flete_porcentaje"
+										class="input"
+										min="0"
+										step="0.01"
+										{...form.fields.flete_porcentaje.as('number', insumo.flete_porcentaje ?? 0)}
+									/>
+								</FormFieldWrapper>
+								<div class="campo">
+									<span class="text-sm font-medium text-base-content/80">Costo final</span>
+									<p class="flex h-10 items-center text-lg font-semibold tabular-nums">
+										{formatearMoneda(costoFinal)}
+									</p>
+								</div>
+							</div>
+						</Seccion>
+					{/if}
+				</fieldset>
 				<FormErrors {form} />
-				<FormActions
-					cancelHref={resolve('/insumos')}
-					pending={!!form.pending}
-					submitText="Guardar cambios"
-				/>
+				{#if editando}
+					<FormActions
+						pending={!!form.pending}
+						submitText="Guardar cambios"
+						onCancel={cancelarEdicion}
+					/>
+				{/if}
 			</form>
 		</Can>
 

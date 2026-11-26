@@ -1,5 +1,6 @@
 <script lang="ts">
-	import { FormFieldWrapper, Modal, SearchSelect } from '$lib/ui';
+	import { untrack } from 'svelte';
+	import { FormFieldWrapper, SearchSelect, Seccion } from '$lib/ui';
 	import type { Option } from '$lib/ui/SearchSelect.svelte';
 	import { toast } from '$lib/ui/toast.svelte';
 	import { mensajeError } from '$lib/utils/errores';
@@ -22,21 +23,24 @@
 		descripcion_producto: string | null;
 	};
 
-	let { orden }: { orden: Orden } = $props();
+	let {
+		orden,
+		guardando = $bindable(false),
+		onGuardado
+	}: { orden: Orden; guardando?: boolean; onGuardado: () => void } = $props();
 
-	let open = $state(false);
-	let guardando = $state(false);
-	let nombre = $state('');
-	let observaciones = $state('');
-	let prioridad = $state('0');
-	let fecha = $state('');
-	let asignado = $state('');
-	let productoId = $state('');
-	let nombreProducto = $state('');
+	const inicial = untrack(() => orden);
+	let nombre = $state(inicial.nombre_trabajo);
+	let observaciones = $state(inicial.observaciones ?? '');
+	let prioridad = $state(String(inicial.prioridad ?? 0));
+	let fecha = $state(inicial.fecha_fin_estimada ? fechaInput(inicial.fecha_fin_estimada) : '');
+	let asignado = $state(inicial.asignado_a ? String(inicial.asignado_a) : '');
+	let productoId = $state(inicial.producto_trabajo_id ? String(inicial.producto_trabajo_id) : '');
+	let nombreProducto = $state(inicial.producto?.nombre ?? inicial.descripcion_producto ?? '');
 	let resultados = $state<Option[]>([]);
 	let solicitud = 0;
 
-	const empleados = $derived(open ? await getEmpleadosOpciones() : []);
+	const empleados = $derived(await getEmpleadosOpciones());
 	const actual = $derived<Option[]>(
 		orden.producto
 			? [
@@ -53,17 +57,6 @@
 		...resultados.filter((opcion) => !actual.some((item) => item.value === opcion.value))
 	]);
 	const cambiaProducto = $derived(productoId !== String(orden.producto_trabajo_id ?? ''));
-
-	export function abrir() {
-		nombre = orden.nombre_trabajo;
-		observaciones = orden.observaciones ?? '';
-		prioridad = String(orden.prioridad ?? 0);
-		fecha = orden.fecha_fin_estimada ? fechaInput(orden.fecha_fin_estimada) : '';
-		asignado = orden.asignado_a ? String(orden.asignado_a) : '';
-		productoId = orden.producto_trabajo_id ? String(orden.producto_trabajo_id) : '';
-		nombreProducto = orden.producto?.nombre ?? orden.descripcion_producto ?? '';
-		open = true;
-	}
 
 	async function buscar(texto: string) {
 		const numero = ++solicitud;
@@ -99,7 +92,7 @@
 				asignado_a: asignado ? Number(asignado) : null,
 				producto_id: cambiaProducto && productoId ? Number(productoId) : null
 			});
-			open = false;
+			onGuardado();
 			toast.success(cambios.length ? 'Orden actualizada' : 'No había cambios para guardar');
 		} catch (causa) {
 			toast.error(mensajeError(causa, 'No se pudo actualizar la orden'));
@@ -109,13 +102,7 @@
 	}
 </script>
 
-<Modal
-	bind:open
-	lateral
-	titulo="Editar OF-{orden.id}"
-	descripcion="Para cuando llegan las especificaciones después de crear la orden."
-	accion={{ etiqueta: 'Guardar cambios', form: 'editar-orden', pendiente: guardando }}
->
+<Seccion titulo="Editar orden">
 	<form id="editar-orden" class="flex flex-col gap-4" onsubmit={guardar}>
 		<div>
 			<SearchSelect
@@ -177,4 +164,4 @@
 			</select>
 		</FormFieldWrapper>
 	</form>
-</Modal>
+</Seccion>

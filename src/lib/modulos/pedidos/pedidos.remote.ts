@@ -26,6 +26,8 @@ import {
 } from '$lib/modulos/pedidos/edicion.server';
 import { cambiarMonedaTx } from '$lib/modulos/ventas/moneda.server';
 import { CambioMonedaSchema } from '$lib/modulos/ventas/moneda.schema';
+import { registrarAuditoria } from '$lib/server/auditoria';
+import { fechaDesdeInput, fechaInput } from '$lib/utils/fechas';
 
 const idDesdeTexto = v.pipe(v.union([v.string(), v.number()]), v.transform(Number), v.integer());
 
@@ -195,3 +197,61 @@ export const cambiarMonedaPedido = command(CambioMonedaSchema, async (cambio) =>
 	refrescarPedidos(cambio.id);
 	return { success: true };
 });
+
+export const editarDatosPedido = command(
+	v.object({
+		id: v.pipe(v.number(), v.integer(), v.minValue(1)),
+		factura: v.nullable(v.pipe(v.string(), v.trim(), v.maxLength(100))),
+		fecha_entrega_prometida: v.nullable(v.pipe(v.string(), v.isoDate('Fecha inválida'))),
+		observaciones: v.nullable(v.pipe(v.string(), v.trim(), v.maxLength(2000)))
+	}),
+	async ({ id, factura, fecha_entrega_prometida, observaciones }) => {
+		const user = await requirePermission('pedidos', 'edit');
+		await db.transaction(async (tx) => {
+			const [actual] = await tx
+				.select({
+					factura: pedidos.factura,
+					fecha: pedidos.fecha_entrega_prometida,
+					observaciones: pedidos.observaciones
+				})
+				.from(pedidos)
+				.where(eq(pedidos.id, id))
+				.for('update');
+			if (!actual) error(404, 'Pedido no encontrado');
+			const nuevaFactura = factura || null;
+			const nuevasObservaciones = observaciones || null;
+			const fechaAnterior = actual.fecha ? fechaInput(actual.fecha) : null;
+			const textoFecha = (valor: string | null) =>
+				valor ? valor.split('-').reverse().join('/') : 'sin fecha';
+			const cambios = [
+				(actual.factura || null) !== nuevaFactura &&
+					(nuevaFactura ? `Factura: ${nuevaFactura}` : 'Factura quitada'),
+				fechaAnterior !== fecha_entrega_prometida &&
+					`Entrega prometida: ${textoFecha(fechaAnterior)} → ${textoFecha(fecha_entrega_prometida)}`,
+				(actual.observaciones || null) !== nuevasObservaciones &&
+					(nuevasObservaciones ? 'Observaciones actualizadas' : 'Observaciones quitadas')
+			].filter((cambio): cambio is string => Boolean(cambio));
+			if (!cambios.length) return;
+			await tx
+				.update(pedidos)
+				.set({
+					factura: nuevaFactura,
+					fecha_entrega_prometida: fecha_entrega_prometida
+						? fechaDesdeInput(fecha_entrega_prometida)
+						: null,
+					observaciones: nuevasObservaciones,
+					updated_at: new Date()
+				})
+				.where(eq(pedidos.id, id));
+			await registrarAuditoria(tx, {
+				entidad: 'pedido',
+				entidadId: id,
+				usuarioId: user.id,
+				accion: 'edicion',
+				detalle: cambios.join('\n')
+			});
+		});
+		refrescarPedidos(id);
+		return { success: true };
+	}
+);

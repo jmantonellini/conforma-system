@@ -3,11 +3,21 @@
 	import { goto } from '$app/navigation';
 	import { resolve } from '$app/paths';
 	import { page } from '$app/state';
-	import { Can, EncabezadoDetalle, Historial, PageLayout, Seccion, Table } from '$lib/ui';
+	import {
+		Can,
+		EncabezadoDetalle,
+		FormActions,
+		FormFieldWrapper,
+		Historial,
+		PageLayout,
+		Seccion,
+		Table
+	} from '$lib/ui';
 	import type { Transicion } from '$lib/ui/EncabezadoDetalle.svelte';
 	import {
 		cambiarEstadoPedido,
 		cambiarMonedaPedido,
+		editarDatosPedido,
 		eliminarPedido,
 		getEstadosPedido,
 		getHistorialPedido,
@@ -17,7 +27,7 @@
 	import { toast } from '$lib/ui/toast.svelte';
 	import { PEDIDO_SLUG } from '$lib/modulos/pedidos/tipos';
 	import { ESTADO_RESERVA } from '$lib/modulos/stock/tipos';
-	import { formatearFecha } from '$lib/utils/fechas';
+	import { fechaInput, formatearFecha } from '$lib/utils/fechas';
 	import { formatearMoneda } from '$lib/utils/precios';
 	import { can } from '$lib/utils/permissions';
 	import PedidoEnvios from './PedidoEnvios.svelte';
@@ -32,7 +42,6 @@
 	import RecepcionPieza from '$lib/modulos/recepciones/componentes/RecepcionPieza.svelte';
 	import { esFotoDeControl } from '$lib/modulos/adjuntos/tipos';
 	import PedidoPagos from './PedidoPagos.svelte';
-	import FacturaDialog from './FacturaDialog.svelte';
 	import ArchivosAdjuntos from '$lib/modulos/adjuntos/componentes/ArchivosAdjuntos.svelte';
 	import CambiarMonedaDialog from '$lib/modulos/ventas/componentes/CambiarMonedaDialog.svelte';
 	import { getPagosByPedido } from '$lib/modulos/pedidos/facturacion.remote';
@@ -62,7 +71,49 @@
 		pedido.estado.slug === PEDIDO_SLUG.COMPLETADO || pedido.estado.slug === PEDIDO_SLUG.ENTREGADO
 	);
 	let dialogoMoneda = $state<CambiarMonedaDialog>();
-	let dialogoFactura = $state<FacturaDialog>();
+	const puedeEditarDatos = $derived(
+		can(page.data.user, page.data.permisos, 'pedidos', 'edit') &&
+			pedido.estado.slug !== PEDIDO_SLUG.CANCELADO
+	);
+	let editando = $state(false);
+	let guardando = $state(false);
+	let borrador = $state({
+		tipo: 'fabricacion' as TipoTrabajo,
+		factura: '',
+		entrega: '',
+		observaciones: ''
+	});
+
+	function empezarEdicion() {
+		borrador = {
+			tipo: pedido.tipo_trabajo,
+			factura: pedido.factura ?? '',
+			entrega: pedido.fecha_entrega_prometida ? fechaInput(pedido.fecha_entrega_prometida) : '',
+			observaciones: pedido.observaciones ?? ''
+		};
+		editando = true;
+	}
+
+	async function guardarDatos() {
+		guardando = true;
+		try {
+			if (borrador.tipo !== pedido.tipo_trabajo) {
+				await cambiarTipoTrabajoPedido({ id: pedido.id, tipo: borrador.tipo });
+			}
+			await editarDatosPedido({
+				id: pedido.id,
+				factura: borrador.factura.trim() || null,
+				fecha_entrega_prometida: borrador.entrega || null,
+				observaciones: borrador.observaciones.trim() || null
+			});
+			editando = false;
+			toast.success('Pedido actualizado');
+		} catch (error) {
+			toast.error(mensajeError(error, 'No se pudo actualizar el pedido'));
+		} finally {
+			guardando = false;
+		}
+	}
 	const contacto = $derived(
 		[pedido.cliente?.nombre, pedido.cliente?.apellido].filter(Boolean).join(' ')
 	);
@@ -96,15 +147,6 @@
 		}
 	}
 
-	async function cambiarTipo(tipo: TipoTrabajo) {
-		try {
-			await cambiarTipoTrabajoPedido({ id: pedido.id, tipo });
-			toast.success(`Pedido marcado como ${ETIQUETA_TIPO_TRABAJO[tipo].toLowerCase()}`);
-		} catch (error) {
-			toast.error(mensajeError(error, 'No se pudo cambiar el tipo de trabajo'));
-		}
-	}
-
 	async function eliminar() {
 		await eliminarPedido(pedido.id);
 		toast.success('Pedido eliminado');
@@ -119,6 +161,7 @@
 		volver={{ href: '/pedidos', etiqueta: 'Pedidos' }}
 		estado={pedido.estado}
 		transiciones={pedido.transiciones}
+		{editando}
 		onTransicion={moverPedido}
 		puedeTransicionar={() => can(page.data.user, page.data.permisos, 'pedidos', 'edit')}
 		{estados}
@@ -134,8 +177,15 @@
 		}}
 	>
 		{#snippet acciones()}
-			{#if editable && veImportes}
-				<a class="btn btn-sm" href={resolve(`/pedidos/${pedido.id}/editar`)}>Editar</a>
+			{#if editando}
+				<FormActions
+					pending={guardando}
+					submitText="Guardar cambios"
+					onCancel={() => (editando = false)}
+					onSubmit={guardarDatos}
+				/>
+			{:else if puedeEditarDatos}
+				<button class="btn btn-sm" onclick={empezarEdicion}>Editar</button>
 			{/if}
 		{/snippet}
 	</EncabezadoDetalle>
@@ -146,54 +196,33 @@
 				<dt>Cliente</dt>
 				<dd>{pedido.cliente?.razon_social ?? '-'}</dd>
 			</div>
-			{#if contacto}<div>
+			{#if contacto}
+				<div>
 					<dt>Contacto</dt>
 					<dd>{contacto}</dd>
-				</div>{/if}
+				</div>
+			{/if}
 			<div>
 				<dt>Fecha</dt>
 				<dd>{formatearFecha(pedido.fecha)}</dd>
 			</div>
-			<div>
-				<dt>Tipo de trabajo</dt>
-				<dd>
-					{#if can(page.data.user, page.data.permisos, 'pedidos', 'edit') && !pedido.estado.es_final}
-						<select
-							class="select w-auto select-sm"
-							aria-label="Tipo de trabajo"
-							value={pedido.tipo_trabajo}
-							onchange={(e) => cambiarTipo(e.currentTarget.value as TipoTrabajo)}
-						>
-							{#each TIPOS_TRABAJO as tipo (tipo)}
-								<option value={tipo}>{ETIQUETA_TIPO_TRABAJO[tipo]}</option>
-							{/each}
-						</select>
-					{:else}
-						{ETIQUETA_TIPO_TRABAJO[pedido.tipo_trabajo]}
-					{/if}
-				</dd>
-			</div>
-			{#if pedido.fecha_entrega_prometida}
-				<div>
-					<dt>Entrega prometida</dt>
-					<dd>{formatearFecha(pedido.fecha_entrega_prometida)}</dd>
-				</div>
-			{/if}
 			{#if veImportes}
 				<div>
 					<dt>Moneda</dt>
-					<dd class="flex items-center gap-2">
-						<span>
-							{NOMBRE_MONEDA[pedido.moneda]} ({pedido.moneda})
-							{#if pedido.tipo_cambio}
-								<span class="block text-sm text-base-content/60">
-									US$ 1 = $ {formatearDosDecimales(pedido.tipo_cambio)}
-								</span>
-							{/if}
-						</span>
-						{#if puedeCambiarMoneda}
-							<button class="btn btn-ghost btn-xs" onclick={() => dialogoMoneda?.abrir()}>
-								Cambiar
+					<dd>
+						{NOMBRE_MONEDA[pedido.moneda]} ({pedido.moneda})
+						{#if pedido.tipo_cambio}
+							<span class="block text-sm text-base-content/60">
+								US$ 1 = $ {formatearDosDecimales(pedido.tipo_cambio)}
+							</span>
+						{/if}
+						{#if editando && puedeCambiarMoneda}
+							<button
+								type="button"
+								class="btn mt-1 btn-ghost btn-xs"
+								onclick={() => dialogoMoneda?.abrir()}
+							>
+								Cambiar moneda
 							</button>
 						{/if}
 					</dd>
@@ -207,29 +236,75 @@
 					<dd>{formatearMoneda(pedido.anticipo, pedido.moneda)}</dd>
 				</div>
 			{/if}
-			<div>
-				<dt>Factura</dt>
-				<dd class="flex items-center gap-2">
-					<span class={[!pedido.factura && 'text-base-content/60']}>
-						{pedido.factura ?? 'Sin factura'}
-					</span>
-					<Can modulo="pedidos" accion="edit">
-						<button class="btn btn-ghost btn-xs" onclick={() => dialogoFactura?.abrir()}>
-							{pedido.factura ? 'Cambiar' : 'Cargar'}
-						</button>
-					</Can>
-				</dd>
-			</div>
-			{#if pedido.observaciones}
-				<div class="col-span-full">
-					<dt>Observaciones</dt>
-					<dd class="whitespace-pre-wrap">{pedido.observaciones}</dd>
+			{#if editando}
+				{#if !pedido.estado.es_final}
+					<FormFieldWrapper id="pedido-tipo" label="Tipo de trabajo">
+						<select id="pedido-tipo" class="select w-full" bind:value={borrador.tipo}>
+							{#each TIPOS_TRABAJO as tipo (tipo)}
+								<option value={tipo}>{ETIQUETA_TIPO_TRABAJO[tipo]}</option>
+							{/each}
+						</select>
+					</FormFieldWrapper>
+				{/if}
+				<FormFieldWrapper id="pedido-entrega" label="Entrega prometida">
+					<input
+						id="pedido-entrega"
+						type="date"
+						class="input w-full"
+						bind:value={borrador.entrega}
+					/>
+				</FormFieldWrapper>
+				<FormFieldWrapper id="pedido-factura" label="Factura">
+					<input
+						id="pedido-factura"
+						class="input w-full"
+						maxlength="100"
+						placeholder="Ej: A-0001-00001234"
+						bind:value={borrador.factura}
+					/>
+				</FormFieldWrapper>
+				<FormFieldWrapper class="col-span-full" id="pedido-observaciones" label="Observaciones">
+					<textarea
+						id="pedido-observaciones"
+						class="textarea w-full"
+						rows="3"
+						bind:value={borrador.observaciones}></textarea>
+				</FormFieldWrapper>
+			{:else}
+				<div>
+					<dt>Tipo de trabajo</dt>
+					<dd>{ETIQUETA_TIPO_TRABAJO[pedido.tipo_trabajo]}</dd>
 				</div>
+				<div>
+					<dt>Entrega prometida</dt>
+					<dd class={[!pedido.fecha_entrega_prometida && 'text-base-content/60']}>
+						{pedido.fecha_entrega_prometida
+							? formatearFecha(pedido.fecha_entrega_prometida)
+							: 'Sin fecha'}
+					</dd>
+				</div>
+				<div>
+					<dt>Factura</dt>
+					<dd class={[!pedido.factura && 'text-base-content/60']}>
+						{pedido.factura ?? 'Sin factura'}
+					</dd>
+				</div>
+				{#if pedido.observaciones}
+					<div class="col-span-full">
+						<dt>Observaciones</dt>
+						<dd class="whitespace-pre-wrap">{pedido.observaciones}</dd>
+					</div>
+				{/if}
 			{/if}
 		</dl>
 	</Seccion>
 
 	<Seccion titulo="Productos">
+		{#snippet acciones()}
+			{#if editable && !editando}
+				<a class="btn btn-sm" href={resolve(`/pedidos/${pedido.id}/editar`)}>Editar productos</a>
+			{/if}
+		{/snippet}
 		<Table data={lineas}>
 			{#snippet header()}
 				<th>Producto</th>
@@ -382,8 +457,6 @@
 		</div>
 	</div>
 </PageLayout>
-
-<FacturaDialog bind:this={dialogoFactura} pedidoId={pedido.id} factura={pedido.factura} />
 
 {#if veImportes}
 	<CambiarMonedaDialog
