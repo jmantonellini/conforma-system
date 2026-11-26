@@ -34,7 +34,11 @@
 				<tbody>
 					{#each fabricados.unidades as unidad (unidad.id)}
 						<tr>
-							<td class="font-semibold tabular-nums">{unidad.numero ?? '—'}</td>
+							<td class="font-semibold tabular-nums">
+								<a class="enlace-fila" href={resolve(`/fabricacion/escapes/${unidad.id}`)}>
+									{unidad.numero ?? '—'}
+								</a>
+							</td>
 							<td class="text-base-content/70">{formatearFecha(unidad.fecha)}</td>
 							<td>{unidad.cliente ?? '—'}</td>
 							<td>

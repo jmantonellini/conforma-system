@@ -7,7 +7,8 @@ export const ENTIDAD_ADJUNTO = Object.freeze({
 	COTIZACION: 'cotizacion',
 	PEDIDO: 'pedido',
 	FABRICACION: 'fabricacion',
-	PRODUCTO: 'producto'
+	PRODUCTO: 'producto',
+	UNIDAD: 'unidad'
 } as const);
 export type TipoEntidadAdjunto = (typeof ENTIDAD_ADJUNTO)[keyof typeof ENTIDAD_ADJUNTO];
 

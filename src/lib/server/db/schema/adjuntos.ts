@@ -2,7 +2,7 @@ import { sql } from 'drizzle-orm';
 import { check, index, integer, pgTable, serial, text, uniqueIndex } from 'drizzle-orm/pg-core';
 import { aislamiento, creado, empresa } from './base';
 import { cotizaciones } from './cotizaciones';
-import { ordenes_fabricacion } from './fabricacion';
+import { ordenes_fabricacion, unidades_fabricacion } from './fabricacion';
 import { pedidos } from './pedidos';
 import { productos } from './productos';
 
@@ -21,6 +21,10 @@ export const adjuntos = pgTable(
 			onDelete: 'cascade'
 		}),
 		producto_id: integer('producto_id').references(() => productos.id, { onDelete: 'cascade' }),
+		unidad_fabricacion_id: integer('unidad_fabricacion_id').references(
+			() => unidades_fabricacion.id,
+			{ onDelete: 'cascade' }
+		),
 		nombre_original: text('nombre_original').notNull(),
 		archivo_key: text('archivo_key').notNull(),
 		mime_type: text('mime_type'),
@@ -33,12 +37,13 @@ export const adjuntos = pgTable(
 		index('idx_adjuntos_owner_pedido').on(t.pedido_id),
 		index('idx_adjuntos_owner_fabricacion').on(t.orden_fabricacion_id),
 		index('idx_adjuntos_owner_producto').on(t.producto_id),
+		index('idx_adjuntos_owner_unidad').on(t.unidad_fabricacion_id),
 		uniqueIndex('idx_adjuntos_portada_producto')
 			.on(t.producto_id)
 			.where(sql`${t.categoria} = 'portada'`),
 		check(
 			'adjuntos_un_solo_propietario',
-			sql`num_nonnulls(cotizacion_id, pedido_id, orden_fabricacion_id, producto_id) = 1`
+			sql`num_nonnulls(cotizacion_id, pedido_id, orden_fabricacion_id, producto_id, unidad_fabricacion_id) = 1`
 		),
 		aislamiento()
 	]

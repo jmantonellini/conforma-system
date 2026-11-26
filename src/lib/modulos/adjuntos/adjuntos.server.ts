@@ -9,12 +9,13 @@ export const ENTIDADES_ADJUNTO = {
 	cotizacion: { columna: adjuntos.cotizacion_id, modulo: Modulos.COTIZACIONES },
 	pedido: { columna: adjuntos.pedido_id, modulo: Modulos.PEDIDOS },
 	fabricacion: { columna: adjuntos.orden_fabricacion_id, modulo: Modulos.FABRICACION },
-	producto: { columna: adjuntos.producto_id, modulo: Modulos.PRODUCTOS }
+	producto: { columna: adjuntos.producto_id, modulo: Modulos.PRODUCTOS },
+	unidad: { columna: adjuntos.unidad_fabricacion_id, modulo: Modulos.FABRICACION }
 } as const satisfies Record<TipoEntidadAdjunto, unknown>;
 
 type FilaPropietario = Pick<
 	typeof adjuntos.$inferSelect,
-	'cotizacion_id' | 'pedido_id' | 'orden_fabricacion_id' | 'producto_id'
+	'cotizacion_id' | 'pedido_id' | 'orden_fabricacion_id' | 'producto_id' | 'unidad_fabricacion_id'
 >;
 
 export function propietarioAdjunto(fila: FilaPropietario): Adjunto['propietario'] | null {
@@ -22,6 +23,7 @@ export function propietarioAdjunto(fila: FilaPropietario): Adjunto['propietario'
 	if (fila.pedido_id) return { tipo: 'pedido', id: fila.pedido_id };
 	if (fila.orden_fabricacion_id) return { tipo: 'fabricacion', id: fila.orden_fabricacion_id };
 	if (fila.producto_id) return { tipo: 'producto', id: fila.producto_id };
+	if (fila.unidad_fabricacion_id) return { tipo: 'unidad', id: fila.unidad_fabricacion_id };
 	return null;
 }
 
@@ -29,12 +31,14 @@ export async function listarAdjuntosRelacionados(relacion: {
 	cotizacionId?: number | null;
 	pedidoId?: number | null;
 	ordenIds?: number[];
+	unidadIds?: number[];
 	productoPlanosId?: number | null;
 }): Promise<Adjunto[]> {
 	const condiciones = [
 		relacion.cotizacionId && eq(adjuntos.cotizacion_id, relacion.cotizacionId),
 		relacion.pedidoId && eq(adjuntos.pedido_id, relacion.pedidoId),
 		relacion.ordenIds?.length && inArray(adjuntos.orden_fabricacion_id, relacion.ordenIds),
+		relacion.unidadIds?.length && inArray(adjuntos.unidad_fabricacion_id, relacion.unidadIds),
 		relacion.productoPlanosId &&
 			and(eq(adjuntos.producto_id, relacion.productoPlanosId), eq(adjuntos.categoria, 'plano'))
 	].filter((condicion): condicion is SQL => Boolean(condicion));

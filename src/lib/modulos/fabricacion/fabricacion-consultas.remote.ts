@@ -235,6 +235,7 @@ export const getOrdenFabricacion = query(v.number(), async (id) => {
 			: [],
 		listarAdjuntosRelacionados({
 			ordenIds: [id],
+			unidadIds: unidades.map((unidad) => unidad.id),
 			pedidoId: orden.pedido_id,
 			cotizacionId: cotizacion?.id,
 			productoPlanosId: trabajo?.producto_id
@@ -323,6 +324,116 @@ export const getHistorialUnidades = query(v.number(), async (ordenId) => {
 	].sort((a, b) => new Date(b.fecha ?? 0).getTime() - new Date(a.fecha ?? 0).getTime());
 });
 
+type FiltroUnidades = {
+	search?: string;
+	producto_id?: number;
+	id?: number;
+	page: number;
+	limit: number;
+};
+
+async function listarUnidades(
+	user: Awaited<ReturnType<typeof requirePermission>>,
+	{ search, producto_id, id, page, limit }: FiltroUnidades
+) {
+	const conImportes = await puedeVerImportes(user);
+	const clienteUnidad = aliasedTable(contactos, 'cliente_unidad');
+	const productoStock = aliasedTable(productos, 'producto_stock');
+	const productoUnidad = aliasedTable(productos, 'producto_unidad');
+	const productoId = sql<
+		number | null
+	>`COALESCE(${unidades_fabricacion.producto_id}, ${lineas_pedido.producto_id}, ${ordenes_fabricacion.producto_id})`;
+	const descripcion = sql<string>`COALESCE(${unidades_fabricacion.descripcion}, ${ordenes_fabricacion.nombre_trabajo})`;
+	const cliente = sql<
+		string | null
+	>`COALESCE(${clienteUnidad.razon_social}, ${contactos.razon_social})`;
+	const productoNombre = sql<
+		string | null
+	>`COALESCE(${productoUnidad.nombre}, ${productos.nombre}, ${productoStock.nombre})`;
+	const precioUsd = sql<number | null>`CASE
+		WHEN ${pedidos.moneda} = 'USD' THEN ${lineas_pedido.precio_unitario}
+		ELSE ${lineas_pedido.precio_unitario} / NULLIF(${pedidos.tipo_cambio}, 0)
+	END`.mapWith(Number);
+	const fecha = sql<Date | null>`COALESCE(${unidades_fabricacion.fecha_fabricacion}, ${ordenes_fabricacion.fecha_fin_real}, ${ordenes_fabricacion.created_at})`;
+	const termino = search?.trim();
+	const filtroBusqueda = termino
+		? /^\d+$/.test(termino)
+			? or(
+					eq(unidades_fabricacion.numero, Number(termino)),
+					eq(ordenes_fabricacion.id, Number(termino))
+				)
+			: or(
+					ilike(descripcion, `%${termino}%`),
+					ilike(cliente, `%${termino}%`),
+					ilike(productoNombre, `%${termino}%`),
+					ilike(unidades_fabricacion.observaciones, `%${termino}%`)
+				)
+		: undefined;
+
+	const filas = await db
+		.select({
+			id: unidades_fabricacion.id,
+			numero: unidades_fabricacion.numero,
+			numero_serie: unidades_fabricacion.numero_serie,
+			adjuntos: sql<number>`(SELECT count(*)::int FROM adjuntos a WHERE a.unidad_fabricacion_id = ${unidades_fabricacion.id})`,
+			descripcion,
+			observaciones: unidades_fabricacion.observaciones,
+			fecha,
+			cliente,
+			producto: productoNombre,
+			producto_id: productoId,
+			precio_usd: precioUsd,
+			orden_id: ordenes_fabricacion.id,
+			pedido_id: pedidos.id,
+			pedido_numero: pedidos.numero_pedido,
+			estado: { nombre: estados.nombre, color: estados.color, es_final: estados.es_final },
+			total_filas: sql<number>`count(*) over()::int`
+		})
+		.from(unidades_fabricacion)
+		.innerJoin(estados, eq(estados.id, unidades_fabricacion.estado_id))
+		.leftJoin(
+			ordenes_fabricacion,
+			eq(ordenes_fabricacion.id, unidades_fabricacion.orden_fabricacion_id)
+		)
+		.leftJoin(lineas_pedido, eq(lineas_pedido.id, ordenes_fabricacion.linea_pedido_id))
+		.leftJoin(
+			pedidos,
+			eq(pedidos.id, sql`COALESCE(${lineas_pedido.pedido_id}, ${unidades_fabricacion.pedido_id})`)
+		)
+		.leftJoin(contactos, eq(contactos.id, pedidos.contacto_id))
+		.leftJoin(clienteUnidad, eq(clienteUnidad.id, unidades_fabricacion.contacto_id))
+		.leftJoin(productos, eq(productos.id, lineas_pedido.producto_id))
+		.leftJoin(productoStock, eq(productoStock.id, ordenes_fabricacion.producto_id))
+		.leftJoin(productoUnidad, eq(productoUnidad.id, unidades_fabricacion.producto_id))
+		.where(
+			and(
+				id
+					? eq(unidades_fabricacion.id, id)
+					: producto_id
+						? eq(productoId, producto_id)
+						: sql`${unidades_fabricacion.numero} IS NOT NULL`,
+				filtroBusqueda
+			)
+		)
+		.orderBy(
+			sql`${unidades_fabricacion.numero} DESC NULLS LAST`,
+			desc(fecha),
+			desc(unidades_fabricacion.id)
+		)
+		.limit(limit)
+		.offset((page - 1) * limit);
+	const total = filas[0]?.total_filas ?? 0;
+	return {
+		unidades: filas.map(({ total_filas, precio_usd, ...fila }) => ({
+			...fila,
+			precio_usd: conImportes && precio_usd > 0 ? precio_usd : null
+		})),
+		total,
+		totalPages: Math.ceil(total / limit),
+		currentPage: page
+	};
+}
+
 export const getUnidadesFabricadas = query(
 	v.object({
 		search: v.optional(v.string()),
@@ -330,100 +441,15 @@ export const getUnidadesFabricadas = query(
 		page: v.optional(v.pipe(v.number(), v.minValue(1)), 1),
 		limit: v.optional(v.pipe(v.number(), v.minValue(1), v.maxValue(100)), 50)
 	}),
-	async ({ search, producto_id, page, limit }) => {
-		const user = await requirePermission('fabricacion', 'view');
-		const conImportes = await puedeVerImportes(user);
-		const clienteUnidad = aliasedTable(contactos, 'cliente_unidad');
-		const productoStock = aliasedTable(productos, 'producto_stock');
-		const productoUnidad = aliasedTable(productos, 'producto_unidad');
-		const productoId = sql<
-			number | null
-		>`COALESCE(${unidades_fabricacion.producto_id}, ${lineas_pedido.producto_id}, ${ordenes_fabricacion.producto_id})`;
-		const descripcion = sql<string>`COALESCE(${unidades_fabricacion.descripcion}, ${ordenes_fabricacion.nombre_trabajo})`;
-		const cliente = sql<
-			string | null
-		>`COALESCE(${clienteUnidad.razon_social}, ${contactos.razon_social})`;
-		const productoNombre = sql<
-			string | null
-		>`COALESCE(${productoUnidad.nombre}, ${productos.nombre}, ${productoStock.nombre})`;
-		const precioUsd = sql<number | null>`CASE
-			WHEN ${pedidos.moneda} = 'USD' THEN ${lineas_pedido.precio_unitario}
-			ELSE ${lineas_pedido.precio_unitario} / NULLIF(${pedidos.tipo_cambio}, 0)
-		END`.mapWith(Number);
-		const fecha = sql<Date | null>`COALESCE(${unidades_fabricacion.fecha_fabricacion}, ${ordenes_fabricacion.fecha_fin_real}, ${ordenes_fabricacion.created_at})`;
-		const termino = search?.trim();
-		const filtroBusqueda = termino
-			? /^\d+$/.test(termino)
-				? or(
-						eq(unidades_fabricacion.numero, Number(termino)),
-						eq(ordenes_fabricacion.id, Number(termino))
-					)
-				: or(
-						ilike(descripcion, `%${termino}%`),
-						ilike(cliente, `%${termino}%`),
-						ilike(productoNombre, `%${termino}%`),
-						ilike(unidades_fabricacion.observaciones, `%${termino}%`)
-					)
-			: undefined;
-
-		const filas = await db
-			.select({
-				id: unidades_fabricacion.id,
-				numero: unidades_fabricacion.numero,
-				numero_serie: unidades_fabricacion.numero_serie,
-				descripcion,
-				observaciones: unidades_fabricacion.observaciones,
-				fecha,
-				cliente,
-				producto: productoNombre,
-				producto_id: productoId,
-				precio_usd: precioUsd,
-				orden_id: ordenes_fabricacion.id,
-				pedido_id: pedidos.id,
-				pedido_numero: pedidos.numero_pedido,
-				estado: { nombre: estados.nombre, color: estados.color, es_final: estados.es_final },
-				total_filas: sql<number>`count(*) over()::int`
-			})
-			.from(unidades_fabricacion)
-			.innerJoin(estados, eq(estados.id, unidades_fabricacion.estado_id))
-			.leftJoin(
-				ordenes_fabricacion,
-				eq(ordenes_fabricacion.id, unidades_fabricacion.orden_fabricacion_id)
-			)
-			.leftJoin(lineas_pedido, eq(lineas_pedido.id, ordenes_fabricacion.linea_pedido_id))
-			.leftJoin(
-				pedidos,
-				eq(pedidos.id, sql`COALESCE(${lineas_pedido.pedido_id}, ${unidades_fabricacion.pedido_id})`)
-			)
-			.leftJoin(contactos, eq(contactos.id, pedidos.contacto_id))
-			.leftJoin(clienteUnidad, eq(clienteUnidad.id, unidades_fabricacion.contacto_id))
-			.leftJoin(productos, eq(productos.id, lineas_pedido.producto_id))
-			.leftJoin(productoStock, eq(productoStock.id, ordenes_fabricacion.producto_id))
-			.leftJoin(productoUnidad, eq(productoUnidad.id, unidades_fabricacion.producto_id))
-			.where(
-				and(
-					producto_id
-						? eq(productoId, producto_id)
-						: sql`${unidades_fabricacion.numero} IS NOT NULL`,
-					filtroBusqueda
-				)
-			)
-			.orderBy(
-				sql`${unidades_fabricacion.numero} DESC NULLS LAST`,
-				desc(fecha),
-				desc(unidades_fabricacion.id)
-			)
-			.limit(limit)
-			.offset((page - 1) * limit);
-		const total = filas[0]?.total_filas ?? 0;
-		return {
-			unidades: filas.map(({ total_filas, precio_usd, ...fila }) => ({
-				...fila,
-				precio_usd: conImportes && precio_usd > 0 ? precio_usd : null
-			})),
-			total,
-			totalPages: Math.ceil(total / limit),
-			currentPage: page
-		};
-	}
+	async (filtro) => listarUnidades(await requirePermission('fabricacion', 'view'), filtro)
 );
+
+export const getUnidadFabricada = query(v.number(), async (id) => {
+	const user = await requirePermission('fabricacion', 'view');
+	const {
+		unidades: [unidad]
+	} = await listarUnidades(user, { id, page: 1, limit: 1 });
+	if (!unidad) error(404, 'Escape no encontrado');
+	const adjuntos = await listarAdjuntosRelacionados({ unidadIds: [id] });
+	return { ...unidad, adjuntos };
+});

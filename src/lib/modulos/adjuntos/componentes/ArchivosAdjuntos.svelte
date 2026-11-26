@@ -43,7 +43,8 @@
 		cotizacion: 'cotizaciones',
 		pedido: 'pedidos',
 		producto: 'productos',
-		fabricacion: 'fabricacion'
+		fabricacion: 'fabricacion',
+		unidad: 'fabricacion'
 	} as const;
 	const ACEPTA_FOTOS = 'image/*,video/mp4,video/quicktime';
 	const esFotos = $derived(categoria === 'recepcion' || categoria === 'despacho');
@@ -228,8 +229,10 @@
 							href={resolve(`/adjuntos/${adjunto.id}`)}
 							target="_blank"
 							rel="noreferrer"
-							title={adjunto.nombre_original}>{adjunto.nombre_original}</a
+							title={adjunto.nombre_original}
 						>
+							{adjunto.nombre_original}
+						</a>
 						{#if adjunto.categoria === 'plano' && categoria !== 'plano'}
 							<span class="badge badge-soft badge-xs badge-info">Plano</span>
 						{/if}
@@ -246,23 +249,25 @@
 											<li>
 												<button
 													onclick={() => recategorizar(adjunto, 'portada', 'Portada actualizada')}
-													>Usar como portada</button
 												>
+													Usar como portada
+												</button>
 											</li>
 										{/if}
 										{#if adjunto.categoria !== 'plano'}
 											<li>
-												<button onclick={() => recategorizar(adjunto, 'plano', 'Movido a planos')}
-													>Mover a planos</button
-												>
+												<button onclick={() => recategorizar(adjunto, 'plano', 'Movido a planos')}>
+													Mover a planos
+												</button>
 											</li>
 										{/if}
 										{#if adjunto.categoria !== 'general'}
 											<li>
 												<button
 													onclick={() => recategorizar(adjunto, 'general', 'Movido a archivos')}
-													>Mover a archivos</button
 												>
+													Mover a archivos
+												</button>
 											</li>
 										{/if}
 									{/if}

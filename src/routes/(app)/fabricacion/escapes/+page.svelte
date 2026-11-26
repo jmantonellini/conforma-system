@@ -36,8 +36,18 @@
 		<th>Estado</th>
 	{/snippet}
 	{#snippet row(unidad: (typeof resultado.unidades)[number])}
-		<td class="font-semibold tabular-nums">
-			<Highlight text={String(unidad.numero)} query={busqueda} />
+		<td class="font-semibold whitespace-nowrap tabular-nums">
+			<a class="enlace-fila" href={resolve(`/fabricacion/escapes/${unidad.id}`)}>
+				<Highlight text={String(unidad.numero)} query={busqueda} />
+			</a>
+			{#if unidad.adjuntos > 0}
+				<span
+					class="ml-1 inline-flex items-center gap-0.5 text-xs font-normal text-base-content/60"
+					title="{unidad.adjuntos} fotos o planos"
+				>
+					<Icono nombre="camara" class="size-3.5" />{unidad.adjuntos}
+				</span>
+			{/if}
 		</td>
 		<td class="text-base-content/70">{formatearFecha(unidad.fecha)}</td>
 		<td class="max-w-md">
@@ -54,14 +64,14 @@
 		<td><Highlight text={unidad.cliente ?? '—'} query={busqueda} /></td>
 		<td class="whitespace-nowrap">
 			{#if unidad.orden_id}
-				<a class="enlace-fila font-mono" href={resolve(`/fabricacion/${unidad.orden_id}`)}>
+				<a class="link font-mono link-hover" href={resolve(`/fabricacion/${unidad.orden_id}`)}>
 					OF-{unidad.orden_id}
 				</a>
 				{#if unidad.pedido_numero}
 					<p class="secundario">{unidad.pedido_numero}</p>
 				{/if}
 			{:else if unidad.pedido_id}
-				<a class="enlace-fila font-mono" href={resolve(`/pedidos/${unidad.pedido_id}`)}>
+				<a class="link font-mono link-hover" href={resolve(`/pedidos/${unidad.pedido_id}`)}>
 					{unidad.pedido_numero}
 				</a>
 				<p class="secundario">Sin OF</p>

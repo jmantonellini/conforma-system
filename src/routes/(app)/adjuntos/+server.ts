@@ -8,7 +8,8 @@ import {
 	cotizaciones,
 	ordenes_fabricacion,
 	pedidos,
-	productos
+	productos,
+	unidades_fabricacion
 } from '$lib/server/db/schema';
 import { requirePermission } from '$lib/server/auth/permissions';
 import { eliminarObjeto, guardarObjeto } from '$lib/server/almacenamiento';
@@ -71,7 +72,8 @@ async function entidadExiste(tipo: TipoEntidadAdjunto, id: number) {
 		[ENTIDAD_ADJUNTO.COTIZACION]: cotizaciones,
 		[ENTIDAD_ADJUNTO.PEDIDO]: pedidos,
 		[ENTIDAD_ADJUNTO.PRODUCTO]: productos,
-		[ENTIDAD_ADJUNTO.FABRICACION]: ordenes_fabricacion
+		[ENTIDAD_ADJUNTO.FABRICACION]: ordenes_fabricacion,
+		[ENTIDAD_ADJUNTO.UNIDAD]: unidades_fabricacion
 	};
 	const tabla = tablas[tipo];
 	return db.select({ id: tabla.id }).from(tabla).where(eq(tabla.id, id)).limit(1);

@@ -54,6 +54,7 @@
 		<th>Progreso</th>
 		<th>Prioridad</th>
 		<th>Responsable</th>
+		<th>Inicio</th>
 		<th>Entrega</th>
 	{/snippet}
 	{#snippet row(orden: (typeof ordenes.ordenes)[number])}
@@ -92,12 +93,15 @@
 		</td>
 		<td><EstadoBadge class="badge-sm" estado={ETIQUETA_PRIORIDAD[orden.prioridad ?? 0]} /></td>
 		<td><Persona nombre={orden.empleado?.nombre} apellido={orden.empleado?.apellido} /></td>
+		<td class="text-base-content/70">{formatearFecha(orden.fecha_inicio ?? orden.created_at)}</td>
 		<td
-			class={estaVencido(orden.fecha_fin_estimada) && !orden.estado?.es_final
+			class={!orden.fecha_fin_real &&
+			estaVencido(orden.fecha_fin_estimada) &&
+			!orden.estado?.es_final
 				? 'font-medium text-error'
 				: 'text-base-content/70'}
 		>
-			{formatearFecha(orden.fecha_fin_estimada)}
+			{formatearFecha(orden.fecha_fin_real ?? orden.fecha_fin_estimada)}
 		</td>
 	{/snippet}
 </Listado>

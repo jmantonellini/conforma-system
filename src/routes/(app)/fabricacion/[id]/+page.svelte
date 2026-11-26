@@ -217,9 +217,20 @@
 					</dd>
 				</div>
 				<div>
-					<dt>Entrega estimada</dt>
-					<dd>{formatearFecha(orden.fecha_fin_estimada)}</dd>
+					<dt>Inicio</dt>
+					<dd>{formatearFecha(orden.fecha_inicio ?? orden.created_at)}</dd>
 				</div>
+				{#if orden.fecha_fin_real}
+					<div>
+						<dt>Terminada</dt>
+						<dd>{formatearFecha(orden.fecha_fin_real)}</dd>
+					</div>
+				{:else}
+					<div>
+						<dt>Entrega estimada</dt>
+						<dd>{formatearFecha(orden.fecha_fin_estimada)}</dd>
+					</div>
+				{/if}
 			</dl>
 		</Seccion>
 	{/if}
