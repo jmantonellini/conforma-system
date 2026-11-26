@@ -362,11 +362,15 @@ async function listarUnidades(
 					eq(unidades_fabricacion.numero, Number(termino)),
 					eq(ordenes_fabricacion.id, Number(termino))
 				)
-			: or(
-					ilike(descripcion, `%${termino}%`),
-					ilike(cliente, `%${termino}%`),
-					ilike(productoNombre, `%${termino}%`),
-					ilike(unidades_fabricacion.observaciones, `%${termino}%`)
+			: and(
+					...termino
+						.split(/\s+/)
+						.map((palabra) => palabra.replace(/[^\p{L}\p{N}]/gu, ''))
+						.filter(Boolean)
+						.map(
+							(palabra) =>
+								sql`regexp_replace(concat_ws(' ', ${descripcion}, ${cliente}, ${productoNombre}, ${unidades_fabricacion.observaciones}), '[^[:alnum:]]', '', 'g') ilike ${`%${palabra}%`}`
+						)
 				)
 		: undefined;
 

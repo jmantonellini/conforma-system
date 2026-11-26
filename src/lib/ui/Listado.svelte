@@ -40,6 +40,13 @@
 	} = $props();
 
 	const enCuadricula = $derived(!!tarjeta && parametro('vista') === 'cuadricula');
+	const busquedaUrl = $derived(parametro('search'));
+	let texto = $state('');
+	let escribiendo = $state(false);
+
+	$effect.pre(() => {
+		if (!escribiendo) texto = busquedaUrl;
+	});
 
 	const porPagina = $derived(paginas > 0 ? Math.ceil(total / paginas) : total);
 	const desde = $derived(total ? (pagina - 1) * porPagina + 1 : 0);
@@ -67,9 +74,11 @@
 						<input
 							type="search"
 							placeholder={buscar}
-							value={parametro('search')}
-							oninput={(evento) => {
-								const valor = evento.currentTarget.value;
+							bind:value={texto}
+							onfocus={() => (escribiendo = true)}
+							onblur={() => (escribiendo = false)}
+							oninput={() => {
+								const valor = texto;
 								debounce(() => filtrar({ search: valor }, { reemplazar: true }), 300);
 							}}
 						/>
