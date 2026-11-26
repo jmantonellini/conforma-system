@@ -7,6 +7,7 @@ import {
 	calcularMargenDesdePrecio,
 	calcularPrecioVenta,
 	formatearDosDecimales,
+	margenDeLinea,
 	parsearNumeroDecimal,
 	precioNetoCubreCosto
 } from './precios';
@@ -82,5 +83,11 @@ describe('quotation pricing', () => {
 		expect(() => calcularPrecioConDescuento(100, 100, 'Invalid')).toThrow(
 			'El descuento debe estar entre 0 y 99.99%'
 		);
+	});
+
+	it('calculates the real margin of a line from price and cost', () => {
+		expect(margenDeLinea(142.86, 100)).toBe(30);
+		expect(margenDeLinea(100, 120)).toBe(-20);
+		expect(margenDeLinea(0, 50)).toBe(0);
 	});
 });

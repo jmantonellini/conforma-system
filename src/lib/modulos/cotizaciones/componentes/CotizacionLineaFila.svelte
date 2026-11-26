@@ -31,6 +31,7 @@
 		onActualizarPrecio: (lineaId: number, precio: string) => void;
 		onCambiarVisibilidad: (lineaId: number, visible: boolean) => void;
 		onActualizarCostoInterno: (lineaId: number, costo: number) => void;
+		onActualizarMargen: (lineaId: number, margen: string) => void;
 		onAgregarInsumoAsociado: (lineaId: number, insumoId: number, cantidad: number) => void;
 		onQuitarInsumoAsociado: (lineaId: number, indice: number) => void;
 		onCrearProducto?: (lineaId: number, texto: string) => void;
@@ -53,6 +54,7 @@
 		onActualizarPrecio,
 		onCambiarVisibilidad,
 		onActualizarCostoInterno,
+		onActualizarMargen,
 		onAgregarInsumoAsociado,
 		onQuitarInsumoAsociado,
 		onCrearProducto,
@@ -61,6 +63,15 @@
 	let estructuraFija = $derived(bloqueada || Boolean(linea.bloqueo));
 	let costoBorrador = $state<string | null>(null);
 	let precioBorrador = $state<string | null>(null);
+	let margenBorrador = $state<string | null>(null);
+	let costoEditable = $derived(
+		!linea.visible_cliente || (linea.tipo === 'concepto' && !linea.insumos_snapshot.length)
+	);
+	let margen = $derived(
+		linea.precio_unitario > 0 && linea.costo_materiales > 0
+			? (1 - linea.costo_materiales / linea.precio_unitario) * 100
+			: null
+	);
 	let insumoSeleccionado = $state('');
 	let cantidadInsumo = $state(1);
 
@@ -165,14 +176,14 @@
 		{/if}
 	</td>
 	<td class="text-right">
-		{#if !linea.visible_cliente}
+		{#if costoEditable}
 			<input
-				class="input w-32 text-right input-sm"
+				class="input w-28 text-right input-sm"
 				type="text"
 				inputmode="decimal"
 				disabled={bloqueada}
 				value={costoBorrador ?? formatearDosDecimales(linea.costo_materiales)}
-				aria-label="Costo unitario interno"
+				aria-label="Costo unitario"
 				oninput={(event) => {
 					costoBorrador = event.currentTarget.value;
 					const costo = parsearNumeroDecimal(costoBorrador);
@@ -182,6 +193,41 @@
 				onblur={() => (costoBorrador = null)}
 			/>
 		{:else}
+			<span class="text-sm text-base-content/70 tabular-nums">
+				{formatearMoneda(linea.costo_materiales, moneda)}
+			</span>
+		{/if}
+	</td>
+	<td class="text-right">
+		{#if !linea.visible_cliente}
+			<span class="text-xs text-base-content/50">Interno</span>
+		{:else if linea.costo_materiales > 0}
+			<label
+				class={['input w-24 input-sm', margen !== null && margen < 0 && 'text-error input-error']}
+			>
+				<input
+					class="text-right"
+					type="text"
+					inputmode="decimal"
+					disabled={bloqueada}
+					value={margenBorrador ?? (margen === null ? '' : formatearDosDecimales(margen))}
+					aria-label="Margen de ganancia"
+					oninput={(event) => {
+						margenBorrador = event.currentTarget.value;
+						onActualizarMargen(linea.idx, margenBorrador);
+					}}
+					onblur={() => (margenBorrador = null)}
+				/>
+				<span class="text-xs text-base-content/60">%</span>
+			</label>
+		{:else}
+			<span class="text-xs text-base-content/50" title="Cargá el costo para calcular el margen">
+				—
+			</span>
+		{/if}
+	</td>
+	<td class="text-right">
+		{#if linea.visible_cliente}
 			<input
 				class="input w-32 text-right input-sm"
 				type="text"
@@ -195,6 +241,8 @@
 				}}
 				onblur={() => (precioBorrador = null)}
 			/>
+		{:else}
+			<span class="text-xs text-base-content/50">No se cobra</span>
 		{/if}
 	</td>
 	<td class="text-right font-semibold whitespace-nowrap tabular-nums">
@@ -219,14 +267,16 @@
 			class="btn btn-square btn-ghost btn-xs"
 			disabled={estructuraFija || cantidadLineas === 1}
 			title={linea.bloqueo ?? 'Quitar línea'}
-			onclick={() => onEliminar(linea.idx)}>✕</button
+			onclick={() => onEliminar(linea.idx)}
 		>
+			✕
+		</button>
 	</td>
 </tr>
 
 {#if llevaComposicion(linea)}
 	<tr class="relative z-0 border-x-2 border-b-2 border-base-300/80 focus-within:z-50">
-		<td colspan="6" class="p-0">
+		<td colspan="8" class="p-0">
 			<details class="collapse-arrow collapse w-full rounded-none bg-base-200/40">
 				<summary class="collapse-title w-full px-3 py-2 text-xs font-medium text-base-content/80">
 					{linea.insumos_snapshot.length
@@ -315,7 +365,7 @@
 
 {#if linea.tipo === 'producto' && Array.isArray(linea.insumos_snapshot) && linea.insumos_snapshot.length > 1}
 	<tr class="border-x-2 border-b-2 border-base-300/80">
-		<td colspan="6" class="p-0">
+		<td colspan="8" class="p-0">
 			<details class="collapse-arrow collapse w-full rounded-none bg-base-200/40">
 				<summary class="collapse-title w-full px-3 py-2 text-xs font-medium text-base-content/80">
 					Receta del producto

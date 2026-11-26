@@ -58,7 +58,12 @@ import type { MaterialSnapshot } from '$lib/modulos/ventas/tipos';
 import { historialAuditoria } from '$lib/server/auditoria';
 import { monedaParaDocumento } from '$lib/modulos/ventas/moneda.server';
 import { MONEDAS, aUsd, factorDesdeUsd } from '$lib/utils/moneda';
-import { formatearMoneda, normalizarPrecioPendiente, redondearPrecio } from '$lib/utils/precios';
+import {
+	formatearMoneda,
+	margenDeLinea,
+	normalizarPrecioPendiente,
+	redondearPrecio
+} from '$lib/utils/precios';
 
 const idOpcional = v.pipe(
 	v.optional(v.union([v.string(), v.number()])),
@@ -578,7 +583,9 @@ export async function crearPedidoServicio(data: NuevoPedido, usuarioId: number) 
 							cantidad: linea.cantidad,
 							precio_unitario: linea.visible_cliente ? linea.precio_unitario : 0,
 							precio_lista_unitario: linea.precio_lista_unitario,
-							margen_porcentaje: linea.margen_producto,
+							margen_porcentaje: linea.visible_cliente
+								? margenDeLinea(linea.precio_unitario, linea.costo_materiales)
+								: 0,
 							costo_materiales: linea.costo_materiales,
 							insumos_snapshot: linea.insumos_snapshot,
 							es_personalizado: linea.es_personalizado,

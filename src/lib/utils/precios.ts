@@ -80,6 +80,10 @@ export function calcularPrecioVenta(costo: number, margenPorcentaje: number) {
 	return redondearPrecio(costo / (1 - margenPorcentaje / 100));
 }
 
+export function margenDeLinea(precio: number, costo: number) {
+	return precio > 0 ? redondearPrecio(((precio - costo) / precio) * 100) : 0;
+}
+
 export function calcularMargenDesdePrecio(costo: number, precio: number): number | null {
 	if (!Number.isFinite(costo) || !Number.isFinite(precio) || costo <= 0 || precio <= 0) return null;
 	const margen = Number(((1 - costo / precio) * 100).toFixed(4));

@@ -14,7 +14,12 @@ import {
 	unidadInsumo
 } from '$lib/server/db/schema';
 import { and, eq, isNull } from 'drizzle-orm';
-import { calcularIva21, precioNetoCubreCosto, redondearPrecio } from '$lib/utils/precios';
+import {
+	calcularIva21,
+	margenDeLinea,
+	precioNetoCubreCosto,
+	redondearPrecio
+} from '$lib/utils/precios';
 import { requirePermission, tienePermiso } from '$lib/server/auth/permissions';
 import { clavesAdjuntos, eliminarArchivos } from '$lib/modulos/adjuntos/adjuntos.server';
 import { resolverLineaComercial } from '$lib/modulos/ventas/lineas.server';
@@ -302,10 +307,7 @@ export const cotizarCotizacion = command(
 					cantidad: linea.cantidad,
 					precio_unitario: precio,
 					precio_lista_unitario: resuelta.precio_lista_unitario,
-					margen_porcentaje:
-						resuelta.visible_cliente && precio > 0
-							? redondearPrecio(((precio - costo) / precio) * 100)
-							: 0,
+					margen_porcentaje: resuelta.visible_cliente ? margenDeLinea(precio, costo) : 0,
 					costo_materiales: costo,
 					insumos_snapshot: resuelta.insumos_snapshot,
 					orden_linea,

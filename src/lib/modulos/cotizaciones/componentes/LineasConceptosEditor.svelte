@@ -18,8 +18,12 @@
 	import { can } from '$lib/utils/permissions';
 	import { toast } from '$lib/ui/toast.svelte';
 	import {
+		MARGEN_MAX_PORCENTAJE,
 		ajustarPrecioPorCambioDeCosto,
 		calcularCostoComposicion,
+		calcularPrecioVenta,
+		formatearDosDecimales,
+		formatearMoneda,
 		normalizarPrecioPendiente,
 		parsearNumeroDecimal,
 		redondearPrecio
@@ -70,6 +74,19 @@
 	}: Props = $props();
 
 	let siguienteId = $state(Date.now());
+	let margenDefecto = $state('');
+	const margenPorDefecto = $derived.by(() => {
+		const valor = parsearNumeroDecimal(margenDefecto);
+		return valor !== null && valor >= 0 && valor <= MARGEN_MAX_PORCENTAJE ? valor : null;
+	});
+	const costoTotal = $derived(
+		calcularCostoComposicion(
+			lineas.map((linea) => ({ cantidad: linea.cantidad, costo_unitario: linea.costo_materiales }))
+		)
+	);
+	const ventaNeta = $derived(redondearPrecio(totalBase - importeDescuento));
+	const ganancia = $derived(redondearPrecio(ventaNeta - costoTotal));
+	const margenPromedio = $derived(ventaNeta > 0 ? (ganancia / ventaNeta) * 100 : null);
 	let solicitudProducto = 0;
 	let nuevoInsumoAbierto = $state(false);
 	let dialogoInsumo = $state<CotizacionNuevoInsumoDialog>();
@@ -241,6 +258,68 @@
 		});
 	}
 
+	const precioMinimo = (linea: LineaEdicion) =>
+		linea.tipo === 'concepto' ? 0 : linea.precio_minimo_unitario;
+
+	function margenDe(linea: LineaEdicion) {
+		if (linea.precio_unitario <= 0 || linea.costo_materiales <= 0) return null;
+		const margen = (1 - linea.costo_materiales / linea.precio_unitario) * 100;
+		return margen >= 0 && margen <= MARGEN_MAX_PORCENTAJE ? margen : null;
+	}
+
+	function precioConMargen(linea: LineaEdicion, costo: number, margen: number) {
+		return redondearPrecio(Math.max(calcularPrecioVenta(costo, margen), precioMinimo(linea)));
+	}
+
+	function precioParaCosto(linea: LineaEdicion, costoNuevo: number) {
+		const margen = margenDe(linea) ?? (linea.precio_unitario <= 0 ? margenPorDefecto : null);
+		if (margen === null || costoNuevo <= 0) {
+			return ajustarPrecioPorCambioDeCosto(
+				linea.precio_lista_unitario,
+				linea.costo_materiales,
+				costoNuevo
+			);
+		}
+		return precioConMargen(linea, costoNuevo, margen);
+	}
+
+	function actualizarCostoLinea(lineaId: number, costo: number) {
+		const linea = lineas.find((item) => item.idx === lineaId);
+		if (!linea) return;
+		const costoNuevo = Math.max(redondearPrecio(costo), 0);
+		if (!linea.visible_cliente) {
+			actualizarLinea(lineaId, { costo_materiales: costoNuevo });
+			return;
+		}
+		const precio = precioParaCosto(linea, costoNuevo);
+		actualizarLinea(lineaId, {
+			costo_materiales: costoNuevo,
+			precio_lista_unitario: precio,
+			precio_unitario: precio
+		});
+	}
+
+	function actualizarMargenLinea(lineaId: number, valor: string) {
+		const linea = lineas.find((item) => item.idx === lineaId);
+		const margen = parsearNumeroDecimal(valor);
+		if (!linea || margen === null || linea.costo_materiales <= 0) return;
+		const acotado = Math.min(Math.max(margen, 0), MARGEN_MAX_PORCENTAJE);
+		const precio = precioConMargen(linea, linea.costo_materiales, acotado);
+		actualizarLinea(lineaId, { precio_lista_unitario: precio, precio_unitario: precio });
+	}
+
+	function aplicarMargenATodas() {
+		const margen = margenPorDefecto;
+		if (margen === null) return;
+		guardarLineas(
+			lineas.map((linea) => {
+				if (!linea.visible_cliente || linea.costo_materiales <= 0 || linea.bloqueo) return linea;
+				const precio = precioConMargen(linea, linea.costo_materiales, margen);
+				return { ...linea, precio_lista_unitario: precio, precio_unitario: precio };
+			})
+		);
+	}
+
 	function actualizarPrecioLinea(lineaId: number, valor: string) {
 		const ingresado = parsearNumeroDecimal(valor);
 		const linea = lineas.find((item) => item.idx === lineaId);
@@ -274,11 +353,7 @@
 			}
 		];
 		const costoNuevo = calcularCostoComposicion(snapshot);
-		const precio = ajustarPrecioPorCambioDeCosto(
-			linea.precio_lista_unitario,
-			calcularCostoComposicion(linea.insumos_snapshot),
-			costoNuevo
-		);
+		const precio = precioParaCosto(linea, costoNuevo);
 		actualizarLinea(lineaId, {
 			insumos_snapshot: snapshot,
 			costo_materiales: costoNuevo,
@@ -292,11 +367,7 @@
 		if (!linea || !llevaComposicion(linea)) return;
 
 		const snapshot = linea.insumos_snapshot.filter((_, index) => index !== indice);
-		const precio = ajustarPrecioPorCambioDeCosto(
-			linea.precio_lista_unitario,
-			calcularCostoComposicion(linea.insumos_snapshot),
-			calcularCostoComposicion(snapshot)
-		);
+		const precio = precioParaCosto(linea, calcularCostoComposicion(snapshot));
 		actualizarLinea(lineaId, {
 			insumos_snapshot: snapshot,
 			costo_materiales: calcularCostoComposicion(snapshot),
@@ -432,9 +503,60 @@
 			onActualizarPrecio={actualizarPrecioLinea}
 			onCambiarVisibilidad={(lineaId, visible) =>
 				actualizarLinea(lineaId, { visible_cliente: visible })}
-			onActualizarCostoInterno={(lineaId, costo) =>
-				actualizarLinea(lineaId, { costo_materiales: Math.max(redondearPrecio(costo), 0) })}
+			onActualizarCostoInterno={actualizarCostoLinea}
+			onActualizarMargen={actualizarMargenLinea}
 		/>
+		<div
+			class="flex flex-wrap items-end justify-between gap-4 rounded-box border border-base-300 bg-base-200/40 p-3"
+		>
+			<div class="flex items-end gap-2">
+				<label class="flex flex-col gap-1 text-xs text-base-content/70">
+					Margen por defecto
+					<span class="input w-28 input-sm">
+						<input
+							class="text-right"
+							type="text"
+							inputmode="decimal"
+							placeholder="35"
+							disabled={bloqueada}
+							bind:value={margenDefecto}
+						/>
+						<span class="text-xs text-base-content/60">%</span>
+					</span>
+				</label>
+				<button
+					type="button"
+					class="btn btn-sm"
+					disabled={bloqueada || margenPorDefecto === null}
+					onclick={aplicarMargenATodas}
+				>
+					Aplicar a todas las líneas
+				</button>
+			</div>
+			<dl class="flex flex-wrap gap-6 text-sm">
+				<div>
+					<dt class="text-xs text-base-content/60">Costo total</dt>
+					<dd class="font-semibold tabular-nums">{formatearMoneda(costoTotal, moneda)}</dd>
+				</div>
+				<div>
+					<dt class="text-xs text-base-content/60">Ganancia (sin IVA)</dt>
+					<dd class={['font-semibold tabular-nums', ganancia < 0 && 'text-error']}>
+						{formatearMoneda(ganancia, moneda)}
+					</dd>
+				</div>
+				<div>
+					<dt class="text-xs text-base-content/60">Margen promedio</dt>
+					<dd
+						class={[
+							'font-semibold tabular-nums',
+							margenPromedio !== null && margenPromedio < 0 && 'text-error'
+						]}
+					>
+						{margenPromedio === null ? '—' : `${formatearDosDecimales(margenPromedio)}%`}
+					</dd>
+				</div>
+			</dl>
+		</div>
 		{#if contexto === 'pedido'}
 			{@const lineasConStock = lineas.filter(
 				(linea) =>

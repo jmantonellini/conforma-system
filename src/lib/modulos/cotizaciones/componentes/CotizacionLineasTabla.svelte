@@ -26,6 +26,7 @@
 		onActualizarPrecio: (lineaId: number, precio: string) => void;
 		onCambiarVisibilidad: (lineaId: number, visible: boolean) => void;
 		onActualizarCostoInterno: (lineaId: number, costo: number) => void;
+		onActualizarMargen: (lineaId: number, margen: string) => void;
 		onCrearProducto?: (lineaId: number, texto: string) => void;
 		onCrearInsumo?: (lineaId: number, texto: string) => void;
 	};
@@ -52,18 +53,21 @@
 		onActualizarPrecio,
 		onCambiarVisibilidad,
 		onActualizarCostoInterno,
+		onActualizarMargen,
 		onCrearProducto,
 		onCrearInsumo
 	}: Props = $props();
 </script>
 
 <div class="overflow-x-auto rounded-box border border-base-300 xl:overflow-visible">
-	<table class="table min-w-232 table-sm">
+	<table class="table min-w-280 table-sm">
 		<thead>
 			<tr>
 				<th>Artículo / concepto</th>
 				<th class="w-28 text-right">Cantidad</th>
-				<th class="w-40 text-right">Precio / costo unitario</th>
+				<th class="w-32 text-right">Costo unit.</th>
+				<th class="w-28 text-right">Margen</th>
+				<th class="w-36 text-right">Precio unit.</th>
 				<th class="w-40 text-right">Subtotal</th>
 				<th class="w-10 text-center">Visible</th>
 				<th class="w-12"></th>
@@ -87,6 +91,7 @@
 					{onActualizarPrecio}
 					{onCambiarVisibilidad}
 					{onActualizarCostoInterno}
+					{onActualizarMargen}
 					{onAgregarInsumoAsociado}
 					{onQuitarInsumoAsociado}
 					{onCrearProducto}
@@ -95,14 +100,14 @@
 			{/each}
 			{#if descuentoGlobal > 0}
 				<tr>
-					<td colspan="3" class="text-right font-semibold">Subtotal</td>
+					<td colspan="5" class="text-right font-semibold">Subtotal</td>
 					<td class="text-right font-semibold whitespace-nowrap tabular-nums">
 						{formatearMoneda(totalBase, moneda)}
 					</td>
 					<td colspan="2"></td>
 				</tr>
 				<tr>
-					<td colspan="3" class="text-right font-semibold">
+					<td colspan="5" class="text-right font-semibold">
 						Descuento general ({formatearDosDecimales(descuentoGlobal)}%)
 					</td>
 					<td class="text-right font-semibold whitespace-nowrap tabular-nums">
@@ -113,7 +118,7 @@
 			{/if}
 			{#if incluirIva}
 				<tr>
-					<td colspan="3" class="text-right font-semibold">IVA (21%)</td>
+					<td colspan="5" class="text-right font-semibold">IVA (21%)</td>
 					<td class="text-right font-semibold whitespace-nowrap tabular-nums">
 						{formatearMoneda(importeIva, moneda)}
 					</td>

@@ -16,7 +16,7 @@ import {
 	type LineaComercialEntrada
 } from '$lib/modulos/ventas/lineas.server';
 import { factorDesdeUsd } from '$lib/utils/moneda';
-import { formatearMoneda, redondearPrecio } from '$lib/utils/precios';
+import { formatearMoneda, margenDeLinea, redondearPrecio } from '$lib/utils/precios';
 import { LineaPedidoSchema } from './pedidos.server';
 
 export const EdicionPedidoSchema = v.object({
@@ -146,7 +146,7 @@ export async function editarPedidoServicio(data: EdicionPedido, usuarioId: numbe
 							cantidad: resuelta.cantidad,
 							precio_unitario: precioCliente(resuelta),
 							precio_lista_unitario: resuelta.precio_lista_unitario,
-							margen_porcentaje: resuelta.margen_producto,
+							margen_porcentaje: margenDeLinea(precioCliente(resuelta), resuelta.costo_materiales),
 							costo_materiales: resuelta.costo_materiales,
 							insumos_snapshot: resuelta.insumos_snapshot,
 							es_personalizado: resuelta.es_personalizado,
@@ -215,7 +215,7 @@ export async function editarPedidoServicio(data: EdicionPedido, usuarioId: numbe
 					cantidad: resuelta.cantidad,
 					precio_unitario: precioCliente(resuelta),
 					precio_lista_unitario: resuelta.precio_lista_unitario,
-					margen_porcentaje: resuelta.margen_producto,
+					margen_porcentaje: margenDeLinea(precioCliente(resuelta), resuelta.costo_materiales),
 					costo_materiales: resuelta.costo_materiales,
 					insumos_snapshot: resuelta.insumos_snapshot,
 					es_personalizado: resuelta.es_personalizado,
