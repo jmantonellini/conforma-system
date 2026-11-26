@@ -62,6 +62,7 @@ export const getDatosCreacionPedido = query(
 				data: [
 					{
 						...productoInicial,
+						margen_porcentaje: productoInicial.margen_porcentaje ?? 0,
 						marca: null,
 						modelo: null,
 						portada_id: null,

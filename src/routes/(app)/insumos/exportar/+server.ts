@@ -15,6 +15,7 @@ import {
 export async function GET() {
 	try {
 		await requirePermission('insumos', 'view');
+		await requirePermission('importes', 'view');
 	} catch (cause) {
 		if (
 			cause instanceof Error &&

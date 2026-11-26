@@ -150,6 +150,7 @@ export const eliminarPedido = command(v.number(), async (pedidoId) => {
 
 export const crearPedido = form(PedidoSchema, async (data) => {
 	const user = await requirePermission('pedidos', 'create');
+	await requirePermission('importes', 'view');
 	if (data.lineas.some((linea) => linea.stock_ubicacion_id)) {
 		await requirePermission('stock', 'edit');
 	}

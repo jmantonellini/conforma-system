@@ -45,11 +45,13 @@
 	vacio="No hay pedidos para estos filtros"
 >
 	{#snippet acciones()}
-		<Can modulo="pedidos" accion="create">
-			<a class="btn btn-primary btn-sm" href={resolve('/pedidos/crear')}>
-				<Icono nombre="mas_simple" /> Nuevo pedido
-			</a>
-		</Can>
+		{#if veImportes}
+			<Can modulo="pedidos" accion="create">
+				<a class="btn btn-primary btn-sm" href={resolve('/pedidos/crear')}>
+					<Icono nombre="mas_simple" /> Nuevo pedido
+				</a>
+			</Can>
+		{/if}
 	{/snippet}
 	{#snippet filtros()}
 		<select

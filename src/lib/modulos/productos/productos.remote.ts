@@ -20,7 +20,7 @@ import {
 	getAtributosCategoriaService
 } from '$lib/modulos/productos/productos.server';
 
-import { requirePermission } from '$lib/server/auth/permissions';
+import { ocultar, requirePermission, veImportesSesion } from '$lib/server/auth/permissions';
 import { toOptionalId } from '$lib/utils/ids';
 import { TIPOS_PIEZA } from '$lib/modulos/productos/tipos';
 
@@ -71,7 +71,7 @@ export const getProductos = query(
 			direction,
 			page,
 			limit,
-			incluirPrecios
+			incluirPrecios: incluirPrecios && (await veImportesSesion())
 		});
 	}
 );
@@ -93,20 +93,35 @@ export const getProductosCatalogo = query(
 export const getProductoById = query(
 	v.pipe(v.string(), v.transform(Number), v.number()),
 	async (id) => {
-		return getProductoByIdService(id);
+		const producto = await getProductoByIdService(id);
+		if (await veImportesSesion()) return producto;
+		return ocultar(producto, ['costo_materiales', 'precio_venta', 'margen_porcentaje']);
 	}
 );
 
 export const getProductoPrecio = query(v.number(), async (productoId) => {
+	await requirePermission('importes', 'view');
 	return obtenerPrecioProducto(productoId);
 });
 
 export const getProductoInsumos = query(v.number(), async (productoId) => {
-	return getProductoInsumosService(productoId);
+	const insumos = await getProductoInsumosService(productoId);
+	if (await veImportesSesion()) return insumos;
+	return insumos.map((insumo) => ocultar(insumo, ['costo_unitario']));
 });
 
 export const getProductoConReceta = query(v.number(), async (productoId) => {
-	return getProductoConRecetaService(productoId);
+	const resultado = await getProductoConRecetaService(productoId);
+	if (await veImportesSesion()) return resultado;
+	return {
+		...resultado,
+		producto: ocultar(resultado.producto, [
+			'costo_materiales',
+			'precio_venta',
+			'margen_porcentaje'
+		]),
+		receta: resultado.receta.map((insumo) => ocultar(insumo, ['costo_unitario']))
+	};
 });
 
 export const getCategorias = query(async () => {
@@ -136,8 +151,10 @@ export const crearProducto = form(ProductoSchema, async (data) => {
 });
 
 export const actualizarProducto = form(ProductoSchemaUpdate, async (data) => {
+	const datos = normalizarProductoPayload(data);
+	if (!(await veImportesSesion())) delete (datos as Partial<typeof datos>).margen_porcentaje;
 	const result = await actualizarProductoServicio({
-		...normalizarProductoPayload(data),
+		...datos,
 		receta: data.receta
 	});
 

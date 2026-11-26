@@ -74,6 +74,11 @@ export async function tienePermiso(user: UsuarioConRol, modulo: string, accion =
 
 export const puedeVerImportes = (user: UsuarioConRol) => tienePermiso(user, 'importes', 'view');
 
+export async function veImportesSesion() {
+	const user = await usuarioDeSesion();
+	return user ? puedeVerImportes(user) : false;
+}
+
 export async function requirePermission(modulo: string, accion = 'view') {
 	const user = await usuarioDeSesion();
 	if (!user) error(401, 'No autorizado');

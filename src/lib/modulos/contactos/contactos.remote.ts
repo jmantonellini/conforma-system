@@ -511,7 +511,10 @@ export const actualizarContacto = form(
 		condiciones_pago,
 		...data
 	}) => {
-		await requirePermission('contactos', 'edit');
+		const user = await requirePermission('contactos', 'edit');
+		if (!(await tienePermiso(user, 'importes', 'view'))) {
+			(data as { saldo_disponible?: number }).saldo_disponible = undefined;
+		}
 		const contactoId = Number(id);
 		const [existente] = await db
 			.select({ es_cliente: contactos.es_cliente, es_distribuidor: contactos.es_distribuidor })

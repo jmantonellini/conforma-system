@@ -1,4 +1,6 @@
 <script lang="ts">
+	import { page } from '$app/state';
+	import { can } from '$lib/utils/permissions';
 	import { resolve } from '$app/paths';
 	import {
 		Can,
@@ -22,6 +24,7 @@
 	import type { PageProps } from './$types';
 
 	let { data }: PageProps = $props();
+	const veImportes = can(page.data.user, page.data.permisos, 'importes', 'view');
 	const busqueda = $derived(parametro('search'));
 	const listado = $derived(getProductos(data.filtros));
 	const resultado = $derived(await listado);
@@ -71,8 +74,10 @@
 		<ColumnaOrden clave="nombre" porDefecto="nombre">Producto</ColumnaOrden>
 		<th>Categoría</th>
 		<th>Vehículo</th>
-		<th class="text-right">Costo receta</th>
-		<th class="text-right">Precio lista</th>
+		{#if veImportes}
+			<th class="text-right">Costo receta</th>
+			<th class="text-right">Precio lista</th>
+		{/if}
 		<th></th>
 	{/snippet}
 	{#snippet row(producto: (typeof resultado.data)[number])}
@@ -103,8 +108,10 @@
 				query={busqueda}
 			/>
 		</td>
-		<td class="numero text-base-content/70">{formatearMoneda(producto.costo_materiales)}</td>
-		<td class="numero font-medium">{formatearMoneda(producto.precio_venta)}</td>
+		{#if veImportes}
+			<td class="numero text-base-content/70">{formatearMoneda(producto.costo_materiales)}</td>
+			<td class="numero font-medium">{formatearMoneda(producto.precio_venta)}</td>
+		{/if}
 		<td class="w-0">
 			<Can modulo="productos" accion="delete">
 				<button
@@ -132,7 +139,9 @@
 				.join(' · ')}
 		>
 			<div class="flex items-center justify-between gap-2">
-				<span class="font-semibold tabular-nums">{formatearMoneda(producto.precio_venta)}</span>
+				{#if veImportes}
+					<span class="font-semibold tabular-nums">{formatearMoneda(producto.precio_venta)}</span>
+				{/if}
 				{#if producto.receta_pendiente}
 					<span class="badge badge-soft badge-xs badge-warning">Receta pendiente</span>
 				{/if}

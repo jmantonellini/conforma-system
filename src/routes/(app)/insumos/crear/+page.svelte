@@ -18,6 +18,10 @@
 		getUnidadesInsumo
 	} from '$lib/modulos/insumos/insumos.remote';
 	import { toast } from '$lib/ui/toast.svelte';
+	import { page } from '$app/state';
+	import { can } from '$lib/utils/permissions';
+
+	const veImportes = can(page.data.user, page.data.permisos, 'importes', 'view');
 
 	const form = crearInsumo;
 	let imagen = $state<File | null>(null);
@@ -131,17 +135,25 @@
 							{/each}
 						</select>
 					</FormFieldWrapper>
-					<FormFieldWrapper label="Costo unitario" id="costo_unitario" required>
-						<input class="input" min="0" step="0.01" {...form.fields.costo_unitario.as('number')} />
-					</FormFieldWrapper>
-					<FormFieldWrapper label="Flete (%)" id="flete_porcentaje">
-						<input
-							class="input"
-							min="0"
-							step="0.01"
-							{...form.fields.flete_porcentaje.as('number')}
-						/>
-					</FormFieldWrapper>
+					{#if veImportes}
+						<FormFieldWrapper label="Costo unitario" id="costo_unitario" required>
+							<input
+								class="input"
+								min="0"
+								step="0.01"
+								required
+								{...form.fields.costo_unitario.as('number')}
+							/>
+						</FormFieldWrapper>
+						<FormFieldWrapper label="Flete (%)" id="flete_porcentaje">
+							<input
+								class="input"
+								min="0"
+								step="0.01"
+								{...form.fields.flete_porcentaje.as('number')}
+							/>
+						</FormFieldWrapper>
+					{/if}
 				</div>
 			</fieldset>
 			<FormErrors {form} />

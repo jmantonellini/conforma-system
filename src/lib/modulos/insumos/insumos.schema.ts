@@ -5,7 +5,7 @@ export const InsumoSchema = v.object({
 	nombre: v.pipe(v.string(), v.nonEmpty('Nombre requerido')),
 	tipo: v.pipe(v.string(), v.nonEmpty('Tipo requerido')),
 	unidad: v.pipe(v.string(), v.nonEmpty('Unidad requerida')),
-	costo_unitario: v.pipe(v.number(), v.toMinValue(0)),
+	costo_unitario: v.optional(v.pipe(v.number(), v.toMinValue(0)), 0),
 	flete_porcentaje: v.optional(v.pipe(v.number(), v.toMinValue(0)), 0),
 	observaciones: v.optional(v.string()),
 	categoria_id: v.optional(v.pipe(v.string(), v.transform(Number), v.number())),

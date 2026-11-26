@@ -134,7 +134,7 @@
 		}}
 	>
 		{#snippet acciones()}
-			{#if editable}
+			{#if editable && veImportes}
 				<a class="btn btn-sm" href={resolve(`/pedidos/${pedido.id}/editar`)}>Editar</a>
 			{/if}
 		{/snippet}

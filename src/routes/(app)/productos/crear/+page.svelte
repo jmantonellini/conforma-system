@@ -15,6 +15,7 @@
 	import { resolve } from '$app/paths';
 	import { formatearMoneda, redondearPrecio } from '$lib/utils/precios';
 	import MargenPrecio from '$lib/modulos/productos/componentes/MargenPrecio.svelte';
+	import { can } from '$lib/utils/permissions';
 	import {
 		CATEGORIAS_PRODUCTO,
 		ETIQUETA_TIPO_PIEZA,
@@ -24,6 +25,7 @@
 	import AtributosCampos from '$lib/modulos/productos/componentes/AtributosCampos.svelte';
 	import type { ValoresAtributos } from '$lib/modulos/productos/atributos';
 
+	const veImportes = can(page.data.user, page.data.permisos, 'importes', 'view');
 	let categorias: { id: number; nombre: string; slug: string }[] = page.data.categorias;
 	let marcas = page.data.marcas;
 	let tiposDeUso: { id: number; nombre: string; slug: string }[] = page.data.tiposDeUso;
@@ -195,13 +197,15 @@
 							</select>
 						</FormFieldWrapper>
 					{/if}
-					<div class="stat rounded-box border border-base-300 bg-base-100 p-3">
-						<div class="stat-title">Costo de receta</div>
-						<div class="stat-value text-xl">
-							{formatearMoneda(costoReceta)}
+					{#if veImportes}
+						<div class="stat rounded-box border border-base-300 bg-base-100 p-3">
+							<div class="stat-title">Costo de receta</div>
+							<div class="stat-value text-xl">
+								{formatearMoneda(costoReceta)}
+							</div>
 						</div>
-					</div>
-					<MargenPrecio field={crearProducto.fields.margen_porcentaje} costo={costoReceta} />
+						<MargenPrecio field={crearProducto.fields.margen_porcentaje} costo={costoReceta} />
+					{/if}
 				</div>
 			</fieldset>
 

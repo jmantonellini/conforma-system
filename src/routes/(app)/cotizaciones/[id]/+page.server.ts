@@ -47,7 +47,10 @@ export const load: PageServerLoad = async ({ params, parent }) => {
 		notas,
 		empleados,
 		productos: catalogos?.[0].data ?? [],
-		insumos: catalogos?.[1].data ?? [],
+		insumos: (catalogos?.[1].data ?? []).map((insumo) => ({
+			...insumo,
+			costo_unitario: insumo.costo_unitario ?? 0
+		})),
 		tiposInsumo: catalogos?.[2] ?? [],
 		categoriasInsumo: catalogos?.[3] ?? [],
 		unidadesInsumo: catalogos?.[4] ?? []

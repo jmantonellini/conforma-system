@@ -100,7 +100,7 @@
 		codigo: insumo.codigo,
 		nombre: insumo.nombre,
 		unidad: insumo.unidad,
-		costo_unitario: insumo.costo_unitario
+		costo_unitario: insumo.costo_unitario ?? 0
 	}));
 
 	const totalOriginal = pedido.total ?? 0;

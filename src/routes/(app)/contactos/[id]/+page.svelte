@@ -19,9 +19,11 @@
 	} from '$lib/modulos/contactos/contactos.remote';
 	import { toast } from '$lib/ui/toast.svelte';
 	import { formatearMoneda } from '$lib/utils/precios';
+	import { can } from '$lib/utils/permissions';
 	import type { PageProps } from './$types';
 
 	let { data }: PageProps = $props();
+	const veImportes = $derived(can(data.user, data.permisos, 'importes', 'view'));
 	const form = $derived(actualizarContacto.for(String(data.contacto.id)));
 	const contacto = $derived(data.contacto);
 	let esDistribuidor = $derived(contacto.es_distribuidor ?? false);
@@ -71,9 +73,9 @@
 							submitText="Guardar cambios"
 						/>
 					{:else}
-						<button type="button" class="btn btn-primary btn-sm" onclick={() => (editando = true)}
-							>Editar</button
-						>
+						<button type="button" class="btn btn-primary btn-sm" onclick={() => (editando = true)}>
+							Editar
+						</button>
 					{/if}
 				</Can>
 			{/snippet}
@@ -174,15 +176,17 @@
 								)}
 							/>
 						</FormFieldWrapper>
-						<FormFieldWrapper id="saldo_disponible" label="Saldo disponible">
-							<input
-								class="input"
-								disabled={!editando}
-								min="0"
-								step="0.01"
-								{...form.fields.saldo_disponible.as('number', contacto.saldo_disponible || 0)}
-							/>
-						</FormFieldWrapper>
+						{#if veImportes}
+							<FormFieldWrapper id="saldo_disponible" label="Saldo disponible">
+								<input
+									class="input"
+									disabled={!editando}
+									min="0"
+									step="0.01"
+									{...form.fields.saldo_disponible.as('number', contacto.saldo_disponible || 0)}
+								/>
+							</FormFieldWrapper>
+						{/if}
 					{/if}
 					{#if rol === 'proveedor'}
 						<FormFieldWrapper id="codigo" label="Código de proveedor">
@@ -245,21 +249,26 @@
 		{#if data.pedidos.length}
 			<div class="overflow-x-auto">
 				<table class="table table-sm">
-					<thead
-						><tr><th>Pedido</th><th>Fecha</th><th>Estado</th><th class="text-right">Total</th></tr
-						></thead
-					>
+					<thead>
+						<tr>
+							<th>Pedido</th><th>Fecha</th><th>Estado</th>{#if veImportes}<th class="text-right">
+									Total
+								</th>{/if}
+						</tr>
+					</thead>
 					<tbody>
 						{#each data.pedidos as pedido (pedido.id)}
 							<tr>
-								<td
-									><a class="link link-primary" href={resolve(`/pedidos/${pedido.id}`)}
-										>{pedido.numero_pedido}</a
-									></td
-								>
+								<td>
+									<a class="link link-primary" href={resolve(`/pedidos/${pedido.id}`)}>
+										{pedido.numero_pedido}
+									</a>
+								</td>
 								<td>{pedido.fecha_pedido?.toLocaleDateString('es-AR') || '-'}</td>
 								<td><span class="badge badge-sm">{pedido.estado || 'Sin estado'}</span></td>
-								<td class="numero">{formatearMoneda(pedido.precio_total, pedido.moneda)}</td>
+								{#if veImportes}
+									<td class="numero">{formatearMoneda(pedido.precio_total, pedido.moneda)}</td>
+								{/if}
 							</tr>
 						{/each}
 					</tbody>

@@ -33,6 +33,7 @@
 		redondearPrecio
 	} from '$lib/utils/precios';
 	import MargenPrecio from '$lib/modulos/productos/componentes/MargenPrecio.svelte';
+	import { can } from '$lib/utils/permissions';
 	import type { PageProps } from './$types';
 	import {
 		CATEGORIAS_PRODUCTO,
@@ -73,6 +74,7 @@
 		}
 	}
 
+	const veImportes = can(page.data.user, page.data.permisos, 'importes', 'view');
 	let categorias: { id: number; nombre: string; slug: string }[] = page.data.categorias;
 	let tiposVehiculo = page.data.tiposVehiculo;
 	let marcas = page.data.marcas;
@@ -256,24 +258,26 @@
 					<dd>{planos.length || 'Sin planos'}</dd>
 				</div>
 			</dl>
-			<dl class="grid grid-cols-3 gap-4 border-t border-base-300 pt-4">
-				<div>
-					<dt class="secundario">Costo de receta</dt>
-					<dd class="text-lg font-semibold tabular-nums">{formatearMoneda(costoReceta)}</dd>
-				</div>
-				<div>
-					<dt class="secundario">Margen</dt>
-					<dd class="text-lg font-semibold tabular-nums">
-						{formatearDosDecimales(margenPorcentajeActual)}%
-					</dd>
-				</div>
-				<div>
-					<dt class="secundario">Precio de lista</dt>
-					<dd class="text-lg font-semibold text-primary tabular-nums">
-						{formatearMoneda(precioVenta)}
-					</dd>
-				</div>
-			</dl>
+			{#if veImportes}
+				<dl class="grid grid-cols-3 gap-4 border-t border-base-300 pt-4">
+					<div>
+						<dt class="secundario">Costo de receta</dt>
+						<dd class="text-lg font-semibold tabular-nums">{formatearMoneda(costoReceta)}</dd>
+					</div>
+					<div>
+						<dt class="secundario">Margen</dt>
+						<dd class="text-lg font-semibold tabular-nums">
+							{formatearDosDecimales(margenPorcentajeActual)}%
+						</dd>
+					</div>
+					<div>
+						<dt class="secundario">Precio de lista</dt>
+						<dd class="text-lg font-semibold text-primary tabular-nums">
+							{formatearMoneda(precioVenta)}
+						</dd>
+					</div>
+				</dl>
+			{/if}
 		</div>
 	</section>
 
@@ -467,9 +471,11 @@
 
 			<Seccion titulo="Receta" descripcion="Insumos y subproductos que lleva cada unidad.">
 				{#snippet acciones()}
-					<span class="text-sm text-base-content/70">
-						Costo: <strong class="tabular-nums">{formatearMoneda(costoReceta)}</strong>
-					</span>
+					{#if veImportes}
+						<span class="text-sm text-base-content/70">
+							Costo: <strong class="tabular-nums">{formatearMoneda(costoReceta)}</strong>
+						</span>
+					{/if}
 				{/snippet}
 				<div class="flex flex-col gap-1">
 					{#each receta as linea, indice (indice)}
@@ -532,13 +538,15 @@
 					<button class="btn btn-sm" type="button" onclick={agregarInsumo}>
 						<Icono nombre="mas_simple" /> Agregar componente
 					</button>
-					<div class="ml-auto grid w-80 grid-cols-2 gap-2">
-						<MargenPrecio
-							field={form.fields.margen_porcentaje}
-							costo={costoReceta}
-							inicial={data.producto.margen_porcentaje ?? 0}
-						/>
-					</div>
+					{#if veImportes}
+						<div class="ml-auto grid w-80 grid-cols-2 gap-2">
+							<MargenPrecio
+								field={form.fields.margen_porcentaje}
+								costo={costoReceta}
+								inicial={data.producto.margen_porcentaje ?? 0}
+							/>
+						</div>
+					{/if}
 				</div>
 			</Seccion>
 

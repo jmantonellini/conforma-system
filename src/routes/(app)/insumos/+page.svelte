@@ -22,6 +22,7 @@
 	import type { PageProps } from './$types';
 
 	let { data }: PageProps = $props();
+	const veImportes = $derived(can(data.user, data.permisos, 'importes', 'view'));
 	const busqueda = $derived(parametro('search'));
 	const listado = $derived(getInsumos(data.filtros));
 	const resultado = $derived(await listado);
@@ -78,8 +79,8 @@
 		<ExcelMenu
 			importHref={resolve('/insumos/importar')}
 			exportHref={resolve('/insumos/exportar')}
-			canImport={can(data.user, data.permisos, 'insumos', 'create')}
-			canExport={can(data.user, data.permisos, 'insumos', 'view')}
+			canImport={can(data.user, data.permisos, 'insumos', 'create') && veImportes}
+			canExport={can(data.user, data.permisos, 'insumos', 'view') && veImportes}
 		/>
 	{/snippet}
 	{#snippet header()}
@@ -87,7 +88,11 @@
 		<th>Tipo</th>
 		<th>Categoría</th>
 		<th>Existencia</th>
-		<ColumnaOrden clave="costo_unitario" porDefecto="nombre" class="text-right">Costo</ColumnaOrden>
+		{#if veImportes}
+			<ColumnaOrden clave="costo_unitario" porDefecto="nombre" class="text-right">
+				Costo
+			</ColumnaOrden>
+		{/if}
 		<th></th>
 	{/snippet}
 	{#snippet row(insumo: (typeof resultado.data)[number])}
@@ -127,7 +132,9 @@
 				<span class="secundario" title="No lleva stock">por {insumo.unidad}</span>
 			{/if}
 		</td>
-		<td class="numero">{formatearMoneda(insumo.costo_unitario)}</td>
+		{#if veImportes}
+			<td class="numero">{formatearMoneda(insumo.costo_unitario)}</td>
+		{/if}
 		<td class="w-0">
 			<Can modulo="insumos" accion="delete">
 				<button
@@ -160,7 +167,9 @@
 				{:else}
 					<span class="secundario">por {insumo.unidad}</span>
 				{/if}
-				<span class="font-semibold tabular-nums">{formatearMoneda(insumo.costo_unitario)}</span>
+				{#if veImportes}
+					<span class="font-semibold tabular-nums">{formatearMoneda(insumo.costo_unitario)}</span>
+				{/if}
 			</div>
 		</TarjetaImagen>
 	{/snippet}

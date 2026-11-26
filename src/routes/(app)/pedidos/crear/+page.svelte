@@ -73,7 +73,7 @@
 		codigo: insumo.codigo,
 		nombre: insumo.nombre,
 		unidad: insumo.unidad,
-		costo_unitario: insumo.costo_unitario
+		costo_unitario: insumo.costo_unitario ?? 0
 	}));
 	const dolar = await getDolarBNA().catch(() => null);
 	let moneda = $state<Moneda>('USD');
@@ -554,8 +554,10 @@
 								class="btn btn-ghost btn-xs"
 								aria-label={`Quitar ${vista.archivo.name}`}
 								disabled={subiendoArchivos || !!form.pending}
-								onclick={() => quitarArchivo(vista.archivo)}>✕</button
+								onclick={() => quitarArchivo(vista.archivo)}
 							>
+								✕
+							</button>
 						</div>
 					{/each}
 				</div>

@@ -21,7 +21,12 @@ import {
 	controlaStockInsumo
 } from '$lib/server/db/schema';
 import { ImportarInsumosSchema, InsumoSchema, InsumoSchemaUpdate } from './insumos.schema';
-import { requirePermission, tienePermiso } from '$lib/server/auth/permissions';
+import {
+	ocultar,
+	requirePermission,
+	tienePermiso,
+	veImportesSesion
+} from '$lib/server/auth/permissions';
 import {
 	consumidoPorInsumoOrdenTx,
 	obtenerInsumosRequeridosOrdenTx,
@@ -258,6 +263,8 @@ export const getInsumos = query(
 		page = 1,
 		limit = 20
 	}) => {
+		const conImportes = await veImportesSesion();
+		if (!conImportes && sort === 'costo_unitario') sort = 'nombre';
 		const conditions: (SQL | undefined)[] = [eq(insumos.activo, true)];
 		if (search) {
 			const term = `%${search}%`;
@@ -319,7 +326,7 @@ export const getInsumos = query(
 		const saldosPorInsumo = new Map(saldos.map((item) => [item.insumo_id, Number(item.saldo)]));
 		return {
 			data: data.map(({ insumo, unidad, tipo, categoria, proveedor, controla_stock }) => ({
-				...insumo,
+				...(conImportes ? insumo : ocultar(insumo, ['costo_unitario', 'flete_porcentaje'])),
 				unidad,
 				tipo,
 				categoria,
@@ -573,8 +580,11 @@ export const getInsumoById = query(v.number(), async (id) => {
 			.orderBy(productos.nombre)
 	]);
 
+	const conImportes = await veImportesSesion();
 	return {
-		...resultado.insumo,
+		...(conImportes
+			? resultado.insumo
+			: ocultar(resultado.insumo, ['costo_unitario', 'flete_porcentaje'])),
 		unidad: resultado.unidad,
 		tipo: resultado.tipo,
 		categoria: resultado.categoria,
@@ -587,13 +597,15 @@ export const getInsumoById = query(v.number(), async (id) => {
 
 export const crearInsumo = form(InsumoSchema, async (data) => {
 	await requirePermission('insumos', 'create');
+	const conImportes = await veImportesSesion();
 	const catalogo = await resolverCatalogos(data.tipo, data.unidad);
 	const datos = normalizarOpcionales(data);
 	const [insumo] = await db
 		.insert(insumos)
 		.values({
 			...datos,
-			costo_unitario: costoConFlete(data.costo_unitario, data.flete_porcentaje),
+			flete_porcentaje: conImportes ? data.flete_porcentaje : 0,
+			costo_unitario: conImportes ? costoConFlete(data.costo_unitario, data.flete_porcentaje) : 0,
 			...catalogo,
 			created_at: new Date(),
 			updated_at: new Date()
@@ -605,13 +617,19 @@ export const crearInsumo = form(InsumoSchema, async (data) => {
 
 export const actualizarInsumo = form(InsumoSchemaUpdate, async ({ id, ...data }) => {
 	await requirePermission('insumos', 'edit');
+	const conImportes = await veImportesSesion();
 	const catalogo = await resolverCatalogos(data.tipo, data.unidad);
-	const datos = normalizarOpcionales(data);
+	const { flete_porcentaje: _flete, ...datos } = normalizarOpcionales(data);
 	const [insumo] = await db
 		.update(insumos)
 		.set({
 			...datos,
-			costo_unitario: costoConFlete(data.costo_unitario, data.flete_porcentaje),
+			...(conImportes
+				? {
+						flete_porcentaje: data.flete_porcentaje,
+						costo_unitario: costoConFlete(data.costo_unitario, data.flete_porcentaje)
+					}
+				: {}),
 			...catalogo,
 			updated_at: new Date()
 		})
@@ -630,6 +648,7 @@ export const eliminarInsumo = command(v.number(), async (id) => {
 
 export const importarInsumos = command(ImportarInsumosSchema, async (filas) => {
 	await requirePermission('insumos', 'create');
+	await requirePermission('importes', 'view');
 	for (const fila of filas) {
 		const catalogo = await resolverImportacion(fila);
 		const costoConFlete = fila.costo_unitario * (1 + (fila.flete_porcentaje ?? 0) / 100);

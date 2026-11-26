@@ -149,7 +149,8 @@ export const getOrdenesFabricacion = query(
 );
 
 export const getOrdenFabricacion = query(v.number(), async (id) => {
-	await requirePermission('fabricacion', 'view');
+	const usuario = await requirePermission('fabricacion', 'view');
+	const conImportes = await puedeVerImportes(usuario);
 	const { consulta } = consultaOrdenes();
 	const [orden] = await consulta.where(eq(ordenes_fabricacion.id, id));
 	if (!orden) error(404, 'Orden no encontrada');
@@ -267,11 +268,17 @@ export const getOrdenFabricacion = query(v.number(), async (id) => {
 		insumos_requeridos: (receta as MaterialSnapshot[]).map((material) => ({
 			...material,
 			cantidad: material.cantidad * orden.cantidad_total,
-			subtotal: Number(
-				(material.cantidad * orden.cantidad_total * (material.costo_unitario ?? 0)).toFixed(2)
-			)
+			costo_unitario: conImportes ? material.costo_unitario : null,
+			subtotal: conImportes
+				? Number(
+						(material.cantidad * orden.cantidad_total * (material.costo_unitario ?? 0)).toFixed(2)
+					)
+				: null
 		})),
-		insumos_adicionales: insumosAdicionales,
+		insumos_adicionales: insumosAdicionales.map((material) => ({
+			...material,
+			costo_unitario: conImportes ? material.costo_unitario : null
+		})),
 		adjuntos,
 		empleado: empleado_nombre ? { nombre: empleado_nombre, apellido: empleado_apellido } : null,
 		unidades: unidades.map((unidad) => ({

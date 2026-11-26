@@ -23,9 +23,11 @@
 	import { ETIQUETAS_MOVIMIENTO_INSUMO } from '$lib/modulos/insumos/tipos';
 	import { formatearFecha } from '$lib/utils/fechas';
 	import { formatearMoneda } from '$lib/utils/precios';
+	import { can } from '$lib/utils/permissions';
 	import type { PageProps } from './$types';
 
 	let { data }: PageProps = $props();
+	const veImportes = $derived(can(data.user, data.permisos, 'importes', 'view'));
 	const insumo = $derived(data.insumo);
 	const form = actualizarInsumo;
 	const urlImagen = $derived(resolve(`/insumos/${insumo.id}/imagen`));
@@ -107,8 +109,10 @@
 						<button
 							type="button"
 							class="btn btn-ghost text-base-100 btn-xs"
-							onclick={() => imagen('DELETE')}>Quitar</button
+							onclick={() => imagen('DELETE')}
 						>
+							Quitar
+						</button>
 					{/if}
 				</div>
 			</Can>
@@ -125,13 +129,15 @@
 					<dd class="text-base-content/60">No lleva stock · se registran horas</dd>
 				{/if}
 			</div>
-			<div>
-				<dt>Costo final</dt>
-				<dd class="text-xl font-semibold tabular-nums">
-					{formatearMoneda(insumo.costo_unitario)}
-					<span class="secundario block font-normal">por {insumo.unidad}</span>
-				</dd>
-			</div>
+			{#if veImportes}
+				<div>
+					<dt>Costo final</dt>
+					<dd class="text-xl font-semibold tabular-nums">
+						{formatearMoneda(insumo.costo_unitario)}
+						<span class="secundario block font-normal">por {insumo.unidad}</span>
+					</dd>
+				</div>
+			{/if}
 			<div>
 				<dt>Proveedor</dt>
 				<dd>{insumo.proveedor?.nombre ?? 'Sin proveedor'}</dd>
@@ -220,40 +226,42 @@
 					</div>
 				</Seccion>
 
-				<Seccion
-					titulo="Costo"
-					descripcion="El costo final (con flete) es el que usan las recetas."
-				>
-					<div class="grid gap-4 sm:grid-cols-3">
-						<FormFieldWrapper label="Costo base" id="costo_unitario" required>
-							<input
-								id="costo_unitario"
-								class="input"
-								min="0"
-								step="0.01"
-								{...form.fields.costo_unitario.as(
-									'number',
-									insumo.costo_unitario / (1 + (insumo.flete_porcentaje ?? 0) / 100)
-								)}
-							/>
-						</FormFieldWrapper>
-						<FormFieldWrapper label="Flete (%)" id="flete_porcentaje">
-							<input
-								id="flete_porcentaje"
-								class="input"
-								min="0"
-								step="0.01"
-								{...form.fields.flete_porcentaje.as('number', insumo.flete_porcentaje ?? 0)}
-							/>
-						</FormFieldWrapper>
-						<div class="campo">
-							<span class="text-sm font-medium text-base-content/80">Costo final</span>
-							<p class="flex h-10 items-center text-lg font-semibold tabular-nums">
-								{formatearMoneda(costoFinal)}
-							</p>
+				{#if veImportes}
+					<Seccion
+						titulo="Costo"
+						descripcion="El costo final (con flete) es el que usan las recetas."
+					>
+						<div class="grid gap-4 sm:grid-cols-3">
+							<FormFieldWrapper label="Costo base" id="costo_unitario" required>
+								<input
+									id="costo_unitario"
+									class="input"
+									min="0"
+									step="0.01"
+									{...form.fields.costo_unitario.as(
+										'number',
+										(insumo.costo_unitario ?? 0) / (1 + (insumo.flete_porcentaje ?? 0) / 100)
+									)}
+								/>
+							</FormFieldWrapper>
+							<FormFieldWrapper label="Flete (%)" id="flete_porcentaje">
+								<input
+									id="flete_porcentaje"
+									class="input"
+									min="0"
+									step="0.01"
+									{...form.fields.flete_porcentaje.as('number', insumo.flete_porcentaje ?? 0)}
+								/>
+							</FormFieldWrapper>
+							<div class="campo">
+								<span class="text-sm font-medium text-base-content/80">Costo final</span>
+								<p class="flex h-10 items-center text-lg font-semibold tabular-nums">
+									{formatearMoneda(costoFinal)}
+								</p>
+							</div>
 						</div>
-					</div>
-				</Seccion>
+					</Seccion>
+				{/if}
 
 				<FormErrors {form} />
 				<FormActions
