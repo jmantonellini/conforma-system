@@ -22,7 +22,7 @@ import {
 import { empleados } from './acceso';
 import { contactos } from './contactos';
 import { estados } from './estados';
-import { lineas_pedido } from './pedidos';
+import { lineas_pedido, pedidos } from './pedidos';
 import { productos } from './productos';
 
 export const ordenes_fabricacion = pgTable(
@@ -65,6 +65,7 @@ export const unidades_fabricacion = pgTable(
 		numero: integer('numero'),
 		contacto_id: integer('contacto_id').references(() => contactos.id, { onDelete: 'set null' }),
 		producto_id: integer('producto_id').references(() => productos.id, { onDelete: 'set null' }),
+		pedido_id: integer('pedido_id').references(() => pedidos.id, { onDelete: 'set null' }),
 		descripcion: text('descripcion'),
 		fecha_fabricacion: fecha('fecha_fabricacion'),
 		estado_id: integer('estado_id')
@@ -84,6 +85,7 @@ export const unidades_fabricacion = pgTable(
 		index('idx_unidades_empresa_numero').on(t.empresa_id, t.numero),
 		index('idx_unidades_contacto').on(t.contacto_id),
 		index('idx_unidades_producto').on(t.producto_id),
+		index('idx_unidades_pedido').on(t.pedido_id),
 		check(
 			'unidades_con_orden_o_descripcion',
 			sql`${t.orden_fabricacion_id} IS NOT NULL OR ${t.descripcion} IS NOT NULL`

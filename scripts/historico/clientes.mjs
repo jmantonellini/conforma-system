@@ -47,7 +47,7 @@ export function limpiarNombreCliente(valor) {
 		.trim();
 }
 
-function palabras(valor) {
+export function palabras(valor) {
 	return normalizar(valor)
 		.split(' ')
 		.filter((p) => p.length > 1 && !IGNORADAS.has(p))

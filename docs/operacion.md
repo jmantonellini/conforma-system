@@ -150,3 +150,14 @@ docker compose exec app node scripts/historico/vincular-productos.mjs /tmp/histo
 ```
 
 Opciones: `--hasta AAAA-MM-DD` deja afuera las OF posteriores (las que ya se cargaron en el sistema); `--reemplazar` borra la importación anterior (pedidos, OF, escapes sueltos y los contactos que creó y nadie más usa) y vuelve a importar.
+
+### Completar el histórico con una planilla más nueva
+
+`scripts/historico/completar.mjs` agrega lo que falta sin tocar lo que ya está cargado ni las correcciones hechas a mano: OF nuevas, trabajos 2003-2020 (pedidos `T-AAAA-NNNNN`, con su pago si el libro de ingresos lo marca como pagado), escapes que cambiaron de OF o se vincularon a un trabajo, y productos para lo nuevo. Se puede correr de nuevo sin duplicar nada. Las OF que se cargaron dos veces (planilla y sistema) están en `OF_DUPLICADAS_EN_SISTEMA` de `datos.mjs` y no se vuelven a crear.
+
+Necesita la cotización del dólar desde 2003: la de argentinadatos (desde 2011) combinada con la del BCRA (`https://api.bcra.gob.ar/estadisticascambiarias/v1.0/Cotizaciones/USD`) para 2003-2010.
+
+```bash
+docker compose exec app node scripts/historico/completar.mjs /tmp/historico.xlsx --cotizaciones /tmp/cotizaciones.json --informe /tmp/completar.xlsx
+docker compose exec app node scripts/historico/completar.mjs /tmp/historico.xlsx --cotizaciones /tmp/cotizaciones.json --confirmar
+```

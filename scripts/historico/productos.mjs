@@ -277,7 +277,7 @@ export function construirProductos(modelo) {
 			const descripcion = describir(item.fila, item.escapes.length ? 'escape_completo' : null);
 			const util = descripcion && (descripcion.tipo !== 'otra' || item.escapes.length > 0);
 			const clave = util ? registrar(descripcion, item.fila, `OF ${o.numero}`, o.fecha) : null;
-			if (clave) lineas.push({ of: o.numero, orden, clave });
+			if (clave) lineas.push({ pedido: o.numeroPedido ?? `H-${o.numero}`, orden, clave });
 			const total = Math.max(item.cantidad, item.escapes.length);
 			for (let i = 0; i < total; i++) {
 				serie++;
@@ -298,6 +298,7 @@ export function construirProductos(modelo) {
 					unidadesOF.push({
 						of: o.numero,
 						serie: `${o.numero}-${String(serie).padStart(3, '0')}`,
+						numero: escape?.numero ?? null,
 						clave: claveUnidad
 					});
 				}
@@ -309,7 +310,12 @@ export function construirProductos(modelo) {
 		const descripcion = describir(escape.fila, 'escape_completo');
 		if (!descripcion) continue;
 		const clave = registrar(descripcion, escape.fila, `N° ${escape.numero}`, escape.fecha);
-		unidadesSueltas.push({ serie: `H-E${escape.numero}`, fecha: escape.fecha, clave });
+		unidadesSueltas.push({
+			serie: `H-E${escape.numero}`,
+			numero: escape.numero,
+			fecha: escape.fecha,
+			clave
+		});
 	}
 
 	const usosCategoria = new Map();
@@ -379,7 +385,11 @@ export function construirProductos(modelo) {
 	return { productos, lineas, unidadesOF, unidadesSueltas };
 }
 
-export async function vincularProductos(consulta, construido) {
+export async function vincularProductos(
+	consulta,
+	construido,
+	{ existentes = new Map(), soloSinProducto = false, unidadesPorNumero = [] } = {}
+) {
 	const resumen = {
 		productos: 0,
 		marcasNuevas: 0,
@@ -459,9 +469,19 @@ export async function vincularProductos(consulta, construido) {
 		return categorias.get(clave);
 	}
 
-	const ids = new Map();
-	let secuencia = 0;
+	const ids = new Map(existentes);
+	const usadas = new Set([
+		...construido.lineas.map((l) => l.clave),
+		...construido.unidadesOF.map((u) => u.clave),
+		...construido.unidadesSueltas.map((u) => u.clave),
+		...unidadesPorNumero.map((u) => u.clave)
+	]);
+	const [{ ultimo }] = await consulta(
+		"SELECT coalesce(max(substring(codigo from '^H(\\d+)-')::int), 0) AS ultimo FROM productos"
+	);
+	let secuencia = ultimo;
 	for (const p of construido.productos.values()) {
+		if (ids.has(p.clave) || !usadas.has(p.clave)) continue;
 		const marcaId = await idMarca(p.marca);
 		const modeloId = await idModelo(marcaId, p.modelo, p.tipoVehiculo);
 		const categoriaId = await idCategoria(p.categoriaCompetencia, p.tipoVehiculo);
@@ -505,9 +525,15 @@ export async function vincularProductos(consulta, construido) {
 			`UPDATE lineas_pedido l SET producto_id = v.producto_id, es_personalizado = false
 			FROM (SELECT unnest($1::text[]) AS numero, unnest($2::int[]) AS orden, unnest($3::int[]) AS producto_id) v,
 				pedidos p
-			WHERE p.id = l.pedido_id AND p.historico AND p.numero_pedido = 'H-' || v.numero AND l.orden_linea = v.orden
+			WHERE p.id = l.pedido_id AND p.historico AND p.numero_pedido = v.numero AND l.orden_linea = v.orden
+				AND (NOT $4 OR l.producto_id IS NULL)
 			RETURNING l.id`,
-			[lote.map((l) => l.of), lote.map((l) => l.orden), lote.map((l) => ids.get(l.clave))]
+			[
+				lote.map((l) => l.pedido),
+				lote.map((l) => l.orden),
+				lote.map((l) => ids.get(l.clave)),
+				soloSinProducto
+			]
 		);
 		resumen.lineasVinculadas += filas.length;
 	}
@@ -518,8 +544,14 @@ export async function vincularProductos(consulta, construido) {
 			`UPDATE unidades_fabricacion u SET producto_id = v.producto_id
 			FROM (SELECT unnest($1::int[]) AS orden_id, unnest($2::text[]) AS serie, unnest($3::int[]) AS producto_id) v
 			WHERE u.orden_fabricacion_id = v.orden_id AND u.numero_serie = v.serie
+				AND (NOT $4 OR u.producto_id IS NULL)
 			RETURNING u.id`,
-			[lote.map((u) => Number(u.of)), lote.map((u) => u.serie), lote.map((u) => ids.get(u.clave))]
+			[
+				lote.map((u) => Number(u.of)),
+				lote.map((u) => u.serie),
+				lote.map((u) => ids.get(u.clave)),
+				soloSinProducto
+			]
 		);
 		resumen.unidadesVinculadas += filas.length;
 	}
@@ -531,8 +563,26 @@ export async function vincularProductos(consulta, construido) {
 			FROM (SELECT unnest($1::text[]) AS serie, unnest($2::date[]) AS fecha, unnest($3::int[]) AS producto_id) v
 			WHERE u.orden_fabricacion_id IS NULL AND u.numero_serie = v.serie
 				AND u.fecha_fabricacion::date IS NOT DISTINCT FROM v.fecha
+				AND (NOT $4 OR u.producto_id IS NULL)
 			RETURNING u.id`,
-			[lote.map((u) => u.serie), lote.map((u) => u.fecha), lote.map((u) => ids.get(u.clave))]
+			[
+				lote.map((u) => u.serie),
+				lote.map((u) => u.fecha),
+				lote.map((u) => ids.get(u.clave)),
+				soloSinProducto
+			]
+		);
+		resumen.unidadesVinculadas += filas.length;
+	}
+
+	for (let desde = 0; desde < unidadesPorNumero.length; desde += 1000) {
+		const lote = unidadesPorNumero.slice(desde, desde + 1000);
+		const filas = await consulta(
+			`UPDATE unidades_fabricacion u SET producto_id = v.producto_id
+			FROM (SELECT unnest($1::int[]) AS numero, unnest($2::int[]) AS producto_id) v
+			WHERE u.numero = v.numero AND u.producto_id IS NULL
+			RETURNING u.id`,
+			[lote.map((u) => u.numero), lote.map((u) => ids.get(u.clave))]
 		);
 		resumen.unidadesVinculadas += filas.length;
 	}

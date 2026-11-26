@@ -8,18 +8,19 @@ export const REASIGNACION_OF = {
 };
 export const OF_ANEXAS = { '6197 A': '6197' };
 
-export function leerHojas(archivo) {
+export function leerHojas(
+	archivo,
+	nombres = ['OF DETALLE', 'RESUMEN POR OF', 'ESCAPES FABRICADOS', 'COBROS', 'PARA REVISAR'],
+	opcionales = []
+) {
 	const libro = XLSX.readFile(archivo, { cellDates: true });
 	const hojas = {};
-	for (const nombre of [
-		'OF DETALLE',
-		'RESUMEN POR OF',
-		'ESCAPES FABRICADOS',
-		'COBROS',
-		'PARA REVISAR'
-	]) {
+	for (const nombre of [...nombres, ...opcionales]) {
 		const hoja = libro.Sheets[nombre];
-		if (!hoja) throw new Error(`Falta la hoja "${nombre}" en ${archivo}`);
+		if (!hoja) {
+			if (opcionales.includes(nombre)) continue;
+			throw new Error(`Falta la hoja "${nombre}" en ${archivo}`);
+		}
 		const [encabezado, ...filas] = XLSX.utils.sheet_to_json(hoja, {
 			header: 1,
 			defval: null,
@@ -169,3 +170,5 @@ export function cotizador(cotizaciones) {
 		return lista[desde].venta;
 	};
 }
+
+export const OF_DUPLICADAS_EN_SISTEMA = ['6238', '6239', '6243', '6265', '6266'];

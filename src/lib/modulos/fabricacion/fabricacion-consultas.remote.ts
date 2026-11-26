@@ -391,7 +391,10 @@ export const getUnidadesFabricadas = query(
 				eq(ordenes_fabricacion.id, unidades_fabricacion.orden_fabricacion_id)
 			)
 			.leftJoin(lineas_pedido, eq(lineas_pedido.id, ordenes_fabricacion.linea_pedido_id))
-			.leftJoin(pedidos, eq(pedidos.id, lineas_pedido.pedido_id))
+			.leftJoin(
+				pedidos,
+				eq(pedidos.id, sql`COALESCE(${lineas_pedido.pedido_id}, ${unidades_fabricacion.pedido_id})`)
+			)
 			.leftJoin(contactos, eq(contactos.id, pedidos.contacto_id))
 			.leftJoin(clienteUnidad, eq(clienteUnidad.id, unidades_fabricacion.contacto_id))
 			.leftJoin(productos, eq(productos.id, lineas_pedido.producto_id))

@@ -53,7 +53,7 @@ const metodoPago = (...valores) => {
 	return null;
 };
 
-function construirItem(fila, indice) {
+export function construirItem(fila, indice) {
 	const descripcion =
 		texto(fila['DESCRIPCIÓN ORIGINAL']) ??
 		unir([fila.PRODUCTO, fila.MARCA, fila.MODELO], ' ') ??
@@ -391,4 +391,85 @@ export function construirModelo(hojas, { hoy, hasta }) {
 	}
 
 	return { ordenes: [...ordenes.values()], ventas, sueltos, informe };
+}
+
+const metodoDeMedio = (medio) => {
+	const t = texto(medio) ?? '';
+	if (/cheq|cheuq/i.test(t) && /efectivo/i.test(t)) return null;
+	if (/cheq|cheuq/i.test(t)) return 'cheque';
+	if (/efectivo/i.test(t)) return 'efectivo';
+	if (/credicoop|nacion|frances|bbva|banco|todo pago|western|transf/i.test(t))
+		return 'transferencia';
+	return null;
+};
+
+export function construirTrabajos(hojas, { hoy }) {
+	const cuits = new Map();
+	for (const fila of hojas['FACTURAS 2007-2016'] ?? []) {
+		const cuit = texto(fila.CUIT)?.replace(/\D/g, '');
+		const numeroFactura = Number(texto(fila['N° FACTURA'])?.replace(/\D/g, ''));
+		const anio = numero(fila.AÑO);
+		if (cuit?.length === 11 && numeroFactura && anio) cuits.set(`${anio}|${numeroFactura}`, cuit);
+	}
+	const trabajos = [];
+	for (const fila of hojas['TRABAJOS 2003-2020'] ?? []) {
+		const id = texto(fila['TRABAJO N°']);
+		if (!id) continue;
+		const fecha = fechaISO(fila['FECHA (mes)']);
+		const anio = numero(fila.AÑO);
+		const monto = numero(fila['MONTO S/IVA']);
+		const factura = limpiarFactura(fila.FACTURA, true) ?? texto(fila.FACTURA);
+		const numeroFactura = Number(
+			String(factura ?? '')
+				.split(/\D+/)
+				.filter(Boolean)
+				.at(-1)
+		);
+		const item = construirItem({ ...fila, 'CANT. SOLICITADA': fila['CANT.'] }, 0);
+		item.escapes = [];
+		if (monto !== null) item.precio = monto / item.cantidad;
+		const pagado = /^S/i.test(texto(fila.PAGADO) ?? '');
+		const fechaPago = fechaISO(fila['FECHA PAGO']);
+		trabajos.push({
+			numero: id,
+			numeroPedido: id,
+			fecha: fecha && fecha <= hoy ? fecha : null,
+			cliente: texto(fila.CLIENTE),
+			cuit: numeroFactura && anio ? (cuits.get(`${anio}|${numeroFactura}`) ?? null) : null,
+			items: [item],
+			anexos: [],
+			escapes: [],
+			repeticiones: [],
+			notas: ['Fecha aproximada: los libros de ingresos solo indican el mes'],
+			detalle: {
+				observaciones: texto(fila.OBSERVACIONES),
+				entrega: texto(fila.ENVÍO),
+				fuentes: texto(fila['ARCHIVO(S)'])
+			},
+			facturas: [factura],
+			cobrosInfo: [],
+			pagos:
+				pagado && monto > 0
+					? [
+							{
+								fecha: fechaPago ?? fecha,
+								moneda: 'ARS',
+								monto,
+								recibo: null,
+								metodo: metodoDeMedio(fila['MEDIO DE PAGO']),
+								observaciones: unir([
+									'Pagado según el libro de ingresos (importe sin IVA)',
+									texto(fila['MEDIO DE PAGO']),
+									!fechaPago && 'fecha de pago aproximada'
+								])
+							}
+						]
+					: [],
+			reparacion: item.reparacion,
+			transporte: null,
+			fechaEntrega: null,
+			totalResumen: monto
+		});
+	}
+	return trabajos;
 }

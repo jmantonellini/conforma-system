@@ -60,6 +60,11 @@
 				{#if unidad.pedido_numero}
 					<p class="secundario">{unidad.pedido_numero}</p>
 				{/if}
+			{:else if unidad.pedido_id}
+				<a class="enlace-fila font-mono" href={resolve(`/pedidos/${unidad.pedido_id}`)}>
+					{unidad.pedido_numero}
+				</a>
+				<p class="secundario">Sin OF</p>
 			{:else}
 				<span class="text-base-content/50">Sin OF</span>
 			{/if}
