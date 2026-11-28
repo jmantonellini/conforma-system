@@ -30,6 +30,9 @@
 	vacio="No hay órdenes de fabricación para estos filtros"
 >
 	{#snippet acciones()}
+		<a class="btn btn-sm" href={resolve('/fabricacion/pendientes')}>
+			<Icono nombre="imprimir" /> Trabajos pendientes
+		</a>
 		<a class="btn btn-sm" href={resolve('/fabricacion/escapes')}>Escapes fabricados</a>
 		<a class="btn btn-primary btn-sm" href={resolve('/fabricacion/crear')}>
 			<Icono nombre="mas_simple" /> Nueva orden

@@ -22,6 +22,7 @@
 
 <script lang="ts">
 	import type { Snippet } from 'svelte';
+	import { goto } from '$app/navigation';
 	import { page } from '$app/state';
 	import { resolve } from '$app/paths';
 	import type { Pathname } from '$app/types';
@@ -31,6 +32,7 @@
 	import Icono from './Icono.svelte';
 	import MenuDesplegable from './MenuDesplegable.svelte';
 	import { claseStatus } from './colores';
+	import { destinoVolver, esPaginaAnterior } from './volver';
 
 	let {
 		titulo,
@@ -95,6 +97,14 @@
 		!!eliminar && can(page.data.user, page.data.permisos, eliminar.modulo, 'delete')
 	);
 
+	function regresar(evento: MouseEvent) {
+		if (evento.button !== 0 || evento.metaKey || evento.ctrlKey || evento.shiftKey) return;
+		evento.preventDefault();
+		const destino = destinoVolver(volver.href);
+		if (esPaginaAnterior(destino)) history.back();
+		else goto(resolve(destino as Pathname as '/'));
+	}
+
 	const pedirEliminacion = () =>
 		eliminar && confirmarYEjecutar({ mensaje: eliminar.mensaje, ejecutar: eliminar.onConfirmar });
 </script>
@@ -104,6 +114,7 @@
 		<a
 			class="inline-flex w-fit items-center gap-1 text-sm text-base-content/60 hover:text-base-content"
 			href={resolve(volver.href as '/')}
+			onclick={regresar}
 		>
 			<Icono nombre="izquierda" />
 			{volver.etiqueta}

@@ -1,5 +1,8 @@
 <script lang="ts">
 	import type { LayoutProps } from './$types';
+	import { afterNavigate } from '$app/navigation';
+	import { page } from '$app/state';
+	import { recordarListado, registrarNavegacion } from '$lib/ui/volver';
 	import Header from '$lib/ui/Header.svelte';
 	import { SideBar } from '$lib/ui';
 	import {
@@ -20,6 +23,9 @@
 	import { can } from '$lib/utils/permissions';
 
 	let { children, data }: LayoutProps = $props();
+
+	afterNavigate(registrarNavegacion);
+	$effect(() => recordarListado(page.url));
 
 	const tabs = $derived([
 		{ href: Paths.INICIO, label: 'Inicio', icon: Graph },
@@ -70,8 +76,10 @@
 	]);
 </script>
 
-<div class="flex min-h-screen flex-col bg-base-200">
-	<Header usuario={data.user} permisos={data.permisos} empresa={data.empresa} />
+<div class="flex min-h-screen flex-col bg-base-200 print:bg-base-100">
+	<div class="contents print:hidden">
+		<Header usuario={data.user} permisos={data.permisos} empresa={data.empresa} />
+	</div>
 	<SideBar {tabs}>
 		{@render children()}
 	</SideBar>
